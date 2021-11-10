@@ -48,6 +48,9 @@ def smile_to_mol(smile):
 class OpenMMSimulationGenerator:
     """
     An opinionated generator for OpenMM Simulations sets.
+
+    All parameters are serializable and OpenMM objects will only be instantiated
+    when the return_simulation function is called.
     """
 
     def __init__(
@@ -90,14 +93,17 @@ class OpenMMSimulationGenerator:
         self, smile_counts: Dict[str, int]
     ) -> openmm.app.Topology:
         """
+        Returns an openmm topology with the given smiles at the given counts.
+
+        The topology does not contain coordinates.
 
         Parameters
         ----------
-        smile_counts: a dictionary
+        smile_counts : keys are smiles and values are number of that molecule to pack
 
         Returns
         -------
-
+        topology
         """
         structure_counts = {
             count: self._smile_to_parmed_structure(smile)
@@ -132,15 +138,17 @@ class OpenMMSimulationGenerator:
         self, smile_counts: Dict[str, int], density: float
     ) -> float:
         """
+        Calculates the side_length of a cube necessary to contain the given molecules with
+        given density.
 
         Parameters
         ----------
-        smile_counts
-        density
+        smile_counts : keys are smiles and values are number of that molecule to pack
+        density : guessed density of the solution, larger densities will lead to smaller cubes.
 
         Returns
         -------
-
+        side_length: side length of the returned cube
         """
         cm3_to_A3 = 1e24
         NA = 6.02214e23
@@ -181,6 +189,14 @@ class OpenMMSimulationGenerator:
         return system
 
     def return_simulation(self) -> Simulation:
+        """
+        Uses the settings specified in the constructor to instantiate a OpenMM.Simulation.
+
+        Returns
+        -------
+        simulation
+
+        """
         system, topology = self._smiles_to_system_topology(
             self.smile_counts, self.density
         )
