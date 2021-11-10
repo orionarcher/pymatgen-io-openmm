@@ -1,5 +1,6 @@
 from abc import ABC
 
+import openmm
 import openmm.app
 from openbabel import pybel
 from openff.toolkit.typing.engines import smirnoff
@@ -11,8 +12,6 @@ from openmm import LangevinMiddleIntegrator
 
 from pymatgen.io.packmol import PackmolBoxGen
 from pymatgen.io.xyz import XYZ
-
-from pymatgen.io.core import InputGenerator
 
 from openmm.unit import *
 
@@ -107,10 +106,10 @@ class OpenMMSimulationGenerator:
         """
         structure_counts = {
             count: self._smile_to_parmed_structure(smile)
-            for smile, count in smile_counts.values()
+            for smile, count in smile_counts.items()
         }
         combined_structs = parmed.Structure()
-        for struct, count in structure_counts:
+        for struct, count in structure_counts.items():
             combined_structs += struct * count
         return combined_structs.topology
 
@@ -160,7 +159,7 @@ class OpenMMSimulationGenerator:
         side_length = box_volume ** (1 / 3)
         return side_length
 
-    def _smiles_to_system_topology(
+    def _smiles_to_system_and_topology(
         self, smile_counts: Dict[str, int], density: float = 1.5
     ) -> openmm.System:
         """
@@ -197,7 +196,7 @@ class OpenMMSimulationGenerator:
         simulation
 
         """
-        system, topology = self._smiles_to_system_topology(
+        system, topology = self._smiles_to_system_and_topology(
             self.smile_counts, self.density
         )
         integrator = (
