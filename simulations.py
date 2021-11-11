@@ -36,7 +36,7 @@ def equilibrate_pressure(
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
     barostat_force_index = system.addForce(
-        MonteCarloBarostat(1 * atmosphere, 300 * kelvin, 10)
+        MonteCarloBarostat(1 * atmosphere, 298 * kelvin, 10)
     )
     context.reinitialize(preserveState=True)
     simulation.step(steps)
@@ -63,6 +63,7 @@ def anneal(
     steps : the length of the heating, holding, and cooling stages.
     temp_steps : temperature is raised and lowered stepwise in temp_steps pieces.
     """
+    # TODO: timing is currently bugged and not propagating long enough, should be fixed
     assert len(steps) == 3, ""
     integrator = simulation.context.getIntegrator()
     old_temperature = integrator.getTemperature()
