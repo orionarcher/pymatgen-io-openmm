@@ -21,7 +21,7 @@ import openff
 
 import pathlib
 import tempfile
-from typing import Dict, Union, Optional
+from typing import Dict, Union, Optional, Tuple
 
 
 # does this belong as an attribute of the Molecule class?
@@ -56,6 +56,8 @@ class OpenMMSimulationGenerator:
         self,
         smile_counts: Dict[str, int],
         density: float,
+        temperature: float = 298,  # Kelvin
+        step_size: float = 1,  # Femto-seconds
         integrator: Optional[str] = None,
         platform: str = None,
         platformProperties: Optional[Dict] = None,
@@ -63,7 +65,9 @@ class OpenMMSimulationGenerator:
     ):
         self.smile_counts = smile_counts
         self.density = density
-        self.integrator = LangevinMiddleIntegrator if not integrator else integrator
+        self.temperature = temperature
+        self.step_size = step_size
+        self.integrator = integrator
         self.platform = platform
         self.platformProperties = platformProperties
         self.state = state
@@ -152,8 +156,8 @@ class OpenMMSimulationGenerator:
         cm3_to_A3 = 1e24
         NA = 6.02214e23
         mols = [smile_to_mol(smile) for smile in smile_counts.keys()]
-        mol_mw = np.array([mol.structure.composition.weight for mol in mols])
-        counts = np.array(smile_counts.values())
+        mol_mw = np.array([mol.composition.weight for mol in mols])
+        counts = np.array(list(smile_counts.values()))
         total_weight = sum(mol_mw * counts)
         box_volume = total_weight * cm3_to_A3 / (NA * density)
         side_length = box_volume ** (1 / 3)
@@ -161,7 +165,7 @@ class OpenMMSimulationGenerator:
 
     def _smiles_to_system_and_topology(
         self, smile_counts: Dict[str, int], density: float = 1.5
-    ) -> openmm.System:
+    ) -> Tuple[openmm.System, openmm.app.Topology]:
         """
 
         Parameters
@@ -185,7 +189,7 @@ class OpenMMSimulationGenerator:
         )
         openff_topology.box_vectors = [box_size, box_size, box_size] * angstrom
         system = openff_forcefield.create_openmm_system(openff_topology)
-        return system
+        return system, topology
 
     def return_simulation(self) -> Simulation:
         """
@@ -199,15 +203,19 @@ class OpenMMSimulationGenerator:
         system, topology = self._smiles_to_system_and_topology(
             self.smile_counts, self.density
         )
-        integrator = (
-            getattr(openmm, self.integrator)
-            if self.integrator
-            else LangevinMiddleIntegrator
-        )
+        if self.integrator is None:
+            integrator = LangevinMiddleIntegrator(
+                self.temperature * kelvin, 1 / picosecond, self.step_size * femtosecond
+            )
+        else:
+            integrator = getattr(
+                openmm, self.integrator
+            )  # this doesn't work as intended currently
+
         platform = (
             openmm.Platform.getPlatformByName(self.platform) if self.platform else None
         )
-        state = str(self.state)
+        state = self.state
         simulation = Simulation(topology, system, integrator, platform, state)
         if not state:
             box_size = self._smiles_to_cube_size(self.smile_counts, self.density)

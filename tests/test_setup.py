@@ -12,14 +12,14 @@ from pymatgen.io.openmm.setup import (
 
 @pytest.fixture
 def ethanol_water():
-    return {"O": 1000, "CCO": 100}
+    return {"O": 500, "CCO": 50}
 
 
 @pytest.fixture
 def simulation_generator(ethanol_water):
     generator = OpenMMSimulationGenerator(
         ethanol_water,
-        0.98,
+        0.8,
     )
     return generator
 
@@ -35,7 +35,7 @@ class TestOpenMMSimulationGenerator:
     def test_initialization(self, ethanol_water):
         generator = OpenMMSimulationGenerator(
             ethanol_water,
-            0.98,
+            0.8,
             integrator="LangevinMiddleIntegrator",
             platform="CPU",
         )
@@ -49,18 +49,18 @@ class TestOpenMMSimulationGenerator:
         assert isinstance(topology, openmm.app.Topology)
 
     def test_smiles_to_coordinates(self, simulation_generator, ethanol_water):
-        coordinates = simulation_generator._smiles_to_coordinates(ethanol_water, 20)
+        coordinates = simulation_generator._smiles_to_coordinates(ethanol_water, 24)
         assert isinstance(coordinates, np.ndarray)
 
     def test_smiles_to_cube_size(self, simulation_generator, ethanol_water):
-        coordinates = simulation_generator._smiles_to_coordinates(ethanol_water, 0.98)
-        assert isinstance(coordinates, np.ndarray)
+        coordinates = simulation_generator._smiles_to_cube_size(ethanol_water, 0.8)
+        assert isinstance(coordinates, float)
 
-    def test_smiles_to_system_topology(self, simulation_generator, ethanol_water):
-        system, topology = simulation_generator._smile_to_system_and_topology(ethanol_water)
+    def test_smiles_to_system_and_topology(self, simulation_generator, ethanol_water):
+        system, topology = simulation_generator._smiles_to_system_and_topology(ethanol_water)
         assert isinstance(system, openmm.System)
         assert isinstance(topology, openmm.app.Topology)
 
     def test_return_simulation(self, simulation_generator):
-        simulation = simulation_generator.return_simulation
+        simulation = simulation_generator.return_simulation()
         assert isinstance(simulation, openmm.app.Simulation)
