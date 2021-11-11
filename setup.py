@@ -164,7 +164,7 @@ class OpenMMSimulationGenerator:
         return side_length
 
     def _smiles_to_system_and_topology(
-        self, smile_counts: Dict[str, int], density: float = 1.5
+        self, smile_counts: Dict[str, int], density: float
     ) -> Tuple[openmm.System, openmm.app.Topology]:
         """
 
