@@ -66,17 +66,16 @@ def anneal(
     assert len(steps) == 3, ""
     integrator = simulation.context.getIntegrator()
     old_temperature = integrator.getTemperature()
-    temp_step_size = abs(temperature - old_temperature) / temp_steps
-    steps = steps // temp_steps
+    temp_step_size = abs(temperature * kelvin - old_temperature) / temp_steps
 
     for temp in np.arange(
-        old_temperature, temperature + temp_step_size, temp_step_size
+        old_temperature, temperature * kelvin + temp_step_size, temp_step_size
     ):
         integrator.setTemperature(temp * kelvin)
         simulation.step(steps[0] // temp_steps)
 
     simulation.step(steps[1])
 
-    for temp in range(temperature, old_temperature - temp_step_size, temp_step_size):
+    for temp in np.arange(temperature * kelvin, old_temperature - temp_step_size, temp_step_size):
         integrator.setTemperature(temp * kelvin)
         simulation.step(steps[2] // temp_steps)
