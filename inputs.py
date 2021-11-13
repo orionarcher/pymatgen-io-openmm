@@ -194,7 +194,7 @@ class OpenMMGenerator(InputGenerator):
             structure = parmed.load_file(f.name)
         return structure
 
-    def _generate_openmm_topology(
+    def _get_openmm_topology(
         self, smiles: Dict[str, int]
     ) -> openmm.app.Topology:
         """
@@ -219,7 +219,7 @@ class OpenMMGenerator(InputGenerator):
             combined_structs += struct * count
         return combined_structs.topology
 
-    def _generate_coordinates(self, smiles: Dict[str, int], box: List[float]) -> np.ndarray:
+    def _get_coordinates(self, smiles: Dict[str, int], box: List[float]) -> np.ndarray:
         molecules = []
         for smile, count in smiles.items():
             molecules.append(
@@ -237,7 +237,7 @@ class OpenMMGenerator(InputGenerator):
         raw_coordinates = coordinates.loc[:, "x":"z"].values
         return raw_coordinates
 
-    def _generate_box(
+    def _get_box(
         self, smiles: Dict[str, int], density: float
     ) -> List[float]:
         """
@@ -263,10 +263,12 @@ class OpenMMGenerator(InputGenerator):
         side_length = box_volume ** (1 / 3)
         return [0, 0, 0, side_length, side_length, side_length]
 
+
+    # TODO: need to settle on a method for selecting a parameterization of the system.
     def _parameterize_system(self, smiles: Dict[str, int], box: List[float], force_field: str):
        supported_force_fields = ["Sage"]
        if force_field == "Sage":
-        topology = self._generate_openmm_topology(smiles)
+        topology = self._get_openmm_topology(smiles)
         openff_mols = [
             openff.toolkit.topology.Molecule.from_smiles(smile)
             for smile in smiles.keys()
