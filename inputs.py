@@ -107,11 +107,28 @@ class OpenMMSet(InputSet):
             openmm_set['state'] = state
         return openmm_set
 
+
     def validate(self) -> bool:
-        return False
+        # TODO: this should test if the set returns a valid simulation and throw an error if it does not
+        # TODO: is this condition too strict?
+        try:
+            self.get_simulation()
+        except Exception as e:
+            print("A valid simulation could not be generated, the following error was raised:", e)
+            return False
+        else:
+            return True
 
     def get_simulation(self) -> Simulation:
-        return
+        simulation = Simulation(
+            self.topology.topology,
+            self.system.system,
+            self.integrator.integrator,
+        )
+        if hasattr(self, 'state') and self.state:
+            # TODO: confirm that this works correctly
+            simulation.context.setState(self.state.state)
+        return simulation
 
 
 
