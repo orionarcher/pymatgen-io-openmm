@@ -20,9 +20,12 @@ from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 
 import openff
+from openff.toolkit.typing.engines import smirnoff
+
 import openmm
 from openmm.app import Simulation, PDBFile, Topology
 from openmm import XmlSerializer, System, Integrator, State
+from openmm.unit import *
 
 from openbabel import pybel
 
@@ -97,12 +100,12 @@ class OpenMMSet(InputSet):
     # TODO: if there is an optional file should it be missing or should the value be none?
     @classmethod
     def from_directory(
-            cls,
-            directory: Union[str, Path],
-            topology_file: str = "topology.pdb",
-            system_file: str = "system.xml",
-            integrator_file: str = "integrator.xml",
-            state_file: str = "state.xml",
+        cls,
+        directory: Union[str, Path],
+        topology_file: str = "topology.pdb",
+        system_file: str = "system.xml",
+        integrator_file: str = "integrator.xml",
+        state_file: str = "state.xml",
     ):
         topology = TopologyInput.from_file(topology_file)
         system = TopologyInput.from_file(system_file)
@@ -148,25 +151,25 @@ class OpenMMGenerator(InputGenerator):
 
     # TODO: what determines if a setting goes in the __init__ or get_input_set?
     def __init__(
-            self,
-            force_field: str = "Sage",
-            integrator: Union[str, Integrator] = "LangevinMiddleIntegrator",
-            temperature: float = 298,
-            step_size: int = 1,
-            partial_charges: Optional[Dict[str, np.ndarray]] = None,
-            topology_file: Union[str, Path] = "topology.pdb",
-            system_file: Union[str, Path] = "system.xml",
-            integrator_file: Union[str, Path] = "integrator.xml",
-            state_file: Union[str, Path] = "state.xml",
+        self,
+        force_field: str = "Sage",
+        integrator: Union[str, Integrator] = "LangevinMiddleIntegrator",
+        temperature: float = 298,
+        step_size: int = 1,
+        partial_charges: Optional[Dict[str, np.ndarray]] = None,
+        topology_file: Union[str, Path] = "topology.pdb",
+        system_file: Union[str, Path] = "system.xml",
+        integrator_file: Union[str, Path] = "integrator.xml",
+        state_file: Union[str, Path] = "state.xml",
     ):
         return
 
     def get_input_set(
-            self,
-            smiles: Dict[str, int],
-            density: Optional[float] = None,
-            box: Optional[List] = None,
-            temperature: Optional[float] = None,
+        self,
+        smiles: Dict[str, int],
+        density: Optional[float] = None,
+        box: Optional[List] = None,
+        temperature: Optional[float] = None,
     ) -> InputSet:
         return
 
@@ -194,9 +197,7 @@ class OpenMMGenerator(InputGenerator):
             structure = parmed.load_file(f.name)
         return structure
 
-    def _get_openmm_topology(
-        self, smiles: Dict[str, int]
-    ) -> openmm.app.Topology:
+    def _get_openmm_topology(self, smiles: Dict[str, int]) -> openmm.app.Topology:
         """
         Returns an openmm topology with the given smiles at the given counts.
 
@@ -223,12 +224,14 @@ class OpenMMGenerator(InputGenerator):
         molecules = []
         for smile, count in smiles.items():
             molecules.append(
-                {"name": smile, "number": count, "coords": self._smile_to_molecule(smile)}
+                {
+                    "name": smile,
+                    "number": count,
+                    "coords": self._smile_to_molecule(smile),
+                }
             )
         with tempfile.TemporaryDirectory() as scratch_dir:
-            pw = PackmolBoxGen().get_input_set(
-                molecules=molecules, box=box
-            )
+            pw = PackmolBoxGen().get_input_set(molecules=molecules, box=box)
             pw.write_input(scratch_dir)
             pw.run(scratch_dir)
             coordinates = XYZ.from_file(
@@ -237,9 +240,7 @@ class OpenMMGenerator(InputGenerator):
         raw_coordinates = coordinates.loc[:, "x":"z"].values
         return raw_coordinates
 
-    def _get_box(
-        self, smiles: Dict[str, int], density: float
-    ) -> List[float]:
+    def _get_box(self, smiles: Dict[str, int], density: float) -> List[float]:
         """
         Calculates the side_length of a cube necessary to contain the given molecules with
         given density.
@@ -263,18 +264,27 @@ class OpenMMGenerator(InputGenerator):
         side_length = box_volume ** (1 / 3)
         return [0, 0, 0, side_length, side_length, side_length]
 
-
     # TODO: need to settle on a method for selecting a parameterization of the system.
-    def _parameterize_system(self, smiles: Dict[str, int], box: List[float], force_field: str):
-       supported_force_fields = ["Sage"]
-       if force_field == "Sage":
-        topology = self._get_openmm_topology(smiles)
-        openff_mols = [
-            openff.toolkit.topology.Molecule.from_smiles(smile)
-            for smile in smiles.keys()
-        ]
+    def _parameterize_system(
+        self, smiles: Dict[str, int], box: List[float], force_field: str
+    ) -> openmm.System:
+        supported_force_fields = ["Sage"]
+        if force_field == "Sage":
+            topology = self._get_openmm_topology(smiles)
+            openff_mols = [
+                openff.toolkit.topology.Molecule.from_smiles(smile)
+                for smile in smiles.keys()
+            ]
+            openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+            openff_topology = openff.toolkit.topology.Topology.from_openmm(
+                topology, openff_mols
+            )
+            box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * nanometer
+            openff_topology.box_vectors = box_vectors
+            system = openff_forcefield.create_openmm_system(openff_topology)
+            return system
         else:
             raise NotImplementedError(
-                f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n" \
-                f"Please select one of the supported force fields.")
-
+                f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
+                f"Please select one of the supported force fields."
+            )
