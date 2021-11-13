@@ -43,6 +43,7 @@ def smile_to_mol(smile):
     adaptor = BabelMolAdaptor(mol.OBMol)
     return adaptor.pymatgen_mol
 
+# TODO: this logic all belongs in inputs/OpenMMGenerator
 
 class OpenMMSimulationGenerator:
     """
