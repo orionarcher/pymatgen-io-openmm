@@ -275,6 +275,7 @@ class OpenMMGenerator(InputGenerator):
                 openff.toolkit.topology.Molecule.from_smiles(smile)
                 for smile in smiles.keys()
             ]
+            # TODO: add logic to insert partial charges into ff
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
                 topology, openff_mols
