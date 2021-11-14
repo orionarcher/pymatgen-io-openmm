@@ -171,6 +171,11 @@ class OpenMMGenerator(InputGenerator):
         box: Optional[List] = None,
         temperature: Optional[float] = None,
     ) -> InputSet:
+        # the way these functions are written write now is not a pipeline, each internal
+        # method should be called to generate the next step in the pipe, not all take
+        # the same methods. e.g. the static utility methods should not call eachother
+        # unless strictly necessary, instead, get_input_set should string together the
+        # operations to create a clean pipeline.
         return
 
     @staticmethod
@@ -197,7 +202,8 @@ class OpenMMGenerator(InputGenerator):
             structure = parmed.load_file(f.name)
         return structure
 
-    def _get_openmm_topology(self, smiles: Dict[str, int]) -> openmm.app.Topology:
+    @staticmethod
+    def _get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
         """
         Returns an openmm topology with the given smiles at the given counts.
 
@@ -212,7 +218,7 @@ class OpenMMGenerator(InputGenerator):
         topology
         """
         structure_counts = {
-            count: self._smile_to_parmed_structure(smile)
+            count: OpenMMGenerator._smile_to_parmed_structure(smile)
             for smile, count in smiles.items()
         }
         combined_structs = parmed.Structure()
@@ -220,14 +226,15 @@ class OpenMMGenerator(InputGenerator):
             combined_structs += struct * count
         return combined_structs.topology
 
-    def _get_coordinates(self, smiles: Dict[str, int], box: List[float]) -> np.ndarray:
+    @staticmethod
+    def _get_coordinates(smiles: Dict[str, int], box: List[float]) -> np.ndarray:
         molecules = []
         for smile, count in smiles.items():
             molecules.append(
                 {
                     "name": smile,
                     "number": count,
-                    "coords": self._smile_to_molecule(smile),
+                    "coords": OpenMMGenerator._smile_to_molecule(smile),
                 }
             )
         with tempfile.TemporaryDirectory() as scratch_dir:
@@ -240,7 +247,8 @@ class OpenMMGenerator(InputGenerator):
         raw_coordinates = coordinates.loc[:, "x":"z"].values
         return raw_coordinates
 
-    def _get_box(self, smiles: Dict[str, int], density: float) -> List[float]:
+    @staticmethod
+    def _get_box(smiles: Dict[str, int], density: float) -> List[float]:
         """
         Calculates the side_length of a cube necessary to contain the given molecules with
         given density.
@@ -256,7 +264,7 @@ class OpenMMGenerator(InputGenerator):
         """
         cm3_to_A3 = 1e24
         NA = 6.02214e23
-        mols = [self._smile_to_molecule(smile) for smile in smiles.keys()]
+        mols = [OpenMMGenerator._smile_to_molecule(smile) for smile in smiles.keys()]
         mol_mw = np.array([mol.composition.weight for mol in mols])
         counts = np.array(list(smiles.values()))
         total_weight = sum(mol_mw * counts)
@@ -265,12 +273,14 @@ class OpenMMGenerator(InputGenerator):
         return [0, 0, 0, side_length, side_length, side_length]
 
     # TODO: need to settle on a method for selecting a parameterization of the system.
+    # TODO: this code should be restructured to take topology, smiles, box, and ff as args
+    @staticmethod
     def _parameterize_system(
-        self, smiles: Dict[str, int], box: List[float], force_field: str
+        smiles: Dict[str, int], box: List[float], force_field: str
     ) -> openmm.System:
         supported_force_fields = ["Sage"]
         if force_field == "Sage":
-            topology = self._get_openmm_topology(smiles)
+            topology = OpenMMGenerator._get_openmm_topology(smiles)
             openff_mols = [
                 openff.toolkit.topology.Molecule.from_smiles(smile)
                 for smile in smiles.keys()
