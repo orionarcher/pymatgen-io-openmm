@@ -45,7 +45,7 @@ class TopologyInput(InputFile):
 
     def get_string(self) -> str:
         with io.StringIO() as s:
-            PDBFile.writeFile(self.topology, self.positions)
+            PDBFile.writeFile(self.topology, self.positions)  # TODO: missing a file here?
             s.seek(0)
             pdb = s.read()
         return pdb
@@ -108,15 +108,15 @@ class OpenMMSet(InputSet):
         state_file: str = "state.xml",
     ):
         topology = TopologyInput.from_file(topology_file)
-        system = TopologyInput.from_file(system_file)
-        integrator = TopologyInput.from_file(integrator_file)
+        system = SystemInput.from_file(system_file)
+        integrator = IntegratorInput.from_file(integrator_file)
         openmm_set = OpenMMSet(
             topology=topology,
             system=system,
             integrator=integrator,
         )
         if Path("state.xml").is_file():
-            state = TopologyInput.from_file(state_file)
+            state = StateInput.from_file(state_file)
             openmm_set["state"] = state
         return openmm_set
 
