@@ -39,7 +39,7 @@ from openbabel import pybel
 
 import parmed
 
-__author__ = "Orion Cohen"
+__author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
 __maintainer__ = "Orion Cohen"
 __email__ = "orion@lbl.gov"
@@ -128,6 +128,18 @@ class OpenMMSet(InputSet):
         integrator_file: str = "integrator.xml",
         state_file: str = "state.xml",
     ):
+        """
+
+        Args:
+            directory:
+            topology_file: name of the pdb file with topological information.
+            system_file: name of the serialized System xml file.
+            integrator_file: name of the serialized Integrator xml file.
+            state_file: name of the serialized State xml file.
+
+        Returns:
+            an OpenMMSet
+        """
         topology = TopologyInput.from_file(topology_file)
         system = SystemInput.from_file(system_file)
         integrator = IntegratorInput.from_file(integrator_file)
@@ -142,6 +154,12 @@ class OpenMMSet(InputSet):
         return openmm_set
 
     def validate(self) -> bool:
+        """
+        Check that the OpenMMSet will generate a valid simulation.
+
+        Returns:
+            bool
+        """
         # TODO: this should test if the set returns a valid simulation and throw an error if it does not
         # TODO: is this condition too strict?
         try:
@@ -156,6 +174,12 @@ class OpenMMSet(InputSet):
             return True
 
     def get_simulation(self) -> Simulation:
+        """
+        Instantiates and returns an OpenMM.Simulation from the input files.
+
+        Returns:
+            OpenMM.Simulation
+        """
         simulation = Simulation(
             self.topology.topology,
             self.system.system,
@@ -221,10 +245,23 @@ class OpenMMGenerator(InputGenerator):
         box: Optional[List] = None,
         temperature: Optional[float] = None,
     ) -> InputSet:
+        """
+
+        Args:
+            smiles: keys are smiles and values are number of that molecule to pack
+            density: the density of the system. density OR box must be given as an argument.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+            temperature: the temperature of the system (Kelvin).
+
+        Returns:
+            an OpenMM.InputSet
+        """
+        assert density ^ box, "Density OR box must be included, but not both."
         # TODO: write test to ensure coordinates and topology have the same atom ordering
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
-        box = self._get_box(smiles, density)
+        if not box:
+            box = self._get_box(smiles, density)
         coordinates = self._get_coordinates(smiles, box)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
@@ -251,11 +288,6 @@ class OpenMMGenerator(InputGenerator):
                 self.state_file: state_input,
             }
         )
-        # the way these functions are written write now is not a pipeline, each internal
-        # method should be called to generate the next step in the pipe, not all take
-        # the same methods. e.g. the static utility methods should not call eachother
-        # unless strictly necessary, instead, get_input_set should string together the
-        # operations to create a clean pipeline.
         return input_set
 
     @staticmethod
@@ -289,13 +321,11 @@ class OpenMMGenerator(InputGenerator):
 
         The topology does not contain coordinates.
 
-        Parameters
-        ----------
-        smiles : keys are smiles and values are number of that molecule to pack
+        Parameters:
+            smiles: keys are smiles and values are number of that molecule to pack
 
-        Returns
-        -------
-        topology
+        Returns:
+            an openmm.app.Topology
         """
         structure_counts = {
             count: OpenMMGenerator._smile_to_parmed_structure(smile)
@@ -308,6 +338,16 @@ class OpenMMGenerator(InputGenerator):
 
     @staticmethod
     def _get_coordinates(smiles: Dict[str, int], box: List[float]) -> np.ndarray:
+        """
+        Pack the box with the molecules specified by smiles.
+
+        Args:
+            smiles: keys are smiles and values are number of that molecule to pack
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]
+
+        Returns:
+            array of coordinates for each atom in the box.
+        """
         molecules = []
         for smile, count in smiles.items():
             molecules.append(
@@ -333,14 +373,12 @@ class OpenMMGenerator(InputGenerator):
         Calculates the side_length of a cube necessary to contain the given molecules with
         given density.
 
-        Parameters
-        ----------
-        smiles : keys are smiles and values are number of that molecule to pack
-        density : guessed density of the solution, larger densities will lead to smaller cubes.
+        Args:
+            smiles: keys are smiles and values are number of that molecule to pack
+            density: guessed density of the solution, larger densities will lead to smaller cubes.
 
-        Returns
-        -------
-        side_length: side length of the returned cube
+        Returns:
+            side_length: side length of the returned cube
         """
         cm3_to_A3 = 1e24
         NA = 6.02214e23
