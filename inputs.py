@@ -20,11 +20,19 @@ from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 
 import openff
+import openff.toolkit
 from openff.toolkit.typing.engines import smirnoff
 
 import openmm
 from openmm.app import Simulation, PDBFile, Topology
-from openmm import XmlSerializer, System, Integrator, State
+from openmm import (
+    XmlSerializer,
+    System,
+    Integrator,
+    State,
+    Context,
+    LangevinMiddleIntegrator,
+)
 from openmm.unit import *
 
 from openbabel import pybel
@@ -45,7 +53,9 @@ class TopologyInput(InputFile):
 
     def get_string(self) -> str:
         with io.StringIO() as s:
-            PDBFile.writeFile(self.topology, self.positions)  # TODO: missing a file here?
+            PDBFile.writeFile(
+                self.topology, self.positions
+            )  # TODO: missing a file here?
             s.seek(0)
             pdb = s.read()
         return pdb
@@ -148,20 +158,51 @@ class OpenMMSet(InputSet):
 
 # noinspection PyMethodOverriding
 class OpenMMGenerator(InputGenerator):
+    """
+    Generator for an OpenMM InputSet that specifies a simulation of a mixed molecular system.
 
-    # TODO: what determines if a setting goes in the __init__ or get_input_set?
+    This class is only compatible with the Langevin Middle Integrator. To use a different
+    integrator, you can first generate the system with OpenMMGenerator and then add
+    a different integrator to the OpenMMInputSet.
+    """
+
     def __init__(
         self,
         force_field: str = "Sage",
-        integrator: Union[str, Integrator] = "LangevinMiddleIntegrator",
         temperature: float = 298,
-        step_size: int = 1,
+        step_size: float = 0.001,
+        friction_coefficient: int = 1,
         partial_charges: Optional[Dict[str, np.ndarray]] = None,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
         state_file: Union[str, Path] = "state.xml",
     ):
+        """
+        Instantiates an OpenMMGenerator.
+
+        Args:
+            force_field: force field for parameterization, currently supported Force Fields: 'Sage'.
+            temperature: the temperature to be added to the integrator (Kelvin).
+            step_size: the step size of the simulation (picoseconds).
+            friction_coefficient: the friction coefficient which couples the system to
+                the heat bath (inverse picoseconds).
+            partial_charges: TODO: determine a appropriate way of specifying partial charge information
+            topology_file: Location to save the Topology PDB.
+            system_file: Location to save the System xml.
+            integrator_file: Location to save the Integrator xml.
+            state_file: Location to save the State xml.
+        """
+        self.force_field = force_field
+        self.temperature = temperature
+        self.step_size = step_size
+        self.friction_coefficient = friction_coefficient
+        self.partial_charges = partial_charges
+        self.topology_file = topology_file
+        self.system_file = system_file
+        self.integrator_file = integrator_file
+        self.state_file = state_file
+
         return
 
     def get_input_set(
@@ -171,6 +212,23 @@ class OpenMMGenerator(InputGenerator):
         box: Optional[List] = None,
         temperature: Optional[float] = None,
     ) -> InputSet:
+        # TODO: write test to ensure coordinates and topology have the right atom ordering
+        topology = self._get_openmm_topology(smiles)
+        box = self._get_box(smiles, density)
+        coordinates = self._get_coordinates(smiles, box)
+        smile_strings = list(smiles.keys())
+        system = self._parameterize_system(
+            topology, smile_strings, box, self.force_field
+        )
+        integrator = LangevinMiddleIntegrator(
+            self.temperature * kelvin,
+            self.friction_coefficient / picoseconds,
+            self.step_size * picoseconds,
+        )
+        context = Context(system, integrator)
+        context.setPositions(coordinates)
+        state = context.getState(getPositions=True)
+
         # the way these functions are written write now is not a pipeline, each internal
         # method should be called to generate the next step in the pipe, not all take
         # the same methods. e.g. the static utility methods should not call eachother
@@ -276,14 +334,12 @@ class OpenMMGenerator(InputGenerator):
     # TODO: this code should be restructured to take topology, smiles, box, and ff as args
     @staticmethod
     def _parameterize_system(
-        smiles: Dict[str, int], box: List[float], force_field: str
+        topology: Topology, smile_strings: List[str], box: List[float], force_field: str
     ) -> openmm.System:
         supported_force_fields = ["Sage"]
         if force_field == "Sage":
-            topology = OpenMMGenerator._get_openmm_topology(smiles)
             openff_mols = [
-                openff.toolkit.topology.Molecule.from_smiles(smile)
-                for smile in smiles.keys()
+                toolkit.topology.Molecule.from_smiles(smile) for smile in smile_strings
             ]
             # TODO: add logic to insert partial charges into ff
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
