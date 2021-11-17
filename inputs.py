@@ -48,17 +48,20 @@ __date__ = "Nov 2021"
 
 class TopologyInput(InputFile):
     def __init__(self, topology: Topology, positions: Union[np.ndarray, List]):
-        self.topology = topology
-        self.positions = positions
+        self.content = self._get_string(topology, positions)
 
-    def get_string(self) -> str:
+    @staticmethod
+    def _get_string(topology, positions) -> str:
         with io.StringIO() as s:
             PDBFile.writeFile(
-                self.topology, self.positions
+                topology, positions
             )  # TODO: missing a file here?
             s.seek(0)
             pdb = s.read()
         return pdb
+
+    def get_string(self) -> str:
+        return self.content
 
     @classmethod
     def from_string(cls, contents: str):
@@ -71,10 +74,14 @@ class TopologyInput(InputFile):
 
 class SystemInput(InputFile):
     def __init__(self, system: System):
-        self.system = system
+        self.content = self._get_string(system)
+
+    @staticmethod
+    def _get_string(system) -> str:
+        return XmlSerializer.serialize(system)
 
     def get_string(self) -> str:
-        return XmlSerializer.serialize(self.system)
+        return self.content
 
     @classmethod
     def from_string(cls, contents: str):
@@ -83,10 +90,14 @@ class SystemInput(InputFile):
 
 class IntegratorInput(InputFile):
     def __init__(self, integrator: Integrator):
-        self.integrator = integrator
+        self.content = self._get_string(integrator)
+
+    @staticmethod
+    def _get_string(integrator) -> str:
+        return XmlSerializer.serialize(integrator)
 
     def get_string(self) -> str:
-        return XmlSerializer.serialize(self.integrator)
+        return self.content
 
     @classmethod
     def from_string(cls, contents: str):
@@ -95,10 +106,14 @@ class IntegratorInput(InputFile):
 
 class StateInput(InputFile):
     def __init__(self, state: State):
-        self.state = state
+        self.content = self._get_string(state)
+
+    @staticmethod
+    def _get_string(state) -> str:
+        return XmlSerializer.serialize(state)
 
     def get_string(self) -> str:
-        return XmlSerializer.serialize(self.state)
+        return self.content
 
     @classmethod
     def from_string(cls, contents: str):
@@ -212,7 +227,7 @@ class OpenMMGenerator(InputGenerator):
         box: Optional[List] = None,
         temperature: Optional[float] = None,
     ) -> InputSet:
-        # TODO: write test to ensure coordinates and topology have the right atom ordering
+        # TODO: write test to ensure coordinates and topology have the same atom ordering, tough!
         topology = self._get_openmm_topology(smiles)
         box = self._get_box(smiles, density)
         coordinates = self._get_coordinates(smiles, box)
@@ -229,6 +244,18 @@ class OpenMMGenerator(InputGenerator):
         context.setPositions(coordinates)
         state = context.getState(getPositions=True)
 
+        topology_input = TopologyInput(topology, coordinates)
+        system_input = SystemInput(system)
+        integrator_input = IntegratorInput(integrator)
+        state_input = StateInput(state)
+        input_set = OpenMMSet(
+            inputs={
+                self.topology_file: topology_input,
+                self.system_file: system_input,
+                self.integrator_file: integrator_input,
+                self.state_file: state_input,
+            }
+        )
         # the way these functions are written write now is not a pipeline, each internal
         # method should be called to generate the next step in the pipe, not all take
         # the same methods. e.g. the static utility methods should not call eachother
