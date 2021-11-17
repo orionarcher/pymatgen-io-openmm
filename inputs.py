@@ -53,9 +53,7 @@ class TopologyInput(InputFile):
     @staticmethod
     def _get_string(topology, positions) -> str:
         with io.StringIO() as s:
-            PDBFile.writeFile(
-                topology, positions
-            )  # TODO: missing a file here?
+            PDBFile.writeFile(topology, positions)  # TODO: missing a file here?
             s.seek(0)
             pdb = s.read()
         return pdb
@@ -121,8 +119,6 @@ class StateInput(InputFile):
 
 
 class OpenMMSet(InputSet):
-
-    # TODO: if there is an optional file should it be missing or should the value be none?
     @classmethod
     def from_directory(
         cls,
@@ -218,8 +214,6 @@ class OpenMMGenerator(InputGenerator):
         self.integrator_file = integrator_file
         self.state_file = state_file
 
-        return
-
     def get_input_set(
         self,
         smiles: Dict[str, int],
@@ -227,7 +221,8 @@ class OpenMMGenerator(InputGenerator):
         box: Optional[List] = None,
         temperature: Optional[float] = None,
     ) -> InputSet:
-        # TODO: write test to ensure coordinates and topology have the same atom ordering, tough!
+        # TODO: write test to ensure coordinates and topology have the same atom ordering
+        # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
         box = self._get_box(smiles, density)
         coordinates = self._get_coordinates(smiles, box)
@@ -243,7 +238,7 @@ class OpenMMGenerator(InputGenerator):
         context = Context(system, integrator)
         context.setPositions(coordinates)
         state = context.getState(getPositions=True)
-
+        # instantiate input files and feed to input_set
         topology_input = TopologyInput(topology, coordinates)
         system_input = SystemInput(system)
         integrator_input = IntegratorInput(integrator)
@@ -261,7 +256,7 @@ class OpenMMGenerator(InputGenerator):
         # the same methods. e.g. the static utility methods should not call eachother
         # unless strictly necessary, instead, get_input_set should string together the
         # operations to create a clean pipeline.
-        return
+        return input_set
 
     @staticmethod
     def _smile_to_molecule(smile: str) -> pymatgen.core.Molecule:
@@ -366,7 +361,8 @@ class OpenMMGenerator(InputGenerator):
         supported_force_fields = ["Sage"]
         if force_field == "Sage":
             openff_mols = [
-                toolkit.topology.Molecule.from_smiles(smile) for smile in smile_strings
+                openff.toolkit.topology.Molecule.from_smiles(smile)
+                for smile in smile_strings
             ]
             # TODO: add logic to insert partial charges into ff
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
