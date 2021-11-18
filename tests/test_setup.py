@@ -57,7 +57,7 @@ class TestOpenMMSimulationGenerator:
         assert isinstance(coordinates, float)
 
     def test_smiles_to_system_and_topology(self, simulation_generator, ethanol_water):
-        system, topology = simulation_generator._smiles_to_system_and_topology(ethanol_water)
+        system, topology = simulation_generator._smiles_to_system_and_topology(ethanol_water, 1)
         assert isinstance(system, openmm.System)
         assert isinstance(topology, openmm.app.Topology)
 

@@ -256,7 +256,7 @@ class OpenMMGenerator(InputGenerator):
         Returns:
             an OpenMM.InputSet
         """
-        assert density ^ box, "Density OR box must be included, but not both."
+        assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
         # TODO: write test to ensure coordinates and topology have the same atom ordering
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
@@ -310,8 +310,8 @@ class OpenMMGenerator(InputGenerator):
         mol.addh()
         mol.make3D()
         with tempfile.NamedTemporaryFile() as f:
-            mol.write(format="pdb", filename=f.name, overwrite=True)
-            structure = parmed.load_file(f.name)
+            mol.write(format="mol", filename=f.name, overwrite=True)
+            structure = parmed.load_file(f.name)[0]  # load_file is returning a list for some reason
         return structure
 
     @staticmethod
@@ -387,7 +387,7 @@ class OpenMMGenerator(InputGenerator):
         counts = np.array(list(smiles.values()))
         total_weight = sum(mol_mw * counts)
         box_volume = total_weight * cm3_to_A3 / (NA * density)
-        side_length = box_volume ** (1 / 3)
+        side_length = round(box_volume ** (1 / 3), 2)
         return [0, 0, 0, side_length, side_length, side_length]
 
     # TODO: need to settle on a method for selecting a parameterization of the system.
@@ -397,17 +397,17 @@ class OpenMMGenerator(InputGenerator):
         topology: Topology, smile_strings: List[str], box: List[float], force_field: str
     ) -> openmm.System:
         supported_force_fields = ["Sage"]
-        if force_field == "Sage":
+        if force_field.lower() == "sage":
             openff_mols = [
                 openff.toolkit.topology.Molecule.from_smiles(smile)
                 for smile in smile_strings
             ]
             # TODO: add logic to insert partial charges into ff
-            openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+            openff_forcefield = smirnoff.ForceField("../force_fields/openff_unconstrained-2.0.0.offxml")
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
                 topology, openff_mols
             )
-            box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * nanometer
+            box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
             openff_topology.box_vectors = box_vectors
             system = openff_forcefield.create_openmm_system(openff_topology)
             return system
