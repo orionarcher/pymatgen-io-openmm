@@ -1,4 +1,5 @@
 import pytest
+import numpy as np
 
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -12,6 +13,7 @@ from pymatgen.io.openmm.inputs import (
 import pymatgen
 import parmed
 import openmm
+
 
 class TestInputFiles:
     def test_topology_input(self):
@@ -54,8 +56,8 @@ class TestOpenMMGenerator:
         # currently failing because H2O is two residues. Issue raised on GitHub
         # https://github.com/openbabel/openbabel/issues/2431
         assert len(struct2.atoms) == 3
-        assert len(struct1.residues) == 2
-        assert len(struct1.bonds) == 2
+        assert len(struct2.residues) == 1
+        assert len(struct2.bonds) == 2
 
     def test_get_openmm_topology(self):
         topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
@@ -63,13 +65,23 @@ class TestOpenMMGenerator:
         assert topology.getNumAtoms() == 780
         assert topology.getNumResidues() == 220
         assert topology.getNumBonds() == 560
-        return
 
     def test_get_box(self):
-        return
+        box = OpenMMGenerator._get_box({"O": 200, "CCO": 20}, 1)
+        assert isinstance(box, list)
+        assert len(box) == 6
+        np.testing.assert_allclose(box[0:3], 0, 2)
+        np.testing.assert_allclose(box[3:6], 19.59, 2)
 
     def test_get_coordinates(self):
-        return
+        coordinates = OpenMMGenerator._get_coordinates(
+            {"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59]
+        )
+        assert isinstance(coordinates, np.ndarray)
+        assert len(coordinates) == 780
+        assert np.min(coordinates) > -0.2
+        assert np.max(coordinates) < 19.8
+        assert coordinates.size == 780 * 3
 
     def test_parameterize_system(self):
         return
