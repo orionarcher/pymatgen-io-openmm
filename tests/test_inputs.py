@@ -88,14 +88,19 @@ class TestOpenMMGenerator:
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = "Sage"
-        system = OpenMMGenerator._parameterize_system(topology, smile_strings, box, force_field)
+        system = OpenMMGenerator._parameterize_system(
+            topology, smile_strings, box, force_field
+        )
         assert system.getNumParticles() == 780
         assert system.usesPeriodicBoundaryConditions()
-
-        return
 
     def test_get_input_set(self):
         generator = OpenMMGenerator()
         input_set = generator.get_input_set({"O": 200, "CCO": 20}, density=1)
         assert isinstance(input_set, OpenMMSet)
-        return
+        assert set(input_set.inputs.keys()) == {
+            "topology.pdb",
+            "system.xml",
+            "integrator.xml",
+            "state.xml",
+        }
