@@ -125,22 +125,29 @@ class OpenMMSet(InputSet):
             topology_file: name of the pdb file with topological information.
             system_file: name of the serialized System xml file.
             integrator_file: name of the serialized Integrator xml file.
-            state_file: name of the serialized State xml file.
+            state_file: name of the serialized State xml file. If there is no state_file,
+                then positions must be set for simulation.
 
         Returns:
             an OpenMMSet
         """
-        topology = TopologyInput.from_file(topology_file)
-        system = SystemInput.from_file(system_file)
-        integrator = IntegratorInput.from_file(integrator_file)
-        openmm_set = OpenMMSet(
-            topology=topology,
-            system=system,
-            integrator=integrator,
-        )
+        topology_input = TopologyInput.from_file(topology_file)
+        system_input = SystemInput.from_file(system_file)
+        integrator_input = IntegratorInput.from_file(integrator_file)
+        inputs = {
+            topology_file: topology_input,
+            system_file: system_input,
+            integrator_file: integrator_input,
+        }
         if Path("state.xml").is_file():
-            state = StateInput.from_file(state_file)
-            openmm_set["state"] = state
+            inputs[state_file] = StateInput.from_file(state_file)
+        openmm_set = OpenMMSet(
+            inputs=inputs,
+            topology_file=topology_file,
+            system_file=system_file,
+            integrator_file=integrator_file,
+            state_file=state_file,
+        )
         return openmm_set
 
     def validate(self) -> bool:
@@ -274,7 +281,11 @@ class OpenMMGenerator(InputGenerator):
                 self.system_file: system_input,
                 self.integrator_file: integrator_input,
                 self.state_file: state_input,
-            }
+            },
+            topology_file=self.topology_file,
+            system_file=self.system_file,
+            integrator_file=self.integrator_file,
+            state_file=self.state_file,
         )
         return input_set
 
