@@ -69,6 +69,11 @@ class TopologyInput(InputFile):
             positions = pdb.getPositions(asNumpy=True)
         return TopologyInput(topology, positions)
 
+    def get_topology(self) -> Topology:
+        with io.StringIO(self.content) as s:
+            pdb = PDBFile(s)
+            topology = pdb.getTopology()
+        return topology
 
 class XmlInput(InputFile):
     """
@@ -91,20 +96,17 @@ class XmlInput(InputFile):
 
 
 class SystemInput(XmlInput):
-    @property
-    def system(self) -> System:
+    def get_system(self) -> System:
         return XmlSerializer.deserialize(self.content)
 
 
 class IntegratorInput(XmlInput):
-    @property
-    def integrator(self) -> Integrator:
+    def get_integrator(self) -> Integrator:
         return XmlSerializer.deserialize(self.content)
 
 
 class StateInput(XmlInput):
-    @property
-    def state(self) -> State:
+    def get_state(self) -> State:
         return XmlSerializer.deserialize(self.content)
 
 
@@ -139,15 +141,15 @@ class OpenMMSet(InputSet):
             system_file: system_input,
             integrator_file: integrator_input,
         }
-        if Path("state.xml").is_file():
-            inputs[state_file] = StateInput.from_file(state_file)
         openmm_set = OpenMMSet(
             inputs=inputs,
             topology_file=topology_file,
             system_file=system_file,
             integrator_file=integrator_file,
-            state_file=state_file,
         )
+        if Path(state_file).is_file():
+            openmm_set.inputs[state_file] = StateInput.from_file(state_file)
+            openmm_set.state_file = state_file  # should this be a dict-like assignment?
         return openmm_set
 
     def validate(self) -> bool:
@@ -175,14 +177,18 @@ class OpenMMSet(InputSet):
         Returns:
             OpenMM.Simulation
         """
+        topology_input = self.inputs[self.topology_file]
+        system_input = self.inputs[self.system_file]
+        integrator_input = self.inputs[self.integrator_file]
         simulation = Simulation(
-            self.topology.topology,
-            self.system.system,
-            self.integrator.integrator,
+            topology_input.get_topology(),
+            system_input.get_system(),
+            integrator_input.get_integrator(),
         )
-        if hasattr(self, "state") and self.state:
+        if hasattr(self, "state_file") and self.state_file:
             # TODO: confirm that this works correctly
-            simulation.context.setState(self.state.state)
+            state_input = self.inputs[self.state_file]
+            simulation.context.setState(state_input.get_state())
         return simulation
 
 
