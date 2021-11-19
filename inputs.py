@@ -48,10 +48,10 @@ __date__ = "Nov 2021"
 
 class TopologyInput(InputFile):
     def __init__(self, topology: Topology, positions: Union[np.ndarray, List]):
-        self.content = self._get_string(topology, positions)
+        self.content = self._serialize(topology, positions)
 
     @staticmethod
-    def _get_string(topology, positions) -> str:
+    def _serialize(topology, positions) -> str:
         with io.StringIO() as s:
             PDBFile.writeFile(topology, positions)  # TODO: missing a file here?
             s.seek(0)
@@ -70,52 +70,42 @@ class TopologyInput(InputFile):
         return TopologyInput(topology, positions)
 
 
-class SystemInput(InputFile):
-    def __init__(self, system: System):
-        self.content = self._get_string(system)
+class XmlInput(InputFile):
+    """
+    compatible with any OpenMM object with a serialization proxy registered:
+    https://github.com/openmm/openmm/blob/master/serialization/src/SerializationProxyRegistration.cpp
+    """
+    def __init__(self, openmm_object):
+        self.content = self._serialize(openmm_object)
 
     @staticmethod
-    def _get_string(system) -> str:
-        return XmlSerializer.serialize(system)
+    def _serialize(openmm_object) -> str:
+        return XmlSerializer.serialize(openmm_object)
 
     def get_string(self) -> str:
         return self.content
 
     @classmethod
     def from_string(cls, contents: str):
-        return SystemInput(XmlSerializer.deserialize(contents))
+        return XmlInput(XmlSerializer.deserialize(contents))
 
 
-class IntegratorInput(InputFile):
-    def __init__(self, integrator: Integrator):
-        self.content = self._get_string(integrator)
-
-    @staticmethod
-    def _get_string(integrator) -> str:
-        return XmlSerializer.serialize(integrator)
-
-    def get_string(self) -> str:
-        return self.content
-
-    @classmethod
-    def from_string(cls, contents: str):
-        return IntegratorInput(XmlSerializer.deserialize(contents))
+class SystemInput(XmlInput):
+    @property
+    def system(self) -> System:
+        return XmlSerializer.deserialize(self.content)
 
 
-class StateInput(InputFile):
-    def __init__(self, state: State):
-        self.content = self._get_string(state)
+class IntegratorInput(XmlInput):
+    @property
+    def integrator(self) -> Integrator:
+        return XmlSerializer.deserialize(self.content)
 
-    @staticmethod
-    def _get_string(state) -> str:
-        return XmlSerializer.serialize(state)
 
-    def get_string(self) -> str:
-        return self.content
-
-    @classmethod
-    def from_string(cls, contents: str):
-        return StateInput(XmlSerializer.deserialize(contents))
+class StateInput(XmlInput):
+    @property
+    def state(self) -> State:
+        return XmlSerializer.deserialize(self.content)
 
 
 class OpenMMSet(InputSet):
@@ -160,8 +150,6 @@ class OpenMMSet(InputSet):
         Returns:
             bool
         """
-        # TODO: this should test if the set returns a valid simulation and throw an error if it does not
-        # TODO: is this condition too strict?
         try:
             self.get_simulation()
         except Exception as e:
@@ -403,7 +391,7 @@ class OpenMMGenerator(InputGenerator):
                 for smile in smile_strings
             ]
             # TODO: add logic to insert partial charges into ff
-            openff_forcefield = smirnoff.ForceField("../force_fields/openff_unconstrained-2.0.0.offxml")
+            openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
                 topology, openff_mols
             )
