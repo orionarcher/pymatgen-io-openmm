@@ -55,7 +55,7 @@ class TopologyInput(InputFile):
         if not positions:
             positions = np.zeros(shape=(topology.getNumAtoms(), 3))
         with io.StringIO() as s:
-            PDBFile.writeFile(topology, positions, file=s)  # TODO: missing a file here?
+            PDBFile.writeFile(topology, positions, file=s)
             s.seek(0)
             pdb = s.read()
         return pdb
