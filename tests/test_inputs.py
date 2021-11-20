@@ -1,6 +1,7 @@
 import pathlib
 import tempfile
 
+import openff.toolkit.topology
 import pytest
 import numpy as np
 
@@ -154,14 +155,15 @@ class TestOpenMMGenerator:
 
     @pytest.mark.parametrize(
         "mol_name",
-        ["FEC", "CCO", "PF6"],
+        ["FEC-r", "FEC-s", "CCO", "PF6"],
     )
     def test_get_charged_openff_mol(self, mol_name):
         # see datafiles.py to track the path of the test files
-        xyz_path, charges_path = xyz_charges_dict[mol_name]
+        xyz_path, charges_path, smile = xyz_charges_dict[mol_name]
         mol = pymatgen.core.structure.Molecule.from_file(xyz_path)
         charges = np.load(charges_path)
-        openff_mol = OpenMMGenerator._get_charged_openff_mol(mol, charges)
+        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+        charged_mol = OpenMMGenerator._get_charged_openff_mol(mol, charges, openff_mol)
 
 
         return
