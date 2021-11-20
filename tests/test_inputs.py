@@ -22,6 +22,7 @@ from pymatgen.io.openmm.tests.datafiles import (
     integrator_path,
     system_path,
     coordinates_path,
+    xyz_charges_dict,
 )
 
 import pymatgen
@@ -156,6 +157,12 @@ class TestOpenMMGenerator:
         ["FEC", "CCO", "PF6"],
     )
     def test_get_charged_openff_mol(self, mol_name):
+        # see datafiles.py to track the path of the test files
+        xyz_path, charges_path = xyz_charges_dict[mol_name]
+        mol = pymatgen.core.structure.Molecule.from_file(xyz_path)
+        charges = np.load(charges_path)
+        openff_mol = OpenMMGenerator._get_charged_openff_mol(mol, charges)
+
 
         return
 

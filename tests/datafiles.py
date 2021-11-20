@@ -14,10 +14,15 @@ corrupted_state_path = resource_filename(__name__, str(input_set_path / "corrupt
 
 coordinates_path = resource_filename(__name__, str(test_files_path / "water_ethanol_coordinates.npy"))
 
-CCO_charges = resource_filename(__name__, str(partial_charges / "CCO.npy"))
 CCO_xyz = resource_filename(__name__, str(partial_charges / "CCO.xyz"))
-FEC_charges = resource_filename(__name__, str(partial_charges / "FEC.npy"))
+CCO_charges = resource_filename(__name__, str(partial_charges / "CCO.npy"))
 FEC_xyz = resource_filename(__name__, str(partial_charges / "FEC.xyz"))
-PF6_charges = resource_filename(__name__, str(partial_charges / "PF6.npy"))
+FEC_charges = resource_filename(__name__, str(partial_charges / "FEC.npy"))
 PF6_xyz = resource_filename(__name__, str(partial_charges / "PF6.xyz"))
+PF6_charges = resource_filename(__name__, str(partial_charges / "PF6.npy"))
 
+xyz_charges_dict = {
+    "CCO": (CCO_xyz, CCO_charges),
+    "FEC": (FEC_xyz, FEC_charges),
+    "PF6": (PF6_xyz, PF6_charges),
+}
