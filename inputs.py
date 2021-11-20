@@ -146,9 +146,10 @@ class OpenMMSet(InputSet):
         Returns:
             an OpenMMSet
         """
-        topology_input = TopologyInput.from_file(topology_file)
-        system_input = SystemInput.from_file(system_file)
-        integrator_input = IntegratorInput.from_file(integrator_file)
+        dir = Path(directory)
+        topology_input = TopologyInput.from_file(dir / topology_file)
+        system_input = SystemInput.from_file(dir / system_file)
+        integrator_input = IntegratorInput.from_file(dir / integrator_file)
         inputs = {
             topology_file: topology_input,
             system_file: system_input,
@@ -160,8 +161,8 @@ class OpenMMSet(InputSet):
             system_file=system_file,
             integrator_file=integrator_file,
         )
-        if Path(state_file).is_file():
-            openmm_set.inputs[state_file] = StateInput.from_file(state_file)
+        if Path(dir / state_file).is_file():
+            openmm_set.inputs[state_file] = StateInput.from_file(dir / state_file)
             openmm_set.state_file = state_file  # should this be a dict-like assignment?
         return openmm_set
 

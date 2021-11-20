@@ -1,3 +1,4 @@
+import pathlib
 import tempfile
 
 import pytest
@@ -72,13 +73,35 @@ class TestInputFiles:
 
 class TestOpenMMSet:
     def test_from_directory(self):
-        return
+        input_set = OpenMMSet.from_directory("test_files/input_set_files")
+        assert len(input_set.inputs) == 4
+        assert input_set.topology_file == 'topology.pdb'
+        assert input_set.state_file == 'state.xml'
+        assert isinstance(input_set.inputs['topology.pdb'], TopologyInput)
+        assert isinstance(input_set.inputs['state.xml'], StateInput)
+        input_set2 = OpenMMSet.from_directory("test_files/input_set_files",
+                                              state_file='wrong_file.xml')
+        assert len(input_set2.inputs) == 3
+        assert input_set2.topology_file == 'topology.pdb'
+        assert input_set2.state_file is None
 
     def test_validate(self):
-        return
+        input_set = OpenMMSet.from_directory("test_files/input_set_files")
+        assert input_set.validate()
+        corrupted_input_set = OpenMMSet.from_directory("test_files/input_set_files",
+                                                       state_file="corrupted_state.xml")
+        assert not corrupted_input_set.validate()
 
     def test_get_simulation(self):
-        return
+        input_set = OpenMMSet.from_directory("test_files/input_set_files")
+        simulation = input_set.get_simulation()
+        state = simulation.context.getState(getPositions=True)
+        assert len(state.getPositions(asNumpy=True)) == 780
+        assert simulation.system.getNumParticles() == 780
+        assert simulation.system.usesPeriodicBoundaryConditions()
+        assert simulation.topology.getNumAtoms() == 780
+        assert simulation.topology.getNumResidues() == 220
+        assert simulation.topology.getNumBonds() == 560
 
 
 class TestOpenMMGenerator:
@@ -145,4 +168,4 @@ class TestOpenMMGenerator:
             "integrator.xml",
             "state.xml",
         }
-        input_set.get_simulation()
+        assert input_set.validate()
