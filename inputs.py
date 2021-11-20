@@ -48,14 +48,15 @@ __date__ = "Nov 2021"
 
 class TopologyInput(InputFile):
     # TODO: this class is currently not working properly
-    def __init__(self, topology: Topology):
-        self.content = self._serialize(topology)
+    def __init__(self, topology: Topology, positions: Optional[Union[List, np.ndarray]] = None):
+        self.content = self._serialize(topology, positions)
 
     @staticmethod
-    def _serialize(topology) -> str:
-        zero_coordinates = np.zeros(shape=(topology.getNumAtoms(), 3))
+    def _serialize(topology, positions) -> str:
+        if not positions:
+            positions = np.zeros(shape=(topology.getNumAtoms(), 3))
         with io.StringIO() as s:
-            PDBFile.writeFile(topology, zero_coordinates, file=s)  # TODO: missing a file here?
+            PDBFile.writeFile(topology, positions, file=s)  # TODO: missing a file here?
             s.seek(0)
             pdb = s.read()
         return pdb
