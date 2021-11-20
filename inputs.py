@@ -134,9 +134,14 @@ class OpenMMSet(InputSet):
         state_file: str = "state.xml",
     ):
         """
+        An InputSet for OpenMM Simulations.
+
+        This is a container for the serialized topology, system, integrator, and state files.
+        Topology is stored as a pdb and the other files are stored as xml. The state file is
+        optional but positions must be manually assigned if no state is provided.
 
         Args:
-            directory:
+            directory: directory that holds the input files.
             topology_file: name of the pdb file with topological information.
             system_file: name of the serialized System xml file.
             integrator_file: name of the serialized Integrator xml file.
@@ -168,7 +173,7 @@ class OpenMMSet(InputSet):
 
     def validate(self) -> bool:
         """
-        Check that the OpenMMSet will generate a valid simulation.
+        Checks that the OpenMMSet will generate a valid simulation.
 
         Returns:
             bool
@@ -209,7 +214,11 @@ class OpenMMSet(InputSet):
 # noinspection PyMethodOverriding
 class OpenMMGenerator(InputGenerator):
     """
-    Generator for an OpenMM InputSet that specifies a simulation of a mixed molecular system.
+    Generator for an OpenMM InputSet.
+
+    This class is designed for generating simulations of mixed molecular systems. Starting with
+    only SMILEs and counts, this class can generate a valid InputSet for a wide variety of
+    molecular systems. Currently only the Sage force field is supported.
 
     This class is only compatible with the Langevin Middle Integrator. To use a different
     integrator, you can first generate the system with OpenMMGenerator and then add
@@ -258,15 +267,15 @@ class OpenMMGenerator(InputGenerator):
         smiles: Dict[str, int],
         density: Optional[float] = None,
         box: Optional[List] = None,
-        temperature: Optional[float] = None,
     ) -> InputSet:
         """
+        This
+
 
         Args:
             smiles: keys are smiles and values are number of that molecule to pack
             density: the density of the system. density OR box must be given as an argument.
             box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
-            temperature: the temperature of the system (Kelvin).
 
         Returns:
             an OpenMM.InputSet
@@ -336,7 +345,7 @@ class OpenMMGenerator(InputGenerator):
     @staticmethod
     def _get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
         """
-        Returns an openmm topology with the given smiles at the given counts.
+        Returns an openmm topology with the given SMILEs at the given counts.
 
         The topology does not contain coordinates.
 
