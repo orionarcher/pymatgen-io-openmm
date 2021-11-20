@@ -47,7 +47,6 @@ __date__ = "Nov 2021"
 
 
 class TopologyInput(InputFile):
-    # TODO: this class is currently not working properly
     def __init__(self, topology: Topology, positions: Optional[Union[List, np.ndarray]] = None):
         self.content = self._serialize(topology, positions)
 
@@ -69,7 +68,6 @@ class TopologyInput(InputFile):
         with io.StringIO(contents) as s:
             pdb = PDBFile(s)
             topology = pdb.getTopology()
-            positions = pdb.getPositions(asNumpy=True)
         return TopologyInput(topology)
 
     def get_topology(self) -> Topology:
