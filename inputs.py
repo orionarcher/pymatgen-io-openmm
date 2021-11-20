@@ -47,13 +47,15 @@ __date__ = "Nov 2021"
 
 
 class TopologyInput(InputFile):
-    def __init__(self, topology: Topology, positions: Union[np.ndarray, List]):
-        self.content = self._serialize(topology, positions)
+    # TODO: this class is currently not working properly
+    def __init__(self, topology: Topology):
+        self.content = self._serialize(topology)
 
     @staticmethod
-    def _serialize(topology, positions) -> str:
+    def _serialize(topology) -> str:
+        zero_coordinates = np.zeros(shape=(topology.getNumAtoms(), 3))
         with io.StringIO() as s:
-            PDBFile.writeFile(topology, positions)  # TODO: missing a file here?
+            PDBFile.writeFile(topology, zero_coordinates, file=s)  # TODO: missing a file here?
             s.seek(0)
             pdb = s.read()
         return pdb
@@ -67,7 +69,7 @@ class TopologyInput(InputFile):
             pdb = PDBFile(s)
             topology = pdb.getTopology()
             positions = pdb.getPositions(asNumpy=True)
-        return TopologyInput(topology, positions)
+        return TopologyInput(topology)
 
     def get_topology(self) -> Topology:
         with io.StringIO(self.content) as s:
@@ -277,7 +279,7 @@ class OpenMMGenerator(InputGenerator):
         context.setPositions(coordinates)
         state = context.getState(getPositions=True)
         # instantiate input files and feed to input_set
-        topology_input = TopologyInput(topology, coordinates)
+        topology_input = TopologyInput(topology)
         system_input = SystemInput(system)
         integrator_input = IntegratorInput(integrator)
         state_input = StateInput(state)

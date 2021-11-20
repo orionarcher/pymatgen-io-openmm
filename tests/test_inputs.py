@@ -10,19 +10,40 @@ from pymatgen.io.openmm.inputs import (
     OpenMMGenerator,
 )
 
+from pymatgen.io.openmm.tests.datafiles import (
+    topology_path,
+    state_path,
+    integrator_path,
+    system_path,
+    coordinates_path,
+)
+
 import pymatgen
 import parmed
 import openmm
 
 
+@pytest.fixture
+def input_set():
+    return
+
+
 class TestInputFiles:
+    def test_debug_topology(self):
+        topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
+        positions = np.load(coordinates_path)
+        topology_input = TopologyInput(topology)
+        print("hi")
+
     def test_topology_input(self):
+        topology_input = TopologyInput.from_file(topology_path)
         return
 
     def test_system_input(self):
         return
 
     def test_integrator_input(self):
+        integrator = 1
         return
 
     def test_state_input(self):
@@ -104,3 +125,4 @@ class TestOpenMMGenerator:
             "integrator.xml",
             "state.xml",
         }
+        input_set.get_simulation()
