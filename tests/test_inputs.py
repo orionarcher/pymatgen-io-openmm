@@ -14,8 +14,11 @@ from pymatgen.io.openmm.inputs import (
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
+    test_files_path,
+    input_set_path,
     topology_path,
     state_path,
+    corrupted_state_path,
     integrator_path,
     system_path,
     coordinates_path,
@@ -33,7 +36,6 @@ def input_set():
 
 
 class TestInputFiles:
-
     def test_topology_input(self):
         topology_input = TopologyInput.from_file(topology_path)
         with tempfile.NamedTemporaryFile() as f:
@@ -73,27 +75,29 @@ class TestInputFiles:
 
 class TestOpenMMSet:
     def test_from_directory(self):
-        input_set = OpenMMSet.from_directory("test_files/input_set")
+        input_set = OpenMMSet.from_directory(input_set_path)
         assert len(input_set.inputs) == 4
-        assert input_set.topology_file == 'topology.pdb'
-        assert input_set.state_file == 'state.xml'
-        assert isinstance(input_set.inputs['topology.pdb'], TopologyInput)
-        assert isinstance(input_set.inputs['state.xml'], StateInput)
-        input_set2 = OpenMMSet.from_directory("test_files/input_set",
-                                              state_file='wrong_file.xml')
+        assert input_set.topology_file == "topology.pdb"
+        assert input_set.state_file == "state.xml"
+        assert isinstance(input_set.inputs["topology.pdb"], TopologyInput)
+        assert isinstance(input_set.inputs["state.xml"], StateInput)
+        input_set2 = OpenMMSet.from_directory(
+            input_set_path, state_file="wrong_file.xml"
+        )
         assert len(input_set2.inputs) == 3
-        assert input_set2.topology_file == 'topology.pdb'
+        assert input_set2.topology_file == "topology.pdb"
         assert input_set2.state_file is None
 
     def test_validate(self):
-        input_set = OpenMMSet.from_directory("test_files/input_set")
+        input_set = OpenMMSet.from_directory(input_set_path)
         assert input_set.validate()
-        corrupted_input_set = OpenMMSet.from_directory("test_files/input_set",
-                                                       state_file="corrupted_state.xml")
+        corrupted_input_set = OpenMMSet.from_directory(
+            input_set_path, state_file=corrupted_state_path
+        )
         assert not corrupted_input_set.validate()
 
     def test_get_simulation(self):
-        input_set = OpenMMSet.from_directory("test_files/input_set")
+        input_set = OpenMMSet.from_directory(input_set_path)
         simulation = input_set.get_simulation()
         state = simulation.context.getState(getPositions=True)
         assert len(state.getPositions(asNumpy=True)) == 780
@@ -147,8 +151,11 @@ class TestOpenMMGenerator:
         assert np.max(coordinates) < 19.8
         assert coordinates.size == 780 * 3
 
-
-    def test_get_charged_openff_mol(self):
+    @pytest.mark.parametrize(
+        "mol_name",
+        ["FEC", "CCO", "PF6"],
+    )
+    def test_get_charged_openff_mol(self, mol_name):
 
         return
 
