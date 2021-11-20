@@ -269,8 +269,9 @@ class OpenMMGenerator(InputGenerator):
         box: Optional[List] = None,
     ) -> InputSet:
         """
-        This
-
+        This executes all of the logic to create the input set. It generates coordinates, instantiates
+        the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
+        all information needed to generate a simulaiton.
 
         Args:
             smiles: keys are smiles and values are number of that molecule to pack
@@ -424,6 +425,18 @@ class OpenMMGenerator(InputGenerator):
     def _parameterize_system(
         topology: Topology, smile_strings: List[str], box: List[float], force_field: str
     ) -> openmm.System:
+        """
+        Parameterize an OpenMM system.
+
+        Args:
+            topology: an OpenMM topology.
+            smile_strings: a list of SMILEs representing each molecule in the system.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi].
+            force_field: name of the force field. Currently only Sage is supported.
+
+        Returns:
+            an OpenMM.system
+        """
         supported_force_fields = ["Sage"]
         if force_field.lower() == "sage":
             openff_mols = [
