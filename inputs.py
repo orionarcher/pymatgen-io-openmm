@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import warnings
 from string import Template
-from typing import Union, Optional, Dict, List
+from typing import Union, Optional, Dict, List, Tuple
 
 import numpy as np
 from monty.json import MSONable
@@ -22,6 +22,7 @@ from pymatgen.io.xyz import XYZ
 import openff
 import openff.toolkit
 from openff.toolkit.typing.engines import smirnoff
+from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 
 import openmm
 from openmm.app import Simulation, PDBFile, Topology
@@ -47,7 +48,9 @@ __date__ = "Nov 2021"
 
 
 class TopologyInput(InputFile):
-    def __init__(self, topology: Topology, positions: Optional[Union[List, np.ndarray]] = None):
+    def __init__(
+        self, topology: Topology, positions: Optional[Union[List, np.ndarray]] = None
+    ):
         self.content = self._serialize(topology, positions)
 
     @staticmethod
@@ -76,11 +79,13 @@ class TopologyInput(InputFile):
             topology = pdb.getTopology()
         return topology
 
+
 class XmlInput(InputFile):
     """
     compatible with any OpenMM object with a serialization proxy registered:
     https://github.com/openmm/openmm/blob/master/serialization/src/SerializationProxyRegistration.cpp
     """
+
     def __init__(self, openmm_object):
         self.content = self._serialize(openmm_object)
 
@@ -273,6 +278,9 @@ class OpenMMGenerator(InputGenerator):
         the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
         all information needed to generate a simulaiton.
 
+        Please note that if the molecules are chiral, then the SMILEs must specify a
+        particular stereochemistry.
+
         Args:
             smiles: keys are smiles and values are number of that molecule to pack
             density: the density of the system. density OR box must be given as an argument.
@@ -281,7 +289,9 @@ class OpenMMGenerator(InputGenerator):
         Returns:
             an OpenMM.InputSet
         """
-        assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
+        assert (density is None) ^ (
+            box is None
+        ), "Density OR box must be included, but not both."
         # TODO: write test to ensure coordinates and topology have the same atom ordering
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
@@ -340,7 +350,9 @@ class OpenMMGenerator(InputGenerator):
         mol.make3D()
         with tempfile.NamedTemporaryFile() as f:
             mol.write(format="mol", filename=f.name, overwrite=True)
-            structure = parmed.load_file(f.name)[0]  # load_file is returning a list for some reason
+            structure = parmed.load_file(f.name)[
+                0
+            ]  # load_file is returning a list for some reason
         return structure
 
     @staticmethod
@@ -419,11 +431,26 @@ class OpenMMGenerator(InputGenerator):
         side_length = round(box_volume ** (1 / 3), 2)
         return [0, 0, 0, side_length, side_length, side_length]
 
-    # TODO: need to settle on a method for selecting a parameterization of the system.
-    # TODO: this code should be restructured to take topology, smiles, box, and ff as args
+    @staticmethod
+    def _get_charged_openff_mol(mol, charges) -> openff.toolkit.topology.Molecule:
+        return
+
+    @staticmethod
+    def _add_mol_charges_to_forcefield(
+        forcefield: smirnoff.ForceField, mols: List[openff.toolkit.topology.Molecule]
+    ) -> smirnoff.ForceField:
+        for mol in mols:
+            charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(mol)
+            forcefield["LibraryCharges"].add_parameter(parameter=charge_type)
+        return forcefield
+
     @staticmethod
     def _parameterize_system(
-        topology: Topology, smile_strings: List[str], box: List[float], force_field: str
+        topology: Topology,
+        smile_strings: List[str],
+        box: List[float],
+        force_field: str,
+        # partial_charges: Tuple(pymatgen.core.structure.Molecule, List[float]),
     ) -> openmm.System:
         """
         Parameterize an OpenMM system.

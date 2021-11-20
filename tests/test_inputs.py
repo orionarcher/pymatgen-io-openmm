@@ -147,6 +147,14 @@ class TestOpenMMGenerator:
         assert np.max(coordinates) < 19.8
         assert coordinates.size == 780 * 3
 
+
+    def test_get_charged_openff_mol(self):
+
+        return
+
+    def test_add_mole_charges_to_forcefield(self):
+        return
+
     def test_parameterize_system(self):
         topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
         smile_strings = ["O", "CCO"]
