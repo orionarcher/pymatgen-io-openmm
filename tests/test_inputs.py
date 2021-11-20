@@ -1,3 +1,5 @@
+import tempfile
+
 import pytest
 import numpy as np
 
@@ -21,6 +23,7 @@ from pymatgen.io.openmm.tests.datafiles import (
 import pymatgen
 import parmed
 import openmm
+from openmm.unit import *
 
 
 @pytest.fixture
@@ -29,25 +32,42 @@ def input_set():
 
 
 class TestInputFiles:
-    def test_debug_topology(self):
-        topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
-        positions = np.load(coordinates_path)
-        topology_input = TopologyInput(topology)
-        print("hi")
 
     def test_topology_input(self):
         topology_input = TopologyInput.from_file(topology_path)
-        return
+        with tempfile.NamedTemporaryFile() as f:
+            topology_input.write_file(f.name)
+        topology = topology_input.get_topology()
+        assert isinstance(topology, openmm.app.Topology)
+        assert topology.getNumAtoms() == 780
+        assert topology.getNumResidues() == 220
+        assert topology.getNumBonds() == 560
 
     def test_system_input(self):
-        return
+        system_input = SystemInput.from_file(system_path)
+        with tempfile.NamedTemporaryFile() as f:
+            system_input.write_file(f.name)
+        system = system_input.get_system()
+        assert isinstance(system, openmm.System)
+        assert system.getNumParticles() == 780
+        assert system.usesPeriodicBoundaryConditions()
 
     def test_integrator_input(self):
-        integrator = 1
-        return
+        integrator_input = IntegratorInput.from_file(integrator_path)
+        with tempfile.NamedTemporaryFile() as f:
+            integrator_input.write_file(f.name)
+        integrator = integrator_input.get_integrator()
+        assert isinstance(integrator, openmm.Integrator)
+        assert integrator.getStepSize() == 1 * femtoseconds
+        assert integrator.getTemperature() == 298 * kelvin
 
     def test_state_input(self):
-        return
+        state_input = StateInput.from_file(state_path)
+        with tempfile.NamedTemporaryFile() as f:
+            state_input.write_file(f.name)
+        state = state_input.get_state()
+        assert isinstance(state, openmm.State)
+        assert len(state.getPositions(asNumpy=True)) == 780
 
 
 class TestOpenMMSet:
