@@ -97,16 +97,28 @@ class XmlInput(InputFile):
 
 
 class SystemInput(XmlInput):
+    @classmethod
+    def from_string(cls, contents: str):
+        return SystemInput(XmlSerializer.deserialize(contents))
+
     def get_system(self) -> System:
         return XmlSerializer.deserialize(self.content)
 
 
 class IntegratorInput(XmlInput):
+    @classmethod
+    def from_string(cls, contents: str):
+        return IntegratorInput(XmlSerializer.deserialize(contents))
+
     def get_integrator(self) -> Integrator:
         return XmlSerializer.deserialize(self.content)
 
 
 class StateInput(XmlInput):
+    @classmethod
+    def from_string(cls, contents: str):
+        return StateInput(XmlSerializer.deserialize(contents))
+
     def get_state(self) -> State:
         return XmlSerializer.deserialize(self.content)
 
