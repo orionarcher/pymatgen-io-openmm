@@ -10,8 +10,10 @@ from string import Template
 from typing import Union, Optional, Dict, List, Tuple
 
 import numpy as np
+import pandas as pd
 from monty.json import MSONable
 from monty.dev import deprecated
+import rdkit
 
 import pymatgen.core
 from pymatgen.io.core import InputFile, InputSet, InputGenerator
@@ -98,6 +100,9 @@ class XmlInput(InputFile):
 
     @classmethod
     def from_string(cls, contents: str):
+        """
+        This is a template that should be overwritten. Replace XmlInput with child class.
+        """
         return XmlInput(XmlSerializer.deserialize(contents))
 
 
@@ -432,8 +437,78 @@ class OpenMMGenerator(InputGenerator):
         return [0, 0, 0, side_length, side_length, side_length]
 
     @staticmethod
-    def _get_charged_openff_mol(mol, charges) -> openff.toolkit.topology.Molecule:
-        return
+    def _infer_openff_mol(charged_mol: Union[pymatgen.core.Molecule, str, Path]):
+        if isinstance(charged_mol, (str, Path)):
+            charged_mol = pymatgen.core.Molecule.from_file(str(charged_mol))
+        # these next 5 lines are cursed
+        pybel_mol = BabelMolAdaptor(charged_mol).pybel_mol  # pymatgen Molecule
+        with tempfile.NamedTemporaryFile() as f:
+            pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
+            rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
+        inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(
+            rdmol, hydrogens_are_explicit=True
+        )  # OpenFF Molecule
+        return inferred_mol
+
+    @staticmethod
+    def _get_atom_map(inferred_mol, openff_mol):
+        assert len(inferred_mol.n_atoms) == len(
+            openff_mol.n_atoms
+        ), "there must be one charge for each species"
+        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+            inferred_mol,
+            openff_mol,
+            return_atom_map=True,
+            formal_charge_matching=False,
+            atom_stereochemistry_matching=False,
+            bond_stereochemistry_matching=False,
+        )
+        # try again relaxing restrictions on bond_order
+        if not isomorphic:
+            isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+                inferred_mol,
+                openff_mol,
+                return_atom_map=True,
+                formal_charge_matching=False,
+                atom_stereochemistry_matching=False,
+                bond_stereochemistry_matching=False,
+                bond_order_matching=False,
+            )
+        if isomorphic:
+            return atom_map
+        else:
+            return False
+
+    @staticmethod
+    def _get_charged_openff_mol(
+        atom_map: Dict[int, int],
+        charges: Union[np.ndarray, List],
+        openff_mol: openff.toolkit.topology.Molecule,
+    ) -> openff.toolkit.topology.Molecule:
+        """
+        Returns a copy of openff_mol with parital charges taken from the charged_mol and corresponding
+        charges array.
+
+        First, an isomorphism is established between the charged_mol and the openff_mol. Then that
+        isomorphism is used to assign the charges to the correct atoms in openff_mol.
+
+        Each charge in charges should correspond to the corresponding atom in charged_mol. The order
+        must be the same.
+
+        Args:
+            charged_mol: a Molecule or path to xyz file.
+            charges: the partial charges for each atom in charged_mol.
+            openff_mol: an openff_mol isomorphic to the charged_mol.
+
+        Returns:
+
+        """
+        reordered_charges = charges[list(atom_map.values())]  # fancy indexing
+        openff_mol_copy = openff.toolkit.topology.Molecule(openff_mol)
+        openff_mol_copy.partial_charges = (
+            reordered_charges * openmm.unit.elementary_charge
+        )
+        return openff_mol_copy
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
