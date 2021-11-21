@@ -37,6 +37,8 @@ import pymatgen
 import parmed
 import openmm
 from openmm.unit import *
+from openmm import NonbondedForce
+from openff.toolkit.typing.engines import smirnoff
 
 
 @pytest.fixture
@@ -194,36 +196,49 @@ class TestOpenMMGenerator:
         assert map_values == list(atom_map.values())
 
     @pytest.mark.parametrize(
-        "charges_path, smile, atom_map",
+        "charges_path, smile, atom_values",
         [
-            (
-                CCO_charges,
-                "CCO",
-                {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8},
-            ),
-            (
-                FEC_charges,
-                "O=C1OC[C@@H](F)O1",
-                {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 9, 6: 5, 7: 6, 8: 7, 9: 8},
-            ),
-            (
-                FEC_charges,
-                "O=C1OC[C@H](F)O1",
-                {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 9, 6: 5, 7: 6, 8: 7, 9: 8},
-            ),
-            (
-                PF6_charges,
-                "F[P-](F)(F)(F)(F)F",
-                {0: 1, 1: 0, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6},
-            ),
+            (CCO_charges, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
         ],
     )
-    def test_assign_charges_to_openff_mol(self, charges_path, smile, atom_map):
+    def test_assign_charges_to_openff_mol(self, charges_path, smile, atom_values):
         charges = np.load(charges_path)
         openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        new_mol = OpenMMGenerator._assign_charges_to_openff_mol(openff_mol, charges, atom_map)
+        atom_map = {i: j for i, j in enumerate(atom_values)}  # this save some space
+        new_mol = OpenMMGenerator._assign_charges_to_openff_mol(
+            openff_mol, charges, atom_map
+        )
         mapped_charges = charges[list(atom_map.values())]  # fancy indexing
         np.testing.assert_almost_equal(mapped_charges, new_mol.partial_charges._value)
+
+    @pytest.mark.parametrize(
+        "charges_path, smile, atom_values",
+        [
+            (CCO_charges, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
+        ],
+    )
+    def test_add_mol_charges_to_forcefield(self, charges_path, smile, atom_values):
+        charges = np.load(charges_path)
+        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+        atom_map = {i: j for i, j in enumerate(atom_values)}  # this save some space
+        new_mol = OpenMMGenerator._assign_charges_to_openff_mol(
+            openff_mol, charges, atom_map
+        )
+        mapped_charges = charges[list(atom_map.values())]  # fancy indexing
+        forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+        OpenMMGenerator._add_mol_charges_to_forcefield(forcefield, [new_mol])
+        topology = openff_mol.to_topology()
+        system = forcefield.create_openmm_system(topology)
+        for force in system.getForces():
+            if type(force) == NonbondedForce:
+                for i in range(force.getNumParticles()):
+                    assert force.getParticleParameters(i)[0]._value == mapped_charges[i]
 
     @pytest.mark.parametrize(
         "mol_name",
