@@ -306,7 +306,7 @@ class OpenMMGenerator(InputGenerator):
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
         if not box:
-            box = self._get_box(smiles, density)
+            box = self.get_box(smiles, density)
         coordinates = self._get_coordinates(smiles, box)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
@@ -419,7 +419,7 @@ class OpenMMGenerator(InputGenerator):
         return raw_coordinates
 
     @staticmethod
-    def _get_box(smiles: Dict[str, int], density: float) -> List[float]:
+    def get_box(smiles: Dict[str, int], density: float) -> List[float]:
         """
         Calculates the side_length of a cube necessary to contain the given molecules with
         given density.
@@ -459,9 +459,6 @@ class OpenMMGenerator(InputGenerator):
 
     @staticmethod
     def _get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
-        assert (
-            inferred_mol.n_atoms == openff_mol.n_atoms
-        ), "there must be one charge for each species"
         # do not apply formal charge restrictions
         kwargs = dict(
             return_atom_map=True,
