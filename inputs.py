@@ -378,12 +378,12 @@ class OpenMMGenerator(InputGenerator):
         Returns:
             an openmm.app.Topology
         """
-        structure_counts = {
-            count: OpenMMGenerator._smile_to_parmed_structure(smile)
-            for smile, count in smiles.items()
-        }
+        structures = [
+            OpenMMGenerator._smile_to_parmed_structure(smile) for smile in smiles.keys()
+        ]
+        counts = list(smiles.values())
         combined_structs = parmed.Structure()
-        for struct, count in structure_counts.items():
+        for struct, count in zip(structures, counts):
             combined_structs += struct * count
         return combined_structs.topology
 
@@ -566,7 +566,7 @@ class OpenMMGenerator(InputGenerator):
                     OpenMMGenerator._add_mol_charges_to_forcefield(
                         forcefield, charged_openff_mol
                     )
-                    continue
+                    break
             if not isomorphic:
                 warnings.warn(
                     f"{mol} in partial_charges is not isomorphic to any SMILE in the system."
@@ -604,7 +604,9 @@ class OpenMMGenerator(InputGenerator):
             # TODO: add logic to insert partial charges into ff
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
-                openff_forcefield, openff_mols, partial_charges,
+                openff_forcefield,
+                openff_mols,
+                partial_charges,
             )
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
                 topology, openff_mols
