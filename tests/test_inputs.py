@@ -146,7 +146,7 @@ class TestOpenMMGenerator:
         assert topology.getNumBonds() == 560
 
     def test_get_box(self):
-        box = OpenMMGenerator._get_box({"O": 200, "CCO": 20}, 1)
+        box = OpenMMGenerator.get_box({"O": 200, "CCO": 20}, 1)
         assert isinstance(box, list)
         assert len(box) == 6
         np.testing.assert_allclose(box[0:3], 0, 2)
@@ -232,7 +232,7 @@ class TestOpenMMGenerator:
         )
         mapped_charges = charges[list(atom_map.values())]  # fancy indexing
         forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-        OpenMMGenerator._add_mol_charges_to_forcefield(forcefield, [new_mol])
+        OpenMMGenerator._add_mol_charges_to_forcefield(forcefield, new_mol)
         topology = openff_mol.to_topology()
         system = forcefield.create_openmm_system(topology)
         for force in system.getForces():
@@ -240,30 +240,54 @@ class TestOpenMMGenerator:
                 for i in range(force.getNumParticles()):
                     assert force.getParticleParameters(i)[0]._value == mapped_charges[i]
 
-    @pytest.mark.parametrize(
-        "mol_name",
-        ["FEC-r", "FEC-s", "CCO", "PF6"],
-    )
-    def test_get_charged_openff_mol(self, mol_name):
-        # see datafiles.py to track the path of the test files
-        xyz_path, charges_path, smile = xyz_charges_dict[mol_name]
-        mol = pymatgen.core.structure.Molecule.from_file(xyz_path)
-        charges = np.load(charges_path)
-        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        charged_mol = OpenMMGenerator._get_charged_openff_mol(mol, charges, openff_mol)
-
-        return
-
-    def test_add_mole_charges_to_forcefield(self):
-        return
+    def test_add_partial_charges_to_forcefield(self):
+        # set up partial charges
+        ethanol_mol = pymatgen.core.Molecule.from_file(CCO_xyz)
+        fec_mol = pymatgen.core.Molecule.from_file(FEC_s_xyz)
+        ethanol_charges = np.load(CCO_charges)
+        fec_charges = np.load(FEC_charges)
+        partial_charges = [(ethanol_mol, ethanol_charges), (fec_mol, fec_charges)]
+        # set up force field
+        ethanol_smile = "CCO"
+        fec_smile = "O=C1OC[C@H](F)O1"
+        openff_mols = [
+            openff.toolkit.topology.Molecule.from_smiles(smile)
+            for smile in [ethanol_smile, fec_smile]
+        ]
+        openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+        openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
+            openff_forcefield,
+            openff_mols,
+            partial_charges,
+        )
+        # construct a System to make testing easier
+        topology = OpenMMGenerator._get_openmm_topology(
+            {ethanol_smile: 50, fec_smile: 50}
+        )
+        openff_topology = openff.toolkit.topology.Topology.from_openmm(
+            topology, openff_mols
+        )
+        system = openff_forcefield.create_openmm_system(openff_topology)
+        all_partials = np.append(ethanol_charges, fec_charges)
+        for force in system.getForces():
+            if type(force) == NonbondedForce:
+                for i in range(force.getNumParticles()):
+                    assert np.any(
+                        np.isclose(
+                            force.getParticleParameters(i)[0]._value,
+                            all_partials,
+                            atol=0.01,
+                        )
+                    )
 
     def test_parameterize_system(self):
+        # TODO: add test here to see if I am adding charges?
         topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = "Sage"
         system = OpenMMGenerator._parameterize_system(
-            topology, smile_strings, box, force_field
+            topology, smile_strings, box, force_field, []
         )
         assert system.getNumParticles() == 780
         assert system.usesPeriodicBoundaryConditions()
