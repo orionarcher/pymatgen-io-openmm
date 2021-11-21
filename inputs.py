@@ -241,7 +241,9 @@ class OpenMMGenerator(InputGenerator):
         temperature: float = 298,
         step_size: float = 0.001,
         friction_coefficient: int = 1,
-        partial_charges: Optional[Dict[str, np.ndarray]] = None,
+        partial_charges: Optional[
+            List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]
+        ] = None,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
@@ -256,7 +258,10 @@ class OpenMMGenerator(InputGenerator):
             step_size: the step size of the simulation (picoseconds).
             friction_coefficient: the friction coefficient which couples the system to
                 the heat bath (inverse picoseconds).
-            partial_charges: TODO: determine a appropriate way of specifying partial charge information
+            partial_charges: A list of tuples, where the first element of each tuple is a molecular
+                geometry and the second element is an array of charges. The geometry can be a
+                pymatgen.Molecule or a path to an xyz file. The geometry and charges must have the
+                same atom ordering.
             topology_file: Location to save the Topology PDB.
             system_file: Location to save the System xml.
             integrator_file: Location to save the Integrator xml.
@@ -266,7 +271,7 @@ class OpenMMGenerator(InputGenerator):
         self.temperature = temperature
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
-        self.partial_charges = partial_charges
+        self.partial_charges = partial_charges if partial_charges else []
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
@@ -305,7 +310,7 @@ class OpenMMGenerator(InputGenerator):
         coordinates = self._get_coordinates(smiles, box)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
-            topology, smile_strings, box, self.force_field
+            topology, smile_strings, box, self.force_field, self.partial_charges
         )
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
@@ -437,7 +442,9 @@ class OpenMMGenerator(InputGenerator):
         return [0, 0, 0, side_length, side_length, side_length]
 
     @staticmethod
-    def _infer_openff_mol(charged_mol: Union[pymatgen.core.Molecule, str, Path]):
+    def _infer_openff_mol(
+        charged_mol: Union[pymatgen.core.Molecule, str, Path]
+    ) -> openff.toolkit.topology.Molecule:
         if isinstance(charged_mol, (str, Path)):
             charged_mol = pymatgen.core.Molecule.from_file(str(charged_mol))
         with tempfile.NamedTemporaryFile() as f:
@@ -451,7 +458,7 @@ class OpenMMGenerator(InputGenerator):
         return inferred_mol
 
     @staticmethod
-    def _get_atom_map(inferred_mol, openff_mol):
+    def _get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
         assert (
             inferred_mol.n_atoms == openff_mol.n_atoms
         ), "there must be one charge for each species"
@@ -516,11 +523,57 @@ class OpenMMGenerator(InputGenerator):
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
-        forcefield: smirnoff.ForceField, mols: List[openff.toolkit.topology.Molecule]
+        forcefield: smirnoff.ForceField,
+        charged_openff_mol: List[openff.toolkit.topology.Molecule],
     ) -> smirnoff.ForceField:
-        for mol in mols:
-            charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(mol)
-            forcefield["LibraryCharges"].add_parameter(parameter=charge_type)
+
+        charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(
+            charged_openff_mol
+        )
+        forcefield["LibraryCharges"].add_parameter(parameter=charge_type)
+        return forcefield
+
+    @staticmethod
+    def _add_partial_charges_to_forcefield(
+        forcefield: smirnoff.ForceField,
+        openff_mols: List[openff.toolkit.topology.Molecule],
+        partial_charges: List[
+            Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]
+        ],
+    ):
+        """
+
+
+        This will modify the original force field, not make a copy.
+
+        Args:
+            forcefield:
+            openff_mols:
+            partial_charges:
+
+        Returns:
+
+        """
+        # loop through partial charges to add to force field
+        for mol, charges in partial_charges:
+            inferred_mol = OpenMMGenerator._infer_openff_mol(mol)
+            # if isomorphic to a mol in the system, add them to ff, else, warn user
+            for openff_mol in openff_mols:
+                isomorphic, atom_map = OpenMMGenerator._get_atom_map(
+                    inferred_mol, openff_mol
+                )
+                if isomorphic:
+                    charged_openff_mol = OpenMMGenerator._assign_charges_to_openff_mol(
+                        openff_mol, charges, atom_map
+                    )
+                    OpenMMGenerator._add_mol_charges_to_forcefield(
+                        forcefield, charged_openff_mol
+                    )
+                    continue
+            if not isomorphic:
+                warnings.warn(
+                    f"{mol} in partial_charges is not isomorphic to any SMILE in the system."
+                )
         return forcefield
 
     @staticmethod
@@ -529,7 +582,9 @@ class OpenMMGenerator(InputGenerator):
         smile_strings: List[str],
         box: List[float],
         force_field: str,
-        # partial_charges: Tuple(pymatgen.core.structure.Molecule, List[float]),
+        partial_charges: List[
+            Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]
+        ],
     ) -> openmm.System:
         """
         Parameterize an OpenMM system.
@@ -551,6 +606,9 @@ class OpenMMGenerator(InputGenerator):
             ]
             # TODO: add logic to insert partial charges into ff
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+            openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
+                openff_forcefield, openff_mols, partial_charges,
+            )
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
                 topology, openff_mols
             )
