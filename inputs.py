@@ -440,9 +440,9 @@ class OpenMMGenerator(InputGenerator):
     def _infer_openff_mol(charged_mol: Union[pymatgen.core.Molecule, str, Path]):
         if isinstance(charged_mol, (str, Path)):
             charged_mol = pymatgen.core.Molecule.from_file(str(charged_mol))
-        # these next 5 lines are cursed
-        pybel_mol = BabelMolAdaptor(charged_mol).pybel_mol  # pymatgen Molecule
         with tempfile.NamedTemporaryFile() as f:
+            # these next 4 lines are cursed
+            pybel_mol = BabelMolAdaptor(charged_mol).pybel_mol  # pymatgen Molecule
             pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
             rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
         inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(
@@ -452,38 +452,42 @@ class OpenMMGenerator(InputGenerator):
 
     @staticmethod
     def _get_atom_map(inferred_mol, openff_mol):
-        assert len(inferred_mol.n_atoms) == len(
-            openff_mol.n_atoms
+        assert (
+            inferred_mol.n_atoms == openff_mol.n_atoms
         ), "there must be one charge for each species"
-        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-            inferred_mol,
-            openff_mol,
+        # do not apply formal charge restrictions
+        kwargs = dict(
             return_atom_map=True,
             formal_charge_matching=False,
-            atom_stereochemistry_matching=False,
-            bond_stereochemistry_matching=False,
         )
-        # try again relaxing restrictions on bond_order
-        if not isomorphic:
-            isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-                inferred_mol,
-                openff_mol,
-                return_atom_map=True,
-                formal_charge_matching=False,
-                atom_stereochemistry_matching=False,
-                bond_stereochemistry_matching=False,
-                bond_order_matching=False,
-            )
+        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+            inferred_mol, openff_mol, **kwargs
+        )
         if isomorphic:
-            return atom_map
+            return isomorphic, atom_map
+        # relax stereochemistry restrictions
+        kwargs["atom_stereochemistry_matching"] = False
+        kwargs["bond_stereochemistry_matching"] = False
+        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+            inferred_mol, openff_mol, **kwargs
+        )
+        if isomorphic:
+            return isomorphic, atom_map
+        # relax bond order restrictions
+        kwargs["bond_order_matching"] = False
+        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+            inferred_mol, openff_mol, **kwargs
+        )
+        if isomorphic:
+            return isomorphic, atom_map
         else:
-            return False
+            return isomorphic, {}
 
     @staticmethod
-    def _get_charged_openff_mol(
-        atom_map: Dict[int, int],
-        charges: Union[np.ndarray, List],
+    def _assign_charges_to_openff_mol(
         openff_mol: openff.toolkit.topology.Molecule,
+        charges: Union[np.ndarray, List],
+        atom_map: Dict[int, int],
     ) -> openff.toolkit.topology.Molecule:
         """
         Returns a copy of openff_mol with parital charges taken from the charged_mol and corresponding
