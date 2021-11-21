@@ -24,6 +24,13 @@ from pymatgen.io.openmm.tests.datafiles import (
     system_path,
     coordinates_path,
     xyz_charges_dict,
+    CCO_xyz,
+    CCO_charges,
+    FEC_r_xyz,
+    FEC_s_xyz,
+    FEC_charges,
+    PF6_xyz,
+    PF6_charges,
 )
 
 import pymatgen
@@ -154,6 +161,40 @@ class TestOpenMMGenerator:
         assert coordinates.size == 780 * 3
 
     @pytest.mark.parametrize(
+        "xyz_path, n_atoms, n_bonds",
+        [
+            (CCO_xyz, 9, 8),
+            (FEC_r_xyz, 10, 10),
+            (FEC_s_xyz, 10, 10),
+            (PF6_xyz, 7, 6),
+        ],
+    )
+    def test_infer_openff_mol(self, xyz_path, n_atoms, n_bonds):
+        mol = pymatgen.core.Molecule.from_file(xyz_path)
+        openff_mol = OpenMMGenerator._infer_openff_mol(mol)
+        assert isinstance(openff_mol, openff.toolkit.topology.Molecule)
+        assert openff_mol.n_atoms == n_atoms
+        assert openff_mol.n_bonds == n_bonds
+
+    @pytest.mark.parametrize(
+        "xyz_path, smile, map_values",
+        [
+            (CCO_xyz, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            (FEC_r_xyz, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (FEC_s_xyz, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (PF6_xyz, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
+        ],
+    )
+    def test_get_atom_map(self, xyz_path, smile, map_values):
+        mol = pymatgen.core.Molecule.from_file(xyz_path)
+        inferred_mol = OpenMMGenerator._infer_openff_mol(mol)
+        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+        isomorphic, atom_map = OpenMMGenerator._get_atom_map(inferred_mol, openff_mol)
+        assert isomorphic
+        assert map_values == list(atom_map.values())
+
+
+    @pytest.mark.parametrize(
         "mol_name",
         ["FEC-r", "FEC-s", "CCO", "PF6"],
     )
@@ -164,7 +205,6 @@ class TestOpenMMGenerator:
         charges = np.load(charges_path)
         openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
         charged_mol = OpenMMGenerator._get_charged_openff_mol(mol, charges, openff_mol)
-
 
         return
 
