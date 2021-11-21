@@ -193,6 +193,37 @@ class TestOpenMMGenerator:
         assert isomorphic
         assert map_values == list(atom_map.values())
 
+    @pytest.mark.parametrize(
+        "charges_path, smile, atom_map",
+        [
+            (
+                CCO_charges,
+                "CCO",
+                {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8},
+            ),
+            (
+                FEC_charges,
+                "O=C1OC[C@@H](F)O1",
+                {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 9, 6: 5, 7: 6, 8: 7, 9: 8},
+            ),
+            (
+                FEC_charges,
+                "O=C1OC[C@H](F)O1",
+                {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 9, 6: 5, 7: 6, 8: 7, 9: 8},
+            ),
+            (
+                PF6_charges,
+                "F[P-](F)(F)(F)(F)F",
+                {0: 1, 1: 0, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6},
+            ),
+        ],
+    )
+    def test_assign_charges_to_openff_mol(self, charges_path, smile, atom_map):
+        charges = np.load(charges_path)
+        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+        new_mol = OpenMMGenerator._assign_charges_to_openff_mol(openff_mol, charges, atom_map)
+        mapped_charges = charges[list(atom_map.values())]  # fancy indexing
+        np.testing.assert_almost_equal(mapped_charges, new_mol.partial_charges._value)
 
     @pytest.mark.parametrize(
         "mol_name",
