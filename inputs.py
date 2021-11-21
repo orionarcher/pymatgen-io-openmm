@@ -1,3 +1,4 @@
+# base python
 import io
 import os
 from pathlib import Path
@@ -5,17 +6,17 @@ import pathlib
 import tempfile
 import warnings
 from typing import Union, Optional, Dict, List, Tuple
-
+# cheminformatics
 import numpy as np
 import rdkit
 from openbabel import pybel
 import parmed
-
+# openff
 import openff
 import openff.toolkit
 from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
-
+# openmm
 import openmm
 from openmm.unit import *
 from openmm.app import Simulation, PDBFile, Topology
@@ -27,7 +28,7 @@ from openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
-
+# pymatgen
 import pymatgen.core
 from pymatgen.io.core import InputFile, InputSet, InputGenerator
 from pymatgen.io.packmol import PackmolBoxGen

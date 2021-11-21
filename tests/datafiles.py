@@ -21,10 +21,3 @@ FEC_s_xyz = resource_filename(__name__, str(partial_charges / "FEC-s.xyz"))
 FEC_charges = resource_filename(__name__, str(partial_charges / "FEC.npy"))
 PF6_xyz = resource_filename(__name__, str(partial_charges / "PF6.xyz"))
 PF6_charges = resource_filename(__name__, str(partial_charges / "PF6.npy"))
-
-xyz_charges_dict = {
-    "CCO": (CCO_xyz, CCO_charges, "CCO"),
-    "FEC-r": (FEC_r_xyz, FEC_charges, "O=C1OC[C@@H](F)O1"),
-    "FEC-s": (FEC_s_xyz, FEC_charges, "O=C1OC[C@H](F)O1"),
-    "PF6": (PF6_xyz, PF6_charges, "F[P-](F)(F)(F)(F)F"),
-}

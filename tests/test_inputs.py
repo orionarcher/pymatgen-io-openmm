@@ -1,18 +1,17 @@
+# base python
 import pytest
-import pathlib
 import tempfile
-
+# cheminformatics
 import numpy as np
 import parmed
-
+# openff
 import openff.toolkit.topology
 from openff.toolkit.typing.engines import smirnoff
-
+# openmm
 import openmm
 from openmm.unit import *
 from openmm import NonbondedForce
-
-
+# pymatgen
 import pymatgen
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -23,15 +22,12 @@ from pymatgen.io.openmm.inputs import (
     OpenMMGenerator,
 )
 from pymatgen.io.openmm.tests.datafiles import (
-    test_files_path,
     input_set_path,
     topology_path,
     state_path,
     corrupted_state_path,
     integrator_path,
     system_path,
-    coordinates_path,
-    xyz_charges_dict,
     CCO_xyz,
     CCO_charges,
     FEC_r_xyz,
