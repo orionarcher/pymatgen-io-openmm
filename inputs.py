@@ -2,24 +2,14 @@ import io
 import os
 from pathlib import Path
 import pathlib
-import re
-import shutil
 import tempfile
 import warnings
-from string import Template
 from typing import Union, Optional, Dict, List, Tuple
 
 import numpy as np
-import pandas as pd
-from monty.json import MSONable
-from monty.dev import deprecated
 import rdkit
-
-import pymatgen.core
-from pymatgen.io.core import InputFile, InputSet, InputGenerator
-from pymatgen.io.packmol import PackmolBoxGen
-from pymatgen.io.babel import BabelMolAdaptor
-from pymatgen.io.xyz import XYZ
+from openbabel import pybel
+import parmed
 
 import openff
 import openff.toolkit
@@ -27,6 +17,7 @@ from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 
 import openmm
+from openmm.unit import *
 from openmm.app import Simulation, PDBFile, Topology
 from openmm import (
     XmlSerializer,
@@ -36,11 +27,12 @@ from openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
-from openmm.unit import *
 
-from openbabel import pybel
-
-import parmed
+import pymatgen.core
+from pymatgen.io.core import InputFile, InputSet, InputGenerator
+from pymatgen.io.packmol import PackmolBoxGen
+from pymatgen.io.babel import BabelMolAdaptor
+from pymatgen.io.xyz import XYZ
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
