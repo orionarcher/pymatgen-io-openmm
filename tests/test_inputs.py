@@ -5,8 +5,6 @@ import tempfile
 # cheminformatics
 import numpy as np
 import parmed
-import rdkit
-from rdkit.Chem import AllChem
 
 # openff
 import openff.toolkit.topology

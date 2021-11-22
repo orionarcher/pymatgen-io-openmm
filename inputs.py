@@ -6,16 +6,19 @@ import pathlib
 import tempfile
 import warnings
 from typing import Union, Optional, Dict, List, Tuple
+
 # cheminformatics
 import numpy as np
 import rdkit
 from openbabel import pybel
 import parmed
+
 # openff
 import openff
 import openff.toolkit
 from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
+
 # openmm
 import openmm
 from openmm.unit import *
@@ -28,6 +31,7 @@ from openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
+
 # pymatgen
 import pymatgen.core
 from pymatgen.io.core import InputFile, InputSet, InputGenerator
@@ -481,11 +485,15 @@ class OpenMMGenerator(InputGenerator):
         )
         if isomorphic:
             if not stereochemistry_matching:
-                print(f"stereochemistry ignored when matching inferred"
-                      f"mol: {inferred_mol} to {openff_mol}")
+                print(
+                    f"stereochemistry ignored when matching inferred"
+                    f"mol: {inferred_mol} to {openff_mol}"
+                )
             if not bond_order_matching:
-                print(f"bond_order restrictions ignored when matching inferred"
-                      f"mol: {inferred_mol} to {openff_mol}")
+                print(
+                    f"bond_order restrictions ignored when matching inferred"
+                    f"mol: {inferred_mol} to {openff_mol}"
+                )
             return isomorphic, atom_map
         else:
             return isomorphic, {}
@@ -515,7 +523,9 @@ class OpenMMGenerator(InputGenerator):
 
         """
         atom_map_inverse = {j: i for i, j in atom_map.items()}
-        reordered_charges = np.array([charges[atom_map_inverse[i]] for i in range(len(charges))])
+        reordered_charges = np.array(
+            [charges[atom_map_inverse[i]] for i in range(len(charges))]
+        )
         openff_mol_copy = openff.toolkit.topology.Molecule(openff_mol)
         openff_mol_copy.partial_charges = (
             reordered_charges * openmm.unit.elementary_charge
