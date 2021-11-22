@@ -1,16 +1,22 @@
 # base python
 import pytest
 import tempfile
+
 # cheminformatics
 import numpy as np
 import parmed
+import rdkit
+from rdkit.Chem import AllChem
+
 # openff
 import openff.toolkit.topology
 from openff.toolkit.typing.engines import smirnoff
+
 # openmm
 import openmm
 from openmm.unit import *
 from openmm import NonbondedForce
+
 # pymatgen
 import pymatgen
 from pymatgen.io.openmm.inputs import (
@@ -127,6 +133,10 @@ class TestOpenMMGenerator:
         assert len(struct2.atoms) == 3
         assert len(struct2.residues) == 1
         assert len(struct2.bonds) == 2
+        struct3 = OpenMMGenerator._smile_to_parmed_structure("O=C1OC[C@H](F)O1")
+        assert len(struct3.atoms) == 10
+        assert len(struct3.residues) == 1
+        assert len(struct3.bonds) == 10
 
     def test_get_openmm_topology(self):
         topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
@@ -207,7 +217,8 @@ class TestOpenMMGenerator:
         new_mol = OpenMMGenerator._assign_charges_to_openff_mol(
             openff_mol, charges, atom_map
         )
-        mapped_charges = charges[list(atom_map.values())]  # fancy indexing
+        atom_map_inverse = {j: i for i, j in atom_map.items()}
+        mapped_charges = [charges[atom_map_inverse[i]] for i in range(len(charges))]
         np.testing.assert_almost_equal(mapped_charges, new_mol.partial_charges._value)
 
     @pytest.mark.parametrize(
@@ -226,7 +237,8 @@ class TestOpenMMGenerator:
         new_mol = OpenMMGenerator._assign_charges_to_openff_mol(
             openff_mol, charges, atom_map
         )
-        mapped_charges = charges[list(atom_map.values())]  # fancy indexing
+        atom_map_inverse = {j: i for i, j in atom_map.items()}
+        mapped_charges = [charges[atom_map_inverse[i]] for i in range(len(charges))]
         forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
         OpenMMGenerator._add_mol_charges_to_forcefield(forcefield, new_mol)
         topology = openff_mol.to_topology()
@@ -240,9 +252,9 @@ class TestOpenMMGenerator:
         # set up partial charges
         ethanol_mol = pymatgen.core.Molecule.from_file(CCO_xyz)
         fec_mol = pymatgen.core.Molecule.from_file(FEC_s_xyz)
-        ethanol_charges = np.load(CCO_charges)[[0, 1, 2, 3, 4, 5, 6, 7, 8]]
-        fec_charges = np.load(FEC_charges)[[0, 1, 2, 3, 4, 9, 5, 6, 7, 8]]
-        partial_charges = [(ethanol_mol, ethanol_charges), (fec_mol, fec_charges)]
+        ethanol_charges = np.load(CCO_charges)
+        fec_charges_og = np.load(FEC_charges)
+        partial_charges = [(ethanol_mol, ethanol_charges), (fec_mol, fec_charges_og)]
         # set up force field
         ethanol_smile = "CCO"
         fec_smile = "O=C1OC[C@H](F)O1"
@@ -264,51 +276,19 @@ class TestOpenMMGenerator:
             topology, openff_mols
         )
         system = openff_forcefield.create_openmm_system(openff_topology)
-        all_partials = np.append(ethanol_charges, fec_charges)
         # ensure that all forces are from our assigned force field
         # this does not ensure correct ordering, as we already test that with
         # other methods
-        n_part = system.getNumParticles()
-        mass_array = np.zeros(n_part)
-        for i in range(n_part):
-            mass_array[i] = system.getParticleMass(i)._value
-        for force in system.getForces():
-            if type(force) == NonbondedForce:
-                for i in range(force.getNumParticles()):
-                    assert np.any(
-                        np.isclose(
-                            force.getParticleParameters(i)[0]._value,
-                            all_partials,
-                            atol=0.01,
-                        )
-                    )
+        fec_charges = fec_charges_og[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
         full_partial_array = np.append(
             np.tile(ethanol_charges, 50), np.tile(fec_charges, 50)
         )
-        fec_ele_og = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-        fec_ele = fec_ele_og
-        ele_lookup_dict = {charge: ele for charge, ele in zip(fec_charges, fec_ele)}
         for force in system.getForces():
             if type(force) == NonbondedForce:
                 charge_array = np.zeros(force.getNumParticles())
                 for i in range(len(charge_array)):
                     charge_array[i] = force.getParticleParameters(i)[0]._value
-        errors = (full_partial_array - charge_array)[
-            np.abs(full_partial_array - charge_array) > 0.01
-        ]
-        error_idx = (np.abs(full_partial_array - charge_array) > 0.01).nonzero()
-        # np.testing.assert_allclose(full_partial_array, charge_array, atol=0.01)
-        _, looked_up_counts = np.unique(
-            np.array([ele_lookup_dict[charge] for charge in charge_array[450:]]),
-            return_counts=True,
-        )
-        error_idx, error_counts = np.unique(
-            np.array([ele_lookup_dict[charge] for charge in charge_array[450:]])[
-                (np.abs(full_partial_array[450:] - charge_array[450:]) > 0.0001)
-            ],
-            return_counts=True,
-        )
-        print("hi")
+        np.testing.assert_allclose(full_partial_array, charge_array, atol=0.0001)
 
     def test_parameterize_system(self):
         # TODO: add test here to see if I am adding charges?

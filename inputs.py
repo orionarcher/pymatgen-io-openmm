@@ -453,6 +453,8 @@ class OpenMMGenerator(InputGenerator):
     @staticmethod
     def _get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
         # do not apply formal charge restrictions
+        stereochemistry_matching = True
+        bond_order_matching = True
         kwargs = dict(
             return_atom_map=True,
             formal_charge_matching=False,
@@ -465,6 +467,7 @@ class OpenMMGenerator(InputGenerator):
         # relax stereochemistry restrictions
         kwargs["atom_stereochemistry_matching"] = False
         kwargs["bond_stereochemistry_matching"] = False
+        stereochemistry_matching = False
         isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
             inferred_mol, openff_mol, **kwargs
         )
@@ -472,10 +475,17 @@ class OpenMMGenerator(InputGenerator):
             return isomorphic, atom_map
         # relax bond order restrictions
         kwargs["bond_order_matching"] = False
+        bond_order_matching = False
         isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
             inferred_mol, openff_mol, **kwargs
         )
         if isomorphic:
+            if not stereochemistry_matching:
+                print(f"stereochemistry ignored when matching inferred"
+                      f"mol: {inferred_mol} to {openff_mol}")
+            if not bond_order_matching:
+                print(f"bond_order restrictions ignored when matching inferred"
+                      f"mol: {inferred_mol} to {openff_mol}")
             return isomorphic, atom_map
         else:
             return isomorphic, {}
@@ -504,7 +514,8 @@ class OpenMMGenerator(InputGenerator):
         Returns:
 
         """
-        reordered_charges = charges[list(atom_map.values())]  # fancy indexing
+        atom_map_inverse = {j: i for i, j in atom_map.items()}
+        reordered_charges = np.array([charges[atom_map_inverse[i]] for i in range(len(charges))])
         openff_mol_copy = openff.toolkit.topology.Molecule(openff_mol)
         openff_mol_copy.partial_charges = (
             reordered_charges * openmm.unit.elementary_charge
@@ -594,7 +605,6 @@ class OpenMMGenerator(InputGenerator):
                 openff.toolkit.topology.Molecule.from_smiles(smile)
                 for smile in smile_strings
             ]
-            # TODO: add logic to insert partial charges into ff
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
                 openff_forcefield,
