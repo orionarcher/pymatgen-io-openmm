@@ -238,9 +238,11 @@ class OpenMMGenerator(InputGenerator):
         temperature: float = 298,
         step_size: float = 0.001,
         friction_coefficient: int = 1,
+        partial_charge_scaling: Optional[Dict[str, float]] = None,
         partial_charges: Optional[
             List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]
         ] = None,
+        packmol_random_seed: int = -1,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
@@ -255,6 +257,8 @@ class OpenMMGenerator(InputGenerator):
             step_size: the step size of the simulation (picoseconds).
             friction_coefficient: the friction coefficient which couples the system to
                 the heat bath (inverse picoseconds).
+            partial_charge_scaling: A dictionary of partial charge scaling for particular species. Keys
+            are SMILEs and values are the scaling factor.
             partial_charges: A list of tuples, where the first element of each tuple is a molecular
                 geometry and the second element is an array of charges. The geometry can be a
                 pymatgen.Molecule or a path to an xyz file. The geometry and charges must have the
@@ -268,7 +272,11 @@ class OpenMMGenerator(InputGenerator):
         self.temperature = temperature
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
+        self.partial_charge_scaling = (
+            partial_charge_scaling if partial_charge_scaling else {}
+        )
         self.partial_charges = partial_charges if partial_charges else []
+        self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
@@ -304,10 +312,15 @@ class OpenMMGenerator(InputGenerator):
         topology = self._get_openmm_topology(smiles)
         if not box:
             box = self.get_box(smiles, density)
-        coordinates = self._get_coordinates(smiles, box)
+        coordinates = self._get_coordinates(smiles, box, self.packmol_random_seed)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
-            topology, smile_strings, box, self.force_field, self.partial_charges
+            topology,
+            smile_strings,
+            box,
+            self.force_field,
+            self.partial_charge_scaling,
+            self.partial_charges,
         )
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
@@ -385,7 +398,9 @@ class OpenMMGenerator(InputGenerator):
         return combined_structs.topology
 
     @staticmethod
-    def _get_coordinates(smiles: Dict[str, int], box: List[float]) -> np.ndarray:
+    def _get_coordinates(
+        smiles: Dict[str, int], box: List[float], random_seed: int
+    ) -> np.ndarray:
         """
         Pack the box with the molecules specified by smiles.
 
@@ -406,7 +421,9 @@ class OpenMMGenerator(InputGenerator):
                 }
             )
         with tempfile.TemporaryDirectory() as scratch_dir:
-            pw = PackmolBoxGen().get_input_set(molecules=molecules, box=box)
+            pw = PackmolBoxGen(seed=random_seed).get_input_set(
+                molecules=molecules, box=box
+            )
             pw.write_input(scratch_dir)
             pw.run(scratch_dir)
             coordinates = XYZ.from_file(
@@ -464,73 +481,41 @@ class OpenMMGenerator(InputGenerator):
             formal_charge_matching=False,
         )
         isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-            inferred_mol, openff_mol, **kwargs
+            openff_mol, inferred_mol, **kwargs
         )
         if isomorphic:
-            return isomorphic, atom_map
+            return True, atom_map
         # relax stereochemistry restrictions
         kwargs["atom_stereochemistry_matching"] = False
         kwargs["bond_stereochemistry_matching"] = False
         stereochemistry_matching = False
         isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-            inferred_mol, openff_mol, **kwargs
+            openff_mol, inferred_mol, **kwargs
         )
         if isomorphic:
-            return isomorphic, atom_map
+            print(
+                f"stereochemistry ignored when matching inferred"
+                f"mol: {openff_mol} to {inferred_mol}"
+            )
+            return True, atom_map
         # relax bond order restrictions
         kwargs["bond_order_matching"] = False
         bond_order_matching = False
         isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-            inferred_mol, openff_mol, **kwargs
+            openff_mol, inferred_mol, **kwargs
         )
         if isomorphic:
-            if not stereochemistry_matching:
-                print(
-                    f"stereochemistry ignored when matching inferred"
-                    f"mol: {inferred_mol} to {openff_mol}"
-                )
-            if not bond_order_matching:
-                print(
-                    f"bond_order restrictions ignored when matching inferred"
-                    f"mol: {inferred_mol} to {openff_mol}"
-                )
-            return isomorphic, atom_map
+            print(
+                f"stereochemistry ignored when matching inferred"
+                f"mol: {openff_mol} to {inferred_mol}"
+            )
+            print(
+                f"bond_order restrictions ignored when matching inferred"
+                f"mol: {openff_mol} to {inferred_mol}"
+            )
+            return True, atom_map
         else:
-            return isomorphic, {}
-
-    @staticmethod
-    def _assign_charges_to_openff_mol(
-        openff_mol: openff.toolkit.topology.Molecule,
-        charges: Union[np.ndarray, List],
-        atom_map: Dict[int, int],
-    ) -> openff.toolkit.topology.Molecule:
-        """
-        Returns a copy of openff_mol with parital charges taken from the charged_mol and corresponding
-        charges array.
-
-        First, an isomorphism is established between the charged_mol and the openff_mol. Then that
-        isomorphism is used to assign the charges to the correct atoms in openff_mol.
-
-        Each charge in charges should correspond to the corresponding atom in charged_mol. The order
-        must be the same.
-
-        Args:
-            charged_mol: a Molecule or path to xyz file.
-            charges: the partial charges for each atom in charged_mol.
-            openff_mol: an openff_mol isomorphic to the charged_mol.
-
-        Returns:
-
-        """
-        atom_map_inverse = {j: i for i, j in atom_map.items()}
-        reordered_charges = np.array(
-            [charges[atom_map_inverse[i]] for i in range(len(charges))]
-        )
-        openff_mol_copy = openff.toolkit.topology.Molecule(openff_mol)
-        openff_mol_copy.partial_charges = (
-            reordered_charges * openmm.unit.elementary_charge
-        )
-        return openff_mol_copy
+            return False, {}
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
@@ -547,7 +532,8 @@ class OpenMMGenerator(InputGenerator):
     @staticmethod
     def _add_partial_charges_to_forcefield(
         forcefield: smirnoff.ForceField,
-        openff_mols: List[openff.toolkit.topology.Molecule],
+        smile_strings: List[str],
+        partial_charge_scaling: Dict[str, float],
         partial_charges: List[
             Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]
         ],
@@ -566,25 +552,39 @@ class OpenMMGenerator(InputGenerator):
 
         """
         # loop through partial charges to add to force field
-        for mol, charges in partial_charges:
-            inferred_mol = OpenMMGenerator._infer_openff_mol(mol)
-            # if isomorphic to a mol in the system, add them to ff, else, warn user
-            for openff_mol in openff_mols:
-                isomorphic, atom_map = OpenMMGenerator._get_atom_map(
+        for smile in smile_strings:
+            # detect charge scaling, set scaling parameter
+            if smile in partial_charge_scaling.keys():
+                charge_scaling = partial_charge_scaling[smile]
+            else:
+                charge_scaling = 1
+            # assign default am1bcc charges
+            openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+            openff_mol.compute_partial_charges_am1bcc()
+            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+            # assign charges from isomorphic charges, if they exist
+            is_isomorphic = False
+            for mol_xyz, charges in partial_charges:
+                inferred_mol = OpenMMGenerator._infer_openff_mol(mol_xyz)
+                is_isomorphic, atom_map = OpenMMGenerator._get_atom_map(
                     inferred_mol, openff_mol
                 )
-                if isomorphic:
-                    charged_openff_mol = OpenMMGenerator._assign_charges_to_openff_mol(
-                        openff_mol, charges, atom_map
+                # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
+                if is_isomorphic:
+                    reordered_charges = np.array(
+                        [charges[atom_map[i]] for i, _ in enumerate(charges)]
                     )
-                    OpenMMGenerator._add_mol_charges_to_forcefield(
-                        forcefield, charged_openff_mol
-                    )
+                    openff_mol.partial_charges = reordered_charges * charge_scaling * elementary_charge
                     break
-            if not isomorphic:
+            # return a warning if some partial charges were not matched to any mol_xyz
+            if not is_isomorphic and len(partial_charges) > 0:
                 warnings.warn(
-                    f"{mol} in partial_charges is not isomorphic to any SMILE in the system."
+                    f"{mol_xyz} in partial_charges is not is_isomorphic to any SMILE in the system."
                 )
+            # finally, add charged mol to force_field
+            OpenMMGenerator._add_mol_charges_to_forcefield(
+                forcefield, openff_mol
+            )
         return forcefield
 
     @staticmethod
@@ -593,6 +593,7 @@ class OpenMMGenerator(InputGenerator):
         smile_strings: List[str],
         box: List[float],
         force_field: str,
+        partial_charge_scaling: Dict[str, float],
         partial_charges: List[
             Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]
         ],
@@ -618,7 +619,8 @@ class OpenMMGenerator(InputGenerator):
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
                 openff_forcefield,
-                openff_mols,
+                smile_strings,
+                partial_charge_scaling,
                 partial_charges,
             )
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
