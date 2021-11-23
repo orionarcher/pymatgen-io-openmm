@@ -162,7 +162,7 @@ class TestOpenMMGenerator:
 
     def test_get_coordinates(self):
         coordinates = OpenMMGenerator._get_coordinates(
-            {"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59]
+            {"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], -1
         )
         assert isinstance(coordinates, np.ndarray)
         assert len(coordinates) == 780
@@ -190,8 +190,8 @@ class TestOpenMMGenerator:
         "xyz_path, smile, map_values",
         [
             (CCO_xyz, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
-            (FEC_r_xyz, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
-            (FEC_s_xyz, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+            (FEC_r_xyz, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 9, 8, 5]),
+            (FEC_s_xyz, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 9, 8, 5]),
             (PF6_xyz, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
         ],
     )
@@ -212,37 +212,14 @@ class TestOpenMMGenerator:
             (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
         ],
     )
-    def test_assign_charges_to_openff_mol(self, charges_path, smile, atom_values):
-        charges = np.load(charges_path)
-        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        atom_map = {i: j for i, j in enumerate(atom_values)}  # this save some space
-        new_mol = OpenMMGenerator._assign_charges_to_openff_mol(
-            openff_mol, charges, atom_map
-        )
-        atom_map_inverse = {j: i for i, j in atom_map.items()}
-        mapped_charges = [charges[atom_map_inverse[i]] for i in range(len(charges))]
-        np.testing.assert_almost_equal(mapped_charges, new_mol.partial_charges._value)
-
-    @pytest.mark.parametrize(
-        "charges_path, smile, atom_values",
-        [
-            (CCO_charges, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
-            (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
-            (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
-            (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
-        ],
-    )
     def test_add_mol_charges_to_forcefield(self, charges_path, smile, atom_values):
         charges = np.load(charges_path)
         openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
         atom_map = {i: j for i, j in enumerate(atom_values)}  # this saves some space
-        new_mol = OpenMMGenerator._assign_charges_to_openff_mol(
-            openff_mol, charges, atom_map
-        )
-        atom_map_inverse = {j: i for i, j in atom_map.items()}
-        mapped_charges = [charges[atom_map_inverse[i]] for i in range(len(charges))]
+        mapped_charges = np.array([charges[atom_map[i]] for i in range(len(charges))])
+        openff_mol.partial_charges = mapped_charges * elementary_charge
         forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-        OpenMMGenerator._add_mol_charges_to_forcefield(forcefield, new_mol)
+        OpenMMGenerator._add_mol_charges_to_forcefield(forcefield, openff_mol)
         topology = openff_mol.to_topology()
         system = forcefield.create_openmm_system(topology)
         for force in system.getForces():
@@ -255,22 +232,30 @@ class TestOpenMMGenerator:
         ethanol_mol = pymatgen.core.Molecule.from_file(CCO_xyz)
         fec_mol = pymatgen.core.Molecule.from_file(FEC_s_xyz)
         ethanol_charges = np.load(CCO_charges)
-        fec_charges_og = np.load(FEC_charges)
-        partial_charges = [(ethanol_mol, ethanol_charges), (fec_mol, fec_charges_og)]
+        fec_charges = np.load(FEC_charges)
+        partial_charges = [(ethanol_mol, ethanol_charges), (fec_mol, fec_charges)]
         # set up force field
         ethanol_smile = "CCO"
         fec_smile = "O=C1OC[C@H](F)O1"
+        openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+        openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
+            openff_forcefield,
+            ["CCO", "O=C1OC[C@H](F)O1"],
+            {},
+            partial_charges,
+        )
+        openff_forcefield_scaled = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+        openff_forcefield_scaled = OpenMMGenerator._add_partial_charges_to_forcefield(
+            openff_forcefield_scaled,
+            ["CCO", "O=C1OC[C@H](F)O1"],
+            {"CCO": 0.9, "O=C1OC[C@H](F)O1": 0.9},
+            partial_charges,
+        )
+        # construct a System to make testing easier
         openff_mols = [
             openff.toolkit.topology.Molecule.from_smiles(smile)
             for smile in [ethanol_smile, fec_smile]
         ]
-        openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-        openff_forcefield = OpenMMGenerator._add_partial_charges_to_forcefield(
-            openff_forcefield,
-            openff_mols,
-            partial_charges,
-        )
-        # construct a System to make testing easier
         topology = OpenMMGenerator._get_openmm_topology(
             {ethanol_smile: 50, fec_smile: 50}
         )
@@ -278,12 +263,13 @@ class TestOpenMMGenerator:
             topology, openff_mols
         )
         system = openff_forcefield.create_openmm_system(openff_topology)
+        system_scaled = openff_forcefield_scaled.create_openmm_system(openff_topology)
         # ensure that all forces are from our assigned force field
         # this does not ensure correct ordering, as we already test that with
         # other methods
-        fec_charges = fec_charges_og[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
+        fec_charges_reordered = fec_charges[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
         full_partial_array = np.append(
-            np.tile(ethanol_charges, 50), np.tile(fec_charges, 50)
+            np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50)
         )
         for force in system.getForces():
             if type(force) == NonbondedForce:
@@ -291,6 +277,13 @@ class TestOpenMMGenerator:
                 for i in range(len(charge_array)):
                     charge_array[i] = force.getParticleParameters(i)[0]._value
         np.testing.assert_allclose(full_partial_array, charge_array, atol=0.0001)
+        for force in system_scaled.getForces():
+            if type(force) == NonbondedForce:
+                charge_array = np.zeros(force.getNumParticles())
+                for i in range(len(charge_array)):
+                    charge_array[i] = force.getParticleParameters(i)[0]._value
+        np.testing.assert_allclose(full_partial_array * 0.9, charge_array, atol=0.0001)
+
 
     def test_parameterize_system(self):
         # TODO: add test here to see if I am adding charges?
@@ -299,7 +292,7 @@ class TestOpenMMGenerator:
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = "Sage"
         system = OpenMMGenerator._parameterize_system(
-            topology, smile_strings, box, force_field, []
+            topology, smile_strings, box, force_field, {}, []
         )
         assert system.getNumParticles() == 780
         assert system.usesPeriodicBoundaryConditions()
