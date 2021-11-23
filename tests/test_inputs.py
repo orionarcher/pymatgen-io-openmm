@@ -47,6 +47,7 @@ class TestInputFiles:
         topology_input = TopologyInput.from_file(topology_path)
         with tempfile.NamedTemporaryFile() as f:
             topology_input.write_file(f.name)
+            topology_input = TopologyInput.from_file(f.name)
         topology = topology_input.get_topology()
         assert isinstance(topology, openmm.app.Topology)
         assert topology.getNumAtoms() == 780
@@ -57,6 +58,7 @@ class TestInputFiles:
         system_input = SystemInput.from_file(system_path)
         with tempfile.NamedTemporaryFile() as f:
             system_input.write_file(f.name)
+            system_input = SystemInput.from_file(f.name)
         system = system_input.get_system()
         assert isinstance(system, openmm.System)
         assert system.getNumParticles() == 780
@@ -66,6 +68,7 @@ class TestInputFiles:
         integrator_input = IntegratorInput.from_file(integrator_path)
         with tempfile.NamedTemporaryFile() as f:
             integrator_input.write_file(f.name)
+            integrator_input = IntegratorInput.from_file(f.name)
         integrator = integrator_input.get_integrator()
         assert isinstance(integrator, openmm.Integrator)
         assert integrator.getStepSize() == 1 * femtoseconds
@@ -75,6 +78,7 @@ class TestInputFiles:
         state_input = StateInput.from_file(state_path)
         with tempfile.NamedTemporaryFile() as f:
             state_input.write_file(f.name)
+            state_input = StateInput.from_file(f.name)
         state = state_input.get_state()
         assert isinstance(state, openmm.State)
         assert len(state.getPositions(asNumpy=True)) == 780
