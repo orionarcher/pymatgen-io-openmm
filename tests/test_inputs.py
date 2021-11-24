@@ -12,7 +12,7 @@ from openff.toolkit.typing.engines import smirnoff
 
 # openmm
 import openmm
-from openmm.unit import *
+from openmm.unit import femtoseconds, kelvin, elementary_charge
 from openmm import NonbondedForce
 
 # pymatgen
@@ -92,9 +92,7 @@ class TestOpenMMSet:
         assert input_set.state_file == "state.xml"
         assert isinstance(input_set.inputs["topology.pdb"], TopologyInput)
         assert isinstance(input_set.inputs["state.xml"], StateInput)
-        input_set2 = OpenMMSet.from_directory(
-            input_set_path, state_file="wrong_file.xml"
-        )
+        input_set2 = OpenMMSet.from_directory(input_set_path, state_file="wrong_file.xml")
         assert len(input_set2.inputs) == 3
         assert input_set2.topology_file == "topology.pdb"
         assert input_set2.state_file is None
@@ -102,9 +100,7 @@ class TestOpenMMSet:
     def test_validate(self):
         input_set = OpenMMSet.from_directory(input_set_path)
         assert input_set.validate()
-        corrupted_input_set = OpenMMSet.from_directory(
-            input_set_path, state_file=corrupted_state_path
-        )
+        corrupted_input_set = OpenMMSet.from_directory(input_set_path, state_file=corrupted_state_path)
         assert not corrupted_input_set.validate()
 
     def test_get_simulation(self):
@@ -148,9 +144,7 @@ class TestOpenMMGenerator:
         assert topology.getNumBonds() == 560
         ethanol_smile = "CCO"
         fec_smile = "O=C1OC[C@H](F)O1"
-        topology = OpenMMGenerator._get_openmm_topology(
-            {ethanol_smile: 50, fec_smile: 50}
-        )
+        topology = OpenMMGenerator._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
         assert topology.getNumAtoms() == 950
 
     def test_get_box(self):
@@ -161,9 +155,7 @@ class TestOpenMMGenerator:
         np.testing.assert_allclose(box[3:6], 19.59, 2)
 
     def test_get_coordinates(self):
-        coordinates = OpenMMGenerator._get_coordinates(
-            {"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], -1
-        )
+        coordinates = OpenMMGenerator._get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], -1)
         assert isinstance(coordinates, np.ndarray)
         assert len(coordinates) == 780
         assert np.min(coordinates) > -0.2
@@ -252,25 +244,16 @@ class TestOpenMMGenerator:
             partial_charges,
         )
         # construct a System to make testing easier
-        openff_mols = [
-            openff.toolkit.topology.Molecule.from_smiles(smile)
-            for smile in [ethanol_smile, fec_smile]
-        ]
-        topology = OpenMMGenerator._get_openmm_topology(
-            {ethanol_smile: 50, fec_smile: 50}
-        )
-        openff_topology = openff.toolkit.topology.Topology.from_openmm(
-            topology, openff_mols
-        )
+        openff_mols = [openff.toolkit.topology.Molecule.from_smiles(smile) for smile in [ethanol_smile, fec_smile]]
+        topology = OpenMMGenerator._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
+        openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, openff_mols)
         system = openff_forcefield.create_openmm_system(openff_topology)
         system_scaled = openff_forcefield_scaled.create_openmm_system(openff_topology)
         # ensure that all forces are from our assigned force field
         # this does not ensure correct ordering, as we already test that with
         # other methods
         fec_charges_reordered = fec_charges[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
-        full_partial_array = np.append(
-            np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50)
-        )
+        full_partial_array = np.append(np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50))
         for force in system.getForces():
             if type(force) == NonbondedForce:
                 charge_array = np.zeros(force.getNumParticles())
@@ -284,16 +267,13 @@ class TestOpenMMGenerator:
                     charge_array[i] = force.getParticleParameters(i)[0]._value
         np.testing.assert_allclose(full_partial_array * 0.9, charge_array, atol=0.0001)
 
-
     def test_parameterize_system(self):
         # TODO: add test here to see if I am adding charges?
         topology = OpenMMGenerator._get_openmm_topology({"O": 200, "CCO": 20})
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = "Sage"
-        system = OpenMMGenerator._parameterize_system(
-            topology, smile_strings, box, force_field, {}, []
-        )
+        system = OpenMMGenerator._parameterize_system(topology, smile_strings, box, force_field, {}, [])
         assert system.getNumParticles() == 780
         assert system.usesPeriodicBoundaryConditions()
 

@@ -1,9 +1,7 @@
 import pytest
 
 from pymatgen.io.openmm.setup import OpenMMSimulationGenerator
-
 from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal
-
 
 
 @pytest.fixture

@@ -6,13 +6,13 @@ The idea is that each function will operate on a openmm.Simulation and propagate
 simulation forward in time.
 """
 
-import numpy as np
+from typing import Union, List
 
 from openmm import MonteCarloBarostat
-from openmm.unit import *
+from openmm.unit import kelvin, atmosphere
 from openmm.app import Simulation
 
-from typing import Union, List, Optional, Dict
+import numpy as np
 
 
 def equilibrate_pressure(
@@ -35,9 +35,7 @@ def equilibrate_pressure(
     assert (
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
-    barostat_force_index = system.addForce(
-        MonteCarloBarostat(1 * atmosphere, 298 * kelvin, 10)
-    )
+    barostat_force_index = system.addForce(MonteCarloBarostat(1 * atmosphere, 298 * kelvin, 10))
     context.reinitialize(preserveState=True)
     simulation.step(steps)
     system.removeForce(barostat_force_index)
@@ -69,9 +67,7 @@ def anneal(
     old_temperature = integrator.getTemperature()
     temp_step_size = abs(temperature * kelvin - old_temperature) / temp_steps
 
-    for temp in np.arange(
-        old_temperature, temperature * kelvin + temp_step_size, temp_step_size
-    ):
+    for temp in np.arange(old_temperature, temperature * kelvin + temp_step_size, temp_step_size):
         integrator.setTemperature(temp * kelvin)
         simulation.step(steps[0] // temp_steps)
 

@@ -1,4 +1,6 @@
-
+"""
+Input sets for standard OpenMM runs.
+"""
 
 __author__ = "Orion Cohen"
 __version__ = "1.0"
