@@ -55,6 +55,14 @@ class TopologyInput(InputFile):
     """
 
     def __init__(self, topology: Topology, positions: Optional[Union[List, np.ndarray]] = None):
+        """
+        Instatiates a TopologyInput from an OpenMM.Topology. Positions can be supplied as
+        a n x 3 numpy array. If they are not given, positions will be set to 0.
+
+        Args:
+            topology: the openmm topology to serialize
+            positions: coordinates for each particle in the topology
+        """
         self.content = self._serialize(topology, positions)
 
     @staticmethod
@@ -68,10 +76,25 @@ class TopologyInput(InputFile):
         return pdb
 
     def get_string(self) -> str:
+        """
+        Get a string representation of the topology PDB.
+
+        Returns:
+            A string representation of the PDB topology file.
+        """
         return self.content
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
+        """
+        Get an InputFile from a PDB string.
+
+        Args:
+            contents: the contents of a PDB file.
+
+        Returns:
+            An InputFile representing the topology pdb.
+        """
         with io.StringIO(contents) as s:
             pdb = PDBFile(s)
             topology = pdb.getTopology()
@@ -99,6 +122,12 @@ class XmlInput(InputFile):
     """
 
     def __init__(self, openmm_object):
+        """
+        Create an InputFile from a serializable OpenMM object.
+
+        Args:
+            openmm_object:
+        """
         self.content = self._serialize(openmm_object)
 
     @staticmethod
@@ -106,6 +135,12 @@ class XmlInput(InputFile):
         return XmlSerializer.serialize(openmm_object)
 
     def get_string(self) -> str:
+        """
+        Return a string of the serialized Xml file.
+
+        Returns:
+            string
+        """
         return self.content
 
     @classmethod
@@ -123,6 +158,15 @@ class SystemInput(XmlInput):
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
+        """
+        Return a SystemInput from a serialized XML System file.
+
+        Args:
+            contents: the XML System string
+
+        Returns:
+            SystemInput object
+        """
         return SystemInput(XmlSerializer.deserialize(contents))
 
     def get_system(self) -> System:
@@ -142,6 +186,15 @@ class IntegratorInput(XmlInput):
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
+        """
+        Return a IntegratorInput from a serialized XML Integrator file.
+
+        Args:
+            contents: the XML Integrator string
+
+        Returns:
+            IntegratorInput object
+        """
         return IntegratorInput(XmlSerializer.deserialize(contents))
 
     def get_integrator(self) -> Integrator:
@@ -161,6 +214,15 @@ class StateInput(XmlInput):
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
+        """
+        Return a StateInput from a serialized XML State file.
+
+        Args:
+            contents: the XML State string
+
+        Returns:
+            StateInput object
+        """
         return StateInput(XmlSerializer.deserialize(contents))
 
     def get_state(self) -> State:
