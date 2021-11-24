@@ -3,7 +3,7 @@ Exists to organize testing data by providing standard links to each resource.
 """
 
 from pathlib import Path
-from pkg_resources import resource_filename
+from pkg_resources import resource_filename  # type: ignore
 
 test_files_path = Path("test_files")
 input_set_path = Path("test_files/input_set")
