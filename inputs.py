@@ -71,7 +71,7 @@ class TopologyInput(InputFile):
         return self.content
 
     @classmethod
-    def from_string(cls, contents: str):
+    def from_string(cls, contents: str) -> InputFile:
         with io.StringIO(contents) as s:
             pdb = PDBFile(s)
             topology = pdb.getTopology()
@@ -122,7 +122,7 @@ class SystemInput(XmlInput):
     """
 
     @classmethod
-    def from_string(cls, contents: str):
+    def from_string(cls, contents: str) -> InputFile:
         return SystemInput(XmlSerializer.deserialize(contents))
 
     def get_system(self) -> System:
@@ -141,7 +141,7 @@ class IntegratorInput(XmlInput):
     """
 
     @classmethod
-    def from_string(cls, contents: str):
+    def from_string(cls, contents: str) -> InputFile:
         return IntegratorInput(XmlSerializer.deserialize(contents))
 
     def get_integrator(self) -> Integrator:
@@ -160,7 +160,7 @@ class StateInput(XmlInput):
     """
 
     @classmethod
-    def from_string(cls, contents: str):
+    def from_string(cls, contents: str) -> InputFile:
         return StateInput(XmlSerializer.deserialize(contents))
 
     def get_state(self) -> State:
@@ -207,23 +207,23 @@ class OpenMMSet(InputSet):
         Returns:
             an OpenMMSet
         """
-        dir = Path(directory)
-        topology_input = TopologyInput.from_file(dir / topology_file)
-        system_input = SystemInput.from_file(dir / system_file)
-        integrator_input = IntegratorInput.from_file(dir / integrator_file)
+        source_dir = Path(directory)
+        topology_input = TopologyInput.from_file(source_dir / topology_file)
+        system_input = SystemInput.from_file(source_dir / system_file)
+        integrator_input = IntegratorInput.from_file(source_dir / integrator_file)
         inputs = {
             topology_file: topology_input,
             system_file: system_input,
             integrator_file: integrator_input,
         }
         openmm_set = OpenMMSet(
-            inputs=inputs,
+            inputs=inputs,  # type: ignore
             topology_file=topology_file,
             system_file=system_file,
             integrator_file=integrator_file,
         )
-        if Path(dir / state_file).is_file():
-            openmm_set.inputs[state_file] = StateInput.from_file(dir / state_file)
+        if Path(source_dir / state_file).is_file():
+            openmm_set.inputs[state_file] = StateInput.from_file(source_dir / state_file)
             openmm_set.state_file = state_file  # should this be a dict-like assignment?
         return openmm_set
 
@@ -256,14 +256,14 @@ class OpenMMSet(InputSet):
         system_input = self.inputs[self.system_file]
         integrator_input = self.inputs[self.integrator_file]
         simulation = Simulation(
-            topology_input.get_topology(),
-            system_input.get_system(),
-            integrator_input.get_integrator(),
+            topology_input.get_topology(),  # type: ignore
+            system_input.get_system(),  # type: ignore
+            integrator_input.get_integrator(),  # type: ignore
         )
         if hasattr(self, "state_file") and self.state_file:
             # TODO: confirm that this works correctly
             state_input = self.inputs[self.state_file]
-            simulation.context.setState(state_input.get_state())
+            simulation.context.setState(state_input.get_state())  # type: ignore
         return simulation
 
 
@@ -327,11 +327,11 @@ class OpenMMGenerator(InputGenerator):
         self.integrator_file = integrator_file
         self.state_file = state_file
 
-    def get_input_set(
+    def get_input_set(  # type: ignore
         self,
         smiles: Dict[str, int],
         density: Optional[float] = None,
-        box: Optional[List] = None,
+        box: Optional[List[float]] = None,
     ) -> InputSet:
         """
         This executes all of the logic to create the input set. It generates coordinates, instantiates
@@ -350,11 +350,10 @@ class OpenMMGenerator(InputGenerator):
             an OpenMM.InputSet
         """
         assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
-        # TODO: write test to ensure coordinates and topology have the same atom ordering
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
-        if not box:
-            box = self.get_box(smiles, density)
+        if box is None:
+            box = self.get_box(smiles, density)  # type: ignore
         coordinates = self._get_coordinates(smiles, box, self.packmol_random_seed)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
@@ -462,7 +461,7 @@ class OpenMMGenerator(InputGenerator):
             pw.write_input(scratch_dir)
             pw.run(scratch_dir)
             coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
-        raw_coordinates = coordinates.loc[:, "x":"z"].values
+        raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
         return raw_coordinates
 
     @staticmethod
