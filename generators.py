@@ -9,7 +9,7 @@ import tempfile
 import warnings
 from typing import Union, Optional, Dict, List, Tuple
 
-# cheminformatics
+# scipy
 import numpy as np
 import rdkit
 from openbabel import pybel
