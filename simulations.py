@@ -28,8 +28,8 @@ __date__ = "Nov 2021"
 def equilibrate_pressure(
     simulation: Simulation,
     steps: int,
-    temperature: float,
-    pressure: float,
+    temperature: float = 298,
+    pressure: float = 1,
 ):
     """
     Equilibrate the pressure of a simulation in the NPT ensemble.
@@ -81,12 +81,20 @@ def anneal(
     old_temperature = integrator.getTemperature()
     temp_step_size = abs(temperature * kelvin - old_temperature) / temp_steps
 
-    for temp in np.arange(old_temperature, temperature * kelvin + temp_step_size, temp_step_size):
+    for temp in np.arange(
+        old_temperature + temp_step_size,
+        temperature * kelvin + temp_step_size,
+        temp_step_size,
+    ):
         integrator.setTemperature(temp * kelvin)
         simulation.step(steps[0] // temp_steps)
 
     simulation.step(steps[1])
 
-    for temp in np.arange(temperature * kelvin, old_temperature - temp_step_size, temp_step_size):
+    for temp in np.arange(
+        temperature * kelvin - temp_step_size,
+        old_temperature - temp_step_size,
+        -1 * temp_step_size,
+    ):
         integrator.setTemperature(temp * kelvin)
         simulation.step(steps[2] // temp_steps)
