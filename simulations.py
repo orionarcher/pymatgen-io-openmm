@@ -28,6 +28,8 @@ __date__ = "Nov 2021"
 def equilibrate_pressure(
     simulation: Simulation,
     steps: int,
+    temperature: float,
+    pressure: float,
 ):
     """
     Equilibrate the pressure of a simulation in the NPT ensemble.
@@ -38,14 +40,16 @@ def equilibrate_pressure(
     Parameters
     ----------
     simulation : the openmm.Simulation to propagate.
-    steps : the length of the heating, holding, and cooling stages.
+    steps : the length of the heating, holding, and cooling stages. Steps is number of steps.
+    temperature : temperature to equilibrate at (Kelvin)
+    pressure : pressure to equilibrate at (Atm).
     """
     context = simulation.context
     system = context.getSystem()
     assert (
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
-    barostat_force_index = system.addForce(MonteCarloBarostat(1 * atmosphere, 298 * kelvin, 10))
+    barostat_force_index = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 10))
     context.reinitialize(preserveState=True)
     simulation.step(steps)
     system.removeForce(barostat_force_index)
@@ -67,8 +71,8 @@ def anneal(
     Parameters
     ----------
     simulation : the openmm.Simulation to propagate.
-    temperature : the temperature reached for the holding stage.
-    steps : the length of the heating, holding, and cooling stages.
+    temperature : the temperature reached for the holding stage (Kelvin)
+    steps : the length of the heating, holding, and cooling stages. Steps is number of steps.
     temp_steps : temperature is raised and lowered stepwise in temp_steps pieces.
     """
     # TODO: timing is currently bugged and not propagating long enough, should be fixed
