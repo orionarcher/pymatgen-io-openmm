@@ -6,7 +6,7 @@ Concrete implementations of InputFiles for the OpenMM IO.
 import io
 from typing import Union, Optional, List
 
-# cheminformatics
+# scipy
 import numpy as np
 
 # openmm

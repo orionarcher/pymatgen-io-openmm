@@ -77,7 +77,7 @@ class TestOpenMMSolutionGen:
         np.testing.assert_allclose(box[3:6], 19.59, 2)
 
     def test_get_coordinates(self):
-        coordinates = OpenMMSolutionGen._get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], -1)
+        coordinates = OpenMMSolutionGen._get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1)
         assert isinstance(coordinates, np.ndarray)
         assert len(coordinates) == 780
         assert np.min(coordinates) > -0.2
@@ -200,7 +200,7 @@ class TestOpenMMSolutionGen:
         assert system.usesPeriodicBoundaryConditions()
 
     def test_get_input_set(self):
-        generator = OpenMMSolutionGen()
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
         input_set = generator.get_input_set({"O": 200, "CCO": 20}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
