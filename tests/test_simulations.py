@@ -1,16 +1,14 @@
 import pytest
 
-from pymatgen.io.openmm.setup import OpenMMSimulationGenerator
+from pymatgen.io.openmm.generators import OpenMMSolutionGen
 from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal
 
 
 @pytest.fixture
 def ethanol_simulation():
-    generator = OpenMMSimulationGenerator(
-        {"O": 600, "CCO": 50},
-        0.9,
-    )
-    return generator.return_simulation()
+    generator = OpenMMSolutionGen()
+    input_set = generator.get_input_set({"O": 600, "CCO": 50}, density=1.0)
+    return input_set.get_simulation()
 
 
 def test_anneal(ethanol_simulation):
