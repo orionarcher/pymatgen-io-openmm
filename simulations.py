@@ -6,13 +6,23 @@ The idea is that each function will operate on a openmm.Simulation and propagate
 simulation forward in time.
 """
 
+# base python
 from typing import Union, List
 
+# scipy
+import numpy as np
+
+# openmm
 from openmm import MonteCarloBarostat
 from openmm.unit import kelvin, atmosphere
 from openmm.app import Simulation
 
-import numpy as np
+
+__author__ = "Orion Cohen, Ryan Kingsbury"
+__version__ = "1.0"
+__maintainer__ = "Orion Cohen"
+__email__ = "orion@lbl.gov"
+__date__ = "Nov 2021"
 
 
 def equilibrate_pressure(
@@ -22,7 +32,7 @@ def equilibrate_pressure(
     """
     Equilibrate the pressure of a simulation in the NPT ensemble.
 
-    Adds and then removes a openmm.MonteCarloBarostat to shift the system
+    Adds and then removes a openmm.MonteCarlo Barostat to shift the system
     into the NPT ensemble.
 
     Parameters

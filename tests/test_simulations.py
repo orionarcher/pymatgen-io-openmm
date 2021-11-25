@@ -3,6 +3,12 @@ import pytest
 from pymatgen.io.openmm.generators import OpenMMSolutionGen
 from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal
 
+__author__ = "Orion Cohen, Ryan Kingsbury"
+__version__ = "1.0"
+__maintainer__ = "Orion Cohen"
+__email__ = "orion@lbl.gov"
+__date__ = "Nov 2021"
+
 
 @pytest.fixture
 def ethanol_simulation():
