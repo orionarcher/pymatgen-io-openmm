@@ -1,3 +1,6 @@
+# base python
+import tempfile
+
 # pymatgen
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -46,3 +49,14 @@ class TestOpenMMSet:
         assert simulation.topology.getNumAtoms() == 780
         assert simulation.topology.getNumResidues() == 220
         assert simulation.topology.getNumBonds() == 560
+
+    def test_write_inputs(self):
+        input_set = OpenMMSet.from_directory(input_set_path)
+        with tempfile.TemporaryDirectory() as scratch_dir:
+            input_set.write_input(scratch_dir)
+            input_set2 = OpenMMSet.from_directory(scratch_dir)
+        assert len(input_set2.inputs) == 4
+        assert input_set2.topology_file == "topology.pdb"
+        assert input_set2.state_file == "state.xml"
+        assert isinstance(input_set2.inputs["topology.pdb"], TopologyInput)
+        assert isinstance(input_set2.inputs["state.xml"], StateInput)
