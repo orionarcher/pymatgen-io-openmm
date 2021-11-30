@@ -66,7 +66,8 @@ def anneal(
     Anneal the simulation at the specified temperature.
 
     Annealing takes place in 3 stages, heating, holding, and cooling. The three
-    elements of steps specify the length of each stage.
+    elements of steps specify the length of each stage. After heating, and holding,
+    the system will cool to its original temperature.
 
     Parameters
     ----------
