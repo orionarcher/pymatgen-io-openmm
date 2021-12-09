@@ -4,9 +4,10 @@ Concrete implementations of InputSet for the OpenMM IO.
 
 # base python
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional, Dict
 
 # openmm
+import openmm
 from openmm.app import Simulation
 
 # pymatgen
@@ -97,9 +98,17 @@ class OpenMMSet(InputSet):
         else:
             return True
 
-    def get_simulation(self) -> Simulation:
+    def get_simulation(
+        self,
+        platform: Optional[openmm.Platform] = None,
+        platformProperties: Dict[str, str] = None,
+    ) -> Simulation:
         """
         Instantiates and returns an OpenMM.Simulation from the input files.
+
+        Args:
+            platform: the OpenMM platform passed to the Simulation.
+            platformProperties: properties of the OpenMM platform that is passed to the simulation.
 
         Returns:
             OpenMM.Simulation
@@ -111,6 +120,8 @@ class OpenMMSet(InputSet):
             topology_input.get_topology(),  # type: ignore
             system_input.get_system(),  # type: ignore
             integrator_input.get_integrator(),  # type: ignore
+            platform,
+            platformProperties,
         )
         if hasattr(self, "state_file") and self.state_file:
             # TODO: confirm that this works correctly
