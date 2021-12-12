@@ -134,6 +134,7 @@ class OpenMMSolutionGen(InputGenerator):
             an OpenMM.InputSet
         """
         assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
+        smiles = {smile: count for smile, count in smiles.items() if count > 0}
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
         if box is None:
@@ -345,6 +346,8 @@ class OpenMMSolutionGen(InputGenerator):
             forcefield with partial charges added.
         """
         # loop through partial charges to add to force field
+        matched_mols = set()
+        inferred_mols = set()
         for smile in smile_strings:
             # detect charge scaling, set scaling parameter
             if smile in partial_charge_scaling.keys():
@@ -353,23 +356,28 @@ class OpenMMSolutionGen(InputGenerator):
                 charge_scaling = 1
             # assign default am1bcc charges
             openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-            openff_mol.compute_partial_charges_am1bcc()
-            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
             # assign charges from isomorphic charges, if they exist
             is_isomorphic = False
             for mol_xyz, charges in partial_charges:
                 inferred_mol = OpenMMSolutionGen._infer_openff_mol(mol_xyz)
+                inferred_mols.add(inferred_mol)
                 is_isomorphic, atom_map = OpenMMSolutionGen._get_atom_map(inferred_mol, openff_mol)
                 # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
                 if is_isomorphic:
                     reordered_charges = np.array([charges[atom_map[i]] for i, _ in enumerate(charges)])
                     openff_mol.partial_charges = reordered_charges * charge_scaling * elementary_charge
+                    matched_mols.add(inferred_mol)
                     break
+            if not is_isomorphic:
+                openff_mol.compute_partial_charges_am1bcc()
+                openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
             # return a warning if some partial charges were not matched to any mol_xyz
-            if not is_isomorphic and len(partial_charges) > 0:
-                warnings.warn(f"{mol_xyz} in partial_charges is not is_isomorphic to any SMILE in the system.")
+            # if not is_isomorphic and len(partial_charges) > 0:
+            #     warnings.warn(f"{mol_xyz} in partial_charges is not is_isomorphic to any SMILE in the system.")
             # finally, add charged mol to force_field
             OpenMMSolutionGen._add_mol_charges_to_forcefield(forcefield, openff_mol)
+        for unmatched_mol in inferred_mols - matched_mols:
+            warnings.warn(f"{unmatched_mol} in partial_charges is not is_isomorphic to any SMILE in the system.")
         return forcefield
 
     @staticmethod
@@ -406,7 +414,7 @@ class OpenMMSolutionGen(InputGenerator):
             openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, openff_mols)
             box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
             openff_topology.box_vectors = box_vectors
-            system = openff_forcefield.create_openmm_system(openff_topology)
+            system = openff_forcefield.create_openmm_system(openff_topology, allow_nonintegral_charges=True)
             return system
         raise NotImplementedError(
             f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
