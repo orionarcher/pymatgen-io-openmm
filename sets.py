@@ -100,7 +100,7 @@ class OpenMMSet(InputSet):
 
     def get_simulation(
         self,
-        platform: Optional[str, openmm.Platform] = None,
+        platform: Optional[Union[str, openmm.Platform]] = None,
         platformProperties: Optional[Dict[str, str]] = None,
     ) -> Simulation:
         """
