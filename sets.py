@@ -9,6 +9,7 @@ from typing import Union, Optional, Dict
 # openmm
 import openmm
 from openmm.app import Simulation
+from openmm import Platform
 
 # pymatgen
 from pymatgen.io.core import InputSet
@@ -117,7 +118,9 @@ class OpenMMSet(InputSet):
         system_input = self.inputs[self.system_file]
         integrator_input = self.inputs[self.integrator_file]
         if isinstance(platform, str):
-            platform = openmm.Platform.getPlatformByName(platform)
+            print("matching platfrom str")
+            platform = Platform.getPlatformByName(platform)
+            print("found platform")
         simulation = Simulation(
             topology_input.get_topology(),  # type: ignore
             system_input.get_system(),  # type: ignore
