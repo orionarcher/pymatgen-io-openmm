@@ -101,7 +101,7 @@ class OpenMMSet(InputSet):
     def get_simulation(
         self,
         platform: Optional[openmm.Platform] = None,
-        platformProperties: Dict[str, str] = None,
+        platformProperties: Optional[Dict[str, str]] = None,
     ) -> Simulation:
         """
         Instantiates and returns an OpenMM.Simulation from the input files.
@@ -120,8 +120,8 @@ class OpenMMSet(InputSet):
             topology_input.get_topology(),  # type: ignore
             system_input.get_system(),  # type: ignore
             integrator_input.get_integrator(),  # type: ignore
-            platform,
-            platformProperties,
+            platform=platform,
+            platformProperties=platformProperties,
         )
         if hasattr(self, "state_file") and self.state_file:
             # TODO: confirm that this works correctly
