@@ -158,6 +158,9 @@ class OpenMMSolutionGen(InputGenerator):
         context.setPositions(coordinates)
         state = context.getState(getPositions=True)
         del context
+        from gc import collect
+
+        collect()
         # instantiate input files and feed to input_set
         topology_input = TopologyInput(topology)
         system_input = SystemInput(system)
