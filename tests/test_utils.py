@@ -63,4 +63,4 @@ def test_n_solute_from_molarity():
 
 def test_calculate_molarity():
     nm3_to_L = 1e-24
-    np.testing.assert_almost_equal(calculate_molarity(4 ** 3 * nm3_to_L, 39), 1)
+    np.testing.assert_almost_equal(calculate_molarity(4 ** 3 * nm3_to_L, 39), 1, decimal=1)

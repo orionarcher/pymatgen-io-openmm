@@ -59,7 +59,7 @@ def get_box(smiles: Dict[str, int], density: float) -> List[float]:
     return [0, 0, 0, side_length, side_length, side_length]
 
 
-def n_mols_from_mass_ratio(n_mol: int, smiles: List[str], mass_ratio: List[float]) -> np.ndarray[int]:
+def n_mols_from_mass_ratio(n_mol: int, smiles: List[str], mass_ratio: List[float]) -> np.ndarray:
     """
     Calculates the number of mols needed to yield a given mass ratio.
 
@@ -80,7 +80,7 @@ def n_mols_from_mass_ratio(n_mol: int, smiles: List[str], mass_ratio: List[float
 
 def n_mols_from_volume_ratio(
     n_mol: int, smiles: List[str], volume_ratio: List[float], densities: List[float]
-) -> np.ndarray[int]:
+) -> np.ndarray:
     """
     Calculates the number of mols needed to yield a given volume ratio.
 
