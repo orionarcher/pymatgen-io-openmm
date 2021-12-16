@@ -12,7 +12,6 @@ from typing import Union, Optional, Dict, List, Tuple
 # scipy
 import numpy as np
 import rdkit
-from openbabel import pybel
 import parmed
 
 # openff
@@ -40,6 +39,7 @@ from pymatgen.io.openmm.inputs import (
     StateInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet
+from pymatgen.io.openmm.utils import get_box, smile_to_parmed_structure, smile_to_molecule
 from pymatgen.io.packmol import PackmolBoxGen
 from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
@@ -138,7 +138,7 @@ class OpenMMSolutionGen(InputGenerator):
         # create dynamic openmm objects with internal methods
         topology = self._get_openmm_topology(smiles)
         if box is None:
-            box = self.get_box(smiles, density)  # type: ignore
+            box = get_box(smiles, density)  # type: ignore
         coordinates = self._get_coordinates(smiles, box, self.packmol_random_seed)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
@@ -177,30 +177,6 @@ class OpenMMSolutionGen(InputGenerator):
         return input_set
 
     @staticmethod
-    def _smile_to_molecule(smile: str) -> pymatgen.core.Molecule:
-        """
-        Convert a SMILE to a Pymatgen.Molecule.
-        """
-        mol = pybel.readstring("smi", smile)
-        mol.addh()
-        mol.make3D()
-        adaptor = BabelMolAdaptor(mol.OBMol)
-        return adaptor.pymatgen_mol
-
-    @staticmethod
-    def _smile_to_parmed_structure(smile: str) -> parmed.Structure:
-        """
-        Convert a SMILE to a Parmed.Structure.
-        """
-        mol = pybel.readstring("smi", smile)
-        mol.addh()
-        mol.make3D()
-        with tempfile.NamedTemporaryFile() as f:
-            mol.write(format="mol", filename=f.name, overwrite=True)
-            structure = parmed.load_file(f.name)[0]  # load_file is returning a list for some reason
-        return structure
-
-    @staticmethod
     def _get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
         """
         Returns an openmm topology with the given SMILEs at the given counts.
@@ -213,7 +189,7 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an openmm.app.Topology
         """
-        structures = [OpenMMSolutionGen._smile_to_parmed_structure(smile) for smile in smiles.keys()]
+        structures = [smile_to_parmed_structure(smile) for smile in smiles.keys()]
         counts = list(smiles.values())
         combined_structs = parmed.Structure()
         for struct, count in zip(structures, counts):
@@ -238,7 +214,7 @@ class OpenMMSolutionGen(InputGenerator):
                 {
                     "name": smile,
                     "number": count,
-                    "coords": OpenMMSolutionGen._smile_to_molecule(smile),
+                    "coords": smile_to_molecule(smile),
                 }
             )
         with tempfile.TemporaryDirectory() as scratch_dir:
@@ -248,29 +224,6 @@ class OpenMMSolutionGen(InputGenerator):
             coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
         raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
         return raw_coordinates
-
-    @staticmethod
-    def get_box(smiles: Dict[str, int], density: float) -> List[float]:
-        """
-        Calculates the side_length of a cube necessary to contain the given molecules with
-        given density.
-
-        Args:
-            smiles: keys are smiles and values are number of that molecule to pack
-            density: guessed density of the solution, larger densities will lead to smaller cubes.
-
-        Returns:
-            side_length: side length of the returned cube
-        """
-        cm3_to_A3 = 1e24
-        NA = 6.02214e23
-        mols = [OpenMMSolutionGen._smile_to_molecule(smile) for smile in smiles.keys()]
-        mol_mw = np.array([mol.composition.weight for mol in mols])
-        counts = np.array(list(smiles.values()))
-        total_weight = sum(mol_mw * counts)
-        box_volume = total_weight * cm3_to_A3 / (NA * density)
-        side_length = round(box_volume ** (1 / 3), 2)
-        return [0, 0, 0, side_length, side_length, side_length]
 
     @staticmethod
     def _infer_openff_mol(charged_mol: Union[pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:

@@ -3,7 +3,6 @@ import pytest
 
 # cheminformatics
 import numpy as np
-import parmed
 
 # openff
 import openff.toolkit.topology
@@ -40,26 +39,6 @@ __date__ = "Nov 2021"
 
 
 class TestOpenMMSolutionGen:
-    def test_smile_to_molecule(self):
-        mol = OpenMMSolutionGen._smile_to_molecule("CCO")
-        assert isinstance(mol, pymatgen.core.structure.Molecule)
-        assert len(mol.sites) == 9
-
-    def test_smile_to_parmed_structure(self):
-        struct1 = OpenMMSolutionGen._smile_to_parmed_structure("CCO")
-        assert isinstance(struct1, parmed.Structure)
-        assert len(struct1.atoms) == 9
-        assert len(struct1.residues) == 1
-        assert len(struct1.bonds) == 8
-        struct2 = OpenMMSolutionGen._smile_to_parmed_structure("O")
-        assert len(struct2.atoms) == 3
-        assert len(struct2.residues) == 1
-        assert len(struct2.bonds) == 2
-        struct3 = OpenMMSolutionGen._smile_to_parmed_structure("O=C1OC[C@H](F)O1")
-        assert len(struct3.atoms) == 10
-        assert len(struct3.residues) == 1
-        assert len(struct3.bonds) == 10
-
     def test_get_openmm_topology(self):
         topology = OpenMMSolutionGen._get_openmm_topology({"O": 200, "CCO": 20})
         assert isinstance(topology, openmm.app.Topology)
@@ -70,13 +49,6 @@ class TestOpenMMSolutionGen:
         fec_smile = "O=C1OC[C@H](F)O1"
         topology = OpenMMSolutionGen._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
         assert topology.getNumAtoms() == 950
-
-    def test_get_box(self):
-        box = OpenMMSolutionGen.get_box({"O": 200, "CCO": 20}, 1)
-        assert isinstance(box, list)
-        assert len(box) == 6
-        np.testing.assert_allclose(box[0:3], 0, 2)
-        np.testing.assert_allclose(box[3:6], 19.59, 2)
 
     def test_get_coordinates(self):
         coordinates = OpenMMSolutionGen._get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1)
