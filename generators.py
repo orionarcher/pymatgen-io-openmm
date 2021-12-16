@@ -157,6 +157,7 @@ class OpenMMSolutionGen(InputGenerator):
         context = Context(system, integrator)
         context.setPositions(coordinates)
         state = context.getState(getPositions=True)
+        del context
         # instantiate input files and feed to input_set
         topology_input = TopologyInput(topology)
         system_input = SystemInput(system)
