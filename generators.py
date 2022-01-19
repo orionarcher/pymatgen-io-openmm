@@ -149,6 +149,7 @@ class OpenMMSolutionGen(InputGenerator):
             self.partial_charge_scaling,
             self.partial_charges,
         )
+        print('Finished parameterizing system')
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
@@ -210,9 +211,11 @@ class OpenMMSolutionGen(InputGenerator):
         """
         molecules = []
         for smile, count in smiles.items():
+            # Added to not confuse packmol name
+            name = smile_to_molecule(smile).formula.replace(" ", "")
             molecules.append(
                 {
-                    "name": smile,
+                    "name": name,
                     "number": count,
                     "coords": smile_to_molecule(smile),
                 }
@@ -320,15 +323,20 @@ class OpenMMSolutionGen(InputGenerator):
                     reordered_charges = np.array([charges[atom_map[i]] for i, _ in enumerate(charges)])
                     openff_mol.partial_charges = reordered_charges * charge_scaling * elementary_charge
                     matched_mols.add(inferred_mol)
-                    break
-            if not is_isomorphic:
-                openff_mol.compute_partial_charges_am1bcc()
-                openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+                    print('Charges supplied for {}'.format(smile))
+                    #break
+                if not is_isomorphic:
+                    print('Computing charges for {}'.format(smile))
+                    openff_mol.compute_partial_charges_am1bcc()
+                    openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+                    print('Finished computing charges for {}'.format(smile))
+                # print('charges are {}'.format(openff_mol.partial_charges))
             # return a warning if some partial charges were not matched to any mol_xyz
             # if not is_isomorphic and len(partial_charges) > 0:
             #     warnings.warn(f"{mol_xyz} in partial_charges is not is_isomorphic to any SMILE in the system.")
             # finally, add charged mol to force_field
-            OpenMMSolutionGen._add_mol_charges_to_forcefield(forcefield, openff_mol)
+                OpenMMSolutionGen._add_mol_charges_to_forcefield(forcefield,
+                                                              openff_mol)
         for unmatched_mol in inferred_mols - matched_mols:
             warnings.warn(f"{unmatched_mol} in partial_charges is not is_isomorphic to any SMILE in the system.")
         return forcefield
@@ -364,10 +372,25 @@ class OpenMMSolutionGen(InputGenerator):
                 partial_charge_scaling,
                 partial_charges,
             )
+            print(openff_forcefield["LibraryCharges"].parameters)
+            print('Added partial charges in parameterize system')
             openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, openff_mols)
+            # print('Got topology')
             box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
             openff_topology.box_vectors = box_vectors
-            system = openff_forcefield.create_openmm_system(openff_topology, allow_nonintegral_charges=True)
+            mols_with_charge = []
+            # print(partial_charges)
+            for off_mol in openff_mols:
+                if len(off_mol.atoms)>30:
+                    off_mol.assign_partial_charges(
+                        partial_charge_method="mmff94")
+                    mols_with_charge.append(off_mol)
+                    # print(off_mol.partial_charges)
+            print(mols_with_charge)
+            system = openff_forcefield.create_openmm_system(openff_topology,
+                                                            charge_from_molecules = mols_with_charge,
+                                                            allow_nonintegral_charges=True)
+            print('Created openmm system')
             return system
         raise NotImplementedError(
             f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
