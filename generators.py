@@ -210,12 +210,12 @@ class OpenMMSolutionGen(InputGenerator):
             array of coordinates for each atom in the box.
         """
         molecules = []
-        for smile, count in smiles.items():
-            # Added to not confuse packmol name
-            name = smile_to_molecule(smile).formula.replace(" ", "")
+
+        for i, smile_count_tuple in enumerate(smiles.items()):
+            smile, count = smile_count_tuple
             molecules.append(
                 {
-                    "name": name,
+                    "name": str(i),
                     "number": count,
                     "coords": smile_to_molecule(smile),
                 }
