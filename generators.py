@@ -74,6 +74,7 @@ class OpenMMSolutionGen(InputGenerator):
         partial_charge_method: str = "am1bcc",
         partial_charge_scaling: Optional[Dict[str, float]] = None,
         partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
+        initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
         packmol_random_seed: int = -1,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
@@ -109,6 +110,7 @@ class OpenMMSolutionGen(InputGenerator):
         self.partial_charge_method = partial_charge_method
         self.partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
         self.partial_charges = partial_charges if partial_charges else []
+        self.initial_geometries = initial_geometries if initial_geometries else {}
         self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
@@ -349,8 +351,8 @@ class OpenMMSolutionGen(InputGenerator):
         box: List[float],
         force_field: str = "sage",
         partial_charge_method: str = "am1bcc",
-        partial_charge_scaling: Dict[str, float] = {},
-        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
+        partial_charge_scaling: Dict[str, float] = None,
+        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = None,
     ) -> openmm.System:
         """
         Parameterize an OpenMM system.
@@ -364,6 +366,8 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an OpenMM.system
         """
+        partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
+        partial_charges = partial_charges if partial_charges else []
         supported_force_fields = ["Sage"]
         if force_field.lower() == "sage":
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
