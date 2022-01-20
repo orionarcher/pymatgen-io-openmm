@@ -71,6 +71,7 @@ class OpenMMSolutionGen(InputGenerator):
         temperature: float = 298,
         step_size: float = 0.001,
         friction_coefficient: int = 1,
+        partial_charge_method: str = "am1bcc",
         partial_charge_scaling: Optional[Dict[str, float]] = None,
         partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
         packmol_random_seed: int = -1,
@@ -88,6 +89,8 @@ class OpenMMSolutionGen(InputGenerator):
             step_size: the step size of the simulation (picoseconds).
             friction_coefficient: the friction coefficient which couples the system to
                 the heat bath (inverse picoseconds).
+            partial_charge_method: Any partial charge method supported by OpenFF Molecule.assign_partial_charges.
+                "am1bcc" is recommended for small molecules, "mmff94" is recommended for large molecules.
             partial_charge_scaling: A dictionary of partial charge scaling for particular species. Keys
             are SMILEs and values are the scaling factor.
             partial_charges: A list of tuples, where the first element of each tuple is a molecular
@@ -103,6 +106,7 @@ class OpenMMSolutionGen(InputGenerator):
         self.temperature = temperature
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
+        self.partial_charge_method = partial_charge_method
         self.partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
         self.partial_charges = partial_charges if partial_charges else []
         self.packmol_random_seed = packmol_random_seed
@@ -146,6 +150,7 @@ class OpenMMSolutionGen(InputGenerator):
             smile_strings,
             box,
             self.force_field,
+            self.partial_charge_method,
             self.partial_charge_scaling,
             self.partial_charges,
         )
@@ -281,6 +286,7 @@ class OpenMMSolutionGen(InputGenerator):
     def _add_partial_charges_to_forcefield(
         forcefield: smirnoff.ForceField,
         smile_strings: List[str],
+        partial_charge_method: str,
         partial_charge_scaling: Dict[str, float],
         partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]],
     ):
@@ -324,7 +330,7 @@ class OpenMMSolutionGen(InputGenerator):
                     matched_mols.add(inferred_mol)
                     break
             if not is_isomorphic:
-                openff_mol.compute_partial_charges_am1bcc()
+                openff_mol.assign_partial_charges(partial_charge_method)  # TODO: restructure to collect mols!
                 openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
             # return a warning if some partial charges were not matched to any mol_xyz
             # if not is_isomorphic and len(partial_charges) > 0:
@@ -341,6 +347,7 @@ class OpenMMSolutionGen(InputGenerator):
         smile_strings: List[str],
         box: List[float],
         force_field: str,
+        partial_charge_method: str,
         partial_charge_scaling: Dict[str, float],
         partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]],
     ) -> openmm.System:
@@ -363,6 +370,7 @@ class OpenMMSolutionGen(InputGenerator):
             openff_forcefield = OpenMMSolutionGen._add_partial_charges_to_forcefield(
                 openff_forcefield,
                 smile_strings,
+                partial_charge_method,
                 partial_charge_scaling,
                 partial_charges,
             )
