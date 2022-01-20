@@ -283,8 +283,7 @@ class OpenMMSolutionGen(InputGenerator):
         return forcefield
 
     @staticmethod
-    def _add_partial_charges_to_forcefield(
-        forcefield: smirnoff.ForceField,
+    def _assign_charges_to_mols(
         smile_strings: List[str],
         partial_charge_method: str,
         partial_charge_scaling: Dict[str, float],
@@ -309,13 +308,13 @@ class OpenMMSolutionGen(InputGenerator):
         # loop through partial charges to add to force field
         matched_mols = set()
         inferred_mols = set()
+        charged_mols = []
         for smile in smile_strings:
             # detect charge scaling, set scaling parameter
             if smile in partial_charge_scaling.keys():
                 charge_scaling = partial_charge_scaling[smile]
             else:
                 charge_scaling = 1
-            # assign default am1bcc charges
             openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
             # assign charges from isomorphic charges, if they exist
             is_isomorphic = False
@@ -330,26 +329,28 @@ class OpenMMSolutionGen(InputGenerator):
                     matched_mols.add(inferred_mol)
                     break
             if not is_isomorphic:
-                openff_mol.assign_partial_charges(partial_charge_method)  # TODO: restructure to collect mols!
+                # assign partial charges if there was no match
+                openff_mol.assign_partial_charges(partial_charge_method)
                 openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+            charged_mols.append(openff_mol)
             # return a warning if some partial charges were not matched to any mol_xyz
             # if not is_isomorphic and len(partial_charges) > 0:
             #     warnings.warn(f"{mol_xyz} in partial_charges is not is_isomorphic to any SMILE in the system.")
             # finally, add charged mol to force_field
-            OpenMMSolutionGen._add_mol_charges_to_forcefield(forcefield, openff_mol)
+            # OpenMMSolutionGen._add_mol_charges_to_forcefield(forcefield, openff_mol)
         for unmatched_mol in inferred_mols - matched_mols:
-            warnings.warn(f"{unmatched_mol} in partial_charges is not is_isomorphic to any SMILE in the system.")
-        return forcefield
+            warnings.warn(f"{unmatched_mol} in partial_charges is not isomorphic to any SMILE in the system.")
+        return charged_mols
 
     @staticmethod
     def _parameterize_system(
         topology: Topology,
         smile_strings: List[str],
         box: List[float],
-        force_field: str,
-        partial_charge_method: str,
-        partial_charge_scaling: Dict[str, float],
-        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]],
+        force_field: str = "sage",
+        partial_charge_method: str = "am1bcc",
+        partial_charge_scaling: Dict[str, float] = {},
+        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
     ) -> openmm.System:
         """
         Parameterize an OpenMM system.
@@ -365,19 +366,21 @@ class OpenMMSolutionGen(InputGenerator):
         """
         supported_force_fields = ["Sage"]
         if force_field.lower() == "sage":
-            openff_mols = [openff.toolkit.topology.Molecule.from_smiles(smile) for smile in smile_strings]
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-            openff_forcefield = OpenMMSolutionGen._add_partial_charges_to_forcefield(
-                openff_forcefield,
+            charged_openff_mols = OpenMMSolutionGen._assign_charges_to_mols(
                 smile_strings,
                 partial_charge_method,
                 partial_charge_scaling,
                 partial_charges,
             )
-            openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, openff_mols)
+            openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_openff_mols)
             box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
             openff_topology.box_vectors = box_vectors
-            system = openff_forcefield.create_openmm_system(openff_topology, allow_nonintegral_charges=True)
+            system = openff_forcefield.create_openmm_system(
+                openff_topology,
+                charge_from_molecules=charged_openff_mols,
+                allow_nonintegral_charges=True,
+            )
             return system
         raise NotImplementedError(
             f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
