@@ -116,7 +116,7 @@ class TestOpenMMSolutionGen:
                 for i in range(force.getNumParticles()):
                     assert force.getParticleParameters(i)[0]._value == mapped_charges[i]
 
-    def test_add_partial_charges_to_forcefield(self):
+    def test_assign_charges_to_mols(self):
         # set up partial charges
         ethanol_mol = pymatgen.core.Molecule.from_file(CCO_xyz)
         fec_mol = pymatgen.core.Molecule.from_file(FEC_s_xyz)
@@ -127,25 +127,31 @@ class TestOpenMMSolutionGen:
         ethanol_smile = "CCO"
         fec_smile = "O=C1OC[C@H](F)O1"
         openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-        openff_forcefield = OpenMMSolutionGen._add_partial_charges_to_forcefield(
-            openff_forcefield,
-            ["CCO", "O=C1OC[C@H](F)O1"],
+        charged_mols = OpenMMSolutionGen._assign_charges_to_mols(
+            [ethanol_smile, fec_smile],
+            "am1bcc",
             {},
             partial_charges,
         )
         openff_forcefield_scaled = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-        openff_forcefield_scaled = OpenMMSolutionGen._add_partial_charges_to_forcefield(
-            openff_forcefield_scaled,
-            ["CCO", "O=C1OC[C@H](F)O1"],
-            {"CCO": 0.9, "O=C1OC[C@H](F)O1": 0.9},
+        charged_mols_scaled = OpenMMSolutionGen._assign_charges_to_mols(
+            [ethanol_smile, fec_smile],
+            "am1bcc",
+            {ethanol_smile: 0.9, fec_smile: 0.9},
             partial_charges,
         )
         # construct a System to make testing easier
-        openff_mols = [openff.toolkit.topology.Molecule.from_smiles(smile) for smile in [ethanol_smile, fec_smile]]
         topology = OpenMMSolutionGen._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
-        openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, openff_mols)
-        system = openff_forcefield.create_openmm_system(openff_topology)
-        system_scaled = openff_forcefield_scaled.create_openmm_system(openff_topology)
+        openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
+        openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols_scaled)
+        system = openff_forcefield.create_openmm_system(
+            openff_topology,
+            charge_from_molecules=charged_mols,
+        )
+        system_scaled = openff_forcefield_scaled.create_openmm_system(
+            openff_topology_scaled,
+            charge_from_molecules=charged_mols_scaled,
+        )
         # ensure that all forces are from our assigned force field
         # this does not ensure correct ordering, as we already test that with
         # other methods
@@ -170,13 +176,38 @@ class TestOpenMMSolutionGen:
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = "Sage"
-        system = OpenMMSolutionGen._parameterize_system(topology, smile_strings, box, force_field, {}, [])
+        partial_charge_method = "am1bcc"
+        system = OpenMMSolutionGen._parameterize_system(
+            topology,
+            smile_strings,
+            box,
+            force_field=force_field,
+            partial_charge_method=partial_charge_method,
+            partial_charge_scaling={},
+            partial_charges=[],
+        )
         assert system.getNumParticles() == 780
         assert system.usesPeriodicBoundaryConditions()
 
     def test_get_input_set(self):
         generator = OpenMMSolutionGen(packmol_random_seed=1)
         input_set = generator.get_input_set({"O": 200, "CCO": 20}, density=1)
+        assert isinstance(input_set, OpenMMSet)
+        assert set(input_set.inputs.keys()) == {
+            "topology.pdb",
+            "system.xml",
+            "integrator.xml",
+            "state.xml",
+        }
+        assert input_set.validate()
+
+    def test_get_input_set_big_smile(self):
+        generator = OpenMMSolutionGen(
+            packmol_random_seed=1,
+            partial_charge_method="mmff94",
+        )
+        big_smile = "O=C(OC(C)(C)CC/1=O)C1=C(O)/CCCCCCCC/C(NCCN(CCN)CCN)=C2C(OC(C)(C)CC/2=O)=O"
+        input_set = generator.get_input_set({"O": 200, big_smile: 1}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
