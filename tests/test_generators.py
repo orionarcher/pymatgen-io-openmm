@@ -58,6 +58,25 @@ class TestOpenMMSolutionGen:
         assert np.max(coordinates) < 19.8
         assert coordinates.size == 780 * 3
 
+    def test_get_coordinates_added_geometry(self):
+        coordinates = OpenMMSolutionGen._get_coordinates(
+            {"F[P-](F)(F)(F)(F)F": 1}, [0, 0, 0, 3, 3, 3], 1, smile_geometries={"F[P-](F)(F)(F)(F)F": PF6_xyz}
+        )
+        assert len(coordinates) == 7
+        np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
+
+    @pytest.mark.parametrize(
+        "xyz_path, smile, atomic_numbers",
+        [
+            (CCO_xyz, "CCO", (6, 6, 8, 1, 1, 1, 1, 1, 1)),
+            (PF6_xyz, "F[P-](F)(F)(F)(F)F", (9, 15, 9, 9, 9, 9, 9)),
+        ],
+    )
+    def test_order_molecule_like_smile(self, xyz_path, smile, atomic_numbers):
+        mol = pymatgen.core.Molecule.from_file(xyz_path)
+        ordered_mol = OpenMMSolutionGen._order_molecule_like_smile(smile, mol)
+        np.testing.assert_almost_equal(ordered_mol.atomic_numbers, atomic_numbers)
+
     @pytest.mark.parametrize(
         "xyz_path, n_atoms, n_bonds",
         [
