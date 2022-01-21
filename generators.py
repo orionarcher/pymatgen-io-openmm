@@ -168,7 +168,6 @@ class OpenMMSolutionGen(InputGenerator):
             self.partial_charge_scaling,
             self.partial_charges,
         )
-        print('Finished parameterizing system')
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
