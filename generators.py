@@ -39,7 +39,11 @@ from pymatgen.io.openmm.inputs import (
     StateInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet
-from pymatgen.io.openmm.utils import get_box, smile_to_parmed_structure, smile_to_molecule
+from pymatgen.io.openmm.utils import (
+    get_box,
+    smile_to_parmed_structure,
+    smile_to_molecule,
+)
 from pymatgen.io.packmol import PackmolBoxGen
 from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
@@ -110,7 +114,7 @@ class OpenMMSolutionGen(InputGenerator):
         self.partial_charge_method = partial_charge_method
         self.partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
         self.partial_charges = partial_charges if partial_charges else []
-        self.initial_geometries = initial_geometries if initial_geometries else {}
+        self.initial_geometries = initial_geometries if initial_geometries else {}  # TODO: implement geometries!
         self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
@@ -204,7 +208,12 @@ class OpenMMSolutionGen(InputGenerator):
         return combined_structs.topology
 
     @staticmethod
-    def _get_coordinates(smiles: Dict[str, int], box: List[float], random_seed: int) -> np.ndarray:
+    def _get_coordinates(
+        smiles: Dict[str, int],
+        box: List[float],
+        random_seed: int,
+        smile_geometries=None,
+    ) -> np.ndarray:
         """
         Pack the box with the molecules specified by smiles.
 
@@ -215,19 +224,28 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             array of coordinates for each atom in the box.
         """
-        molecules = []
+        smile_geometries = smile_geometries if smile_geometries else {}
 
+        molecule_geometries = {}
+        for smile in smiles.keys():
+            if smile in smile_geometries:
+                geometry = smile_geometries[smile]
+                molecule_geometries[smile] = OpenMMSolutionGen._order_molecule_like_smile(smile, geometry)
+            else:
+                molecule_geometries[smile] = smile_to_molecule(smile)
+
+        packmol_molecules = []
         for i, smile_count_tuple in enumerate(smiles.items()):
             smile, count = smile_count_tuple
-            molecules.append(
+            packmol_molecules.append(
                 {
                     "name": str(i),
                     "number": count,
-                    "coords": smile_to_molecule(smile),
+                    "coords": molecule_geometries[smile],
                 }
             )
         with tempfile.TemporaryDirectory() as scratch_dir:
-            pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=molecules, box=box)
+            pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
             pw.write_input(scratch_dir)
             pw.run(scratch_dir)
             coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
@@ -235,12 +253,22 @@ class OpenMMSolutionGen(InputGenerator):
         return raw_coordinates
 
     @staticmethod
-    def _infer_openff_mol(charged_mol: Union[pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:
-        if isinstance(charged_mol, (str, Path)):
-            charged_mol = pymatgen.core.Molecule.from_file(str(charged_mol))
+    def _order_molecule_like_smile(smile: str, geometry: Union[pymatgen.core.Molecule, str, Path]):
+        if isinstance(geometry, (str, Path)):
+            geometry = pymatgen.core.Molecule.from_file(str(geometry))
+        inferred_mol = OpenMMSolutionGen._infer_openff_mol(geometry)
+        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+        is_isomorphic, atom_map = OpenMMSolutionGen._get_atom_map(inferred_mol, openff_mol)
+        new_molecule = pymatgen.core.Molecule.from_sites([geometry.sites[i] for i in atom_map.values()])
+        return new_molecule
+
+    @staticmethod
+    def _infer_openff_mol(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:
+        if isinstance(mol_geometry, (str, Path)):
+            mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
         with tempfile.NamedTemporaryFile() as f:
             # these next 4 lines are cursed
-            pybel_mol = BabelMolAdaptor(charged_mol).pybel_mol  # pymatgen Molecule
+            pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
             pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
             rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
         inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(
@@ -285,7 +313,7 @@ class OpenMMSolutionGen(InputGenerator):
         return forcefield
 
     @staticmethod
-    def _assign_charges_to_mols(
+    def _assign_charges_to_mols(  # TODO: specify partial charges and geometries matching with SMILEs
         smile_strings: List[str],
         partial_charge_method: str,
         partial_charge_scaling: Dict[str, float],
@@ -334,12 +362,9 @@ class OpenMMSolutionGen(InputGenerator):
                 # assign partial charges if there was no match
                 openff_mol.assign_partial_charges(partial_charge_method)
                 openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+            # finally, add charged mol to force_field
             charged_mols.append(openff_mol)
             # return a warning if some partial charges were not matched to any mol_xyz
-            # if not is_isomorphic and len(partial_charges) > 0:
-            #     warnings.warn(f"{mol_xyz} in partial_charges is not is_isomorphic to any SMILE in the system.")
-            # finally, add charged mol to force_field
-            # OpenMMSolutionGen._add_mol_charges_to_forcefield(forcefield, openff_mol)
         for unmatched_mol in inferred_mols - matched_mols:
             warnings.warn(f"{unmatched_mol} in partial_charges is not isomorphic to any SMILE in the system.")
         return charged_mols
