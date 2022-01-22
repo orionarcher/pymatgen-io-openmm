@@ -30,6 +30,7 @@ from openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
+from openmm.app.forcefield import PME
 from openmmforcefields.generators import GAFFTemplateGenerator, \
     SMIRNOFFTemplateGenerator
 
@@ -73,7 +74,7 @@ class OpenMMSolutionGen(InputGenerator):
     def __init__(
             self,
             force_field: Union[str, List[Tuple[
-                 str, str]]] = "Sage",
+                str, str]]] = "Sage",
             temperature: float = 298,
             step_size: float = 0.001,
             friction_coefficient: int = 1,
@@ -381,7 +382,7 @@ class OpenMMSolutionGen(InputGenerator):
             smile_strings: List[str],
             box: List[float],
             force_field: Union[str, List[Tuple[
-                 str, str]]] = "Sage",
+                str, str]]] = "Sage",
             partial_charge_method: str = "am1bcc",
             partial_charge_scaling: Dict[str, float] = {},
             partial_charges: List[Tuple[
@@ -399,6 +400,9 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an OpenMM.system
         """
+        # TODO: Make decisions for user about ff name
+        # TODO: Dict instead of list of tuples
+        # TODO: Make periodic
         if type(force_field) == str:
             supported_force_fields = ["Sage"]
             if force_field.lower() == "sage":
@@ -443,7 +447,8 @@ class OpenMMSolutionGen(InputGenerator):
             large_or_water = {}
             # iterate through each molecule and forcefield input as list
             for [smile, ffname] in force_field:
-                openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+                openff_mol = openff.toolkit.topology.Molecule.from_smiles(
+                    smile)
                 # Assign mols and forcefield as small molecule vs AMBER or
                 # CHARMM
                 if ffname.lower() in small_ffs:
@@ -454,11 +459,21 @@ class OpenMMSolutionGen(InputGenerator):
             for v in large_or_water.values():
                 forcefield_omm.loadFile(v)
             for k, v in small_molecules.items():
-                if  "gaff" in v:
+                if "gaff" in v:
                     gaff = GAFFTemplateGenerator(molecules=k, forcefield=v)
                     forcefield_omm.registerTemplateGenerator(gaff.generator)
                 elif "smirnoff" in v or "openff" in v:
                     sage = SMIRNOFFTemplateGenerator(molecules=k, forcefield=v)
                     forcefield_omm.registerTemplateGenerator(sage.generator())
-            system = forcefield_omm.createSystem(topology=topology)
+            boxsize = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+            nonbondedCutoff = min(10, boxsize / 2)
+            periodic_box_vectors = np.multiply(
+                np.array([[box[3] - box[0], 0, 0],
+                          [0, box[4] - box[
+                              1], 0], [0, 0, box[5] - box[2]]]),
+                0.1)  # needs to be nanometers, assumes box in angstroms
+            topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
+            system = forcefield_omm.createSystem(topology=topology,
+                                                 nonbondedMethod=PME,
+                                                 nonbondedCutoff=nonbondedCutoff)
             return system

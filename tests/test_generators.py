@@ -207,7 +207,7 @@ class TestOpenMMSolutionGen:
             partial_charges=[],
         )
         assert system.getNumParticles() == 780
-        #assert system.usesPeriodicBoundaryConditions()
+        assert system.usesPeriodicBoundaryConditions()
 
     def test_get_input_set(self):
         generator = OpenMMSolutionGen(packmol_random_seed=1)
