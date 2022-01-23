@@ -39,7 +39,7 @@ def smile_to_molecule(smile: str) -> pymatgen.core.Molecule:
 def get_box(smiles: Dict[str, int], density: float) -> List[float]:
     """
     Calculates the dimensions of a cube necessary to contain the given molecules with
-    given density. The corner of the cube is at the origin.
+    given density. The corner of the cube is at the origin. Units are angstrom.
 
     Args:
         smiles: keys are smiles and values are number of that molecule to pack
