@@ -17,8 +17,8 @@ def test_get_box():
     box = get_box({"O": 200, "CCO": 20}, 1)
     assert isinstance(box, list)
     assert len(box) == 6
-    np.testing.assert_allclose(box[0:3], 0, 2)
-    np.testing.assert_allclose(box[3:6], 19.59, 2)
+    np.testing.assert_almost_equal(box[0:3], 0, 2)
+    np.testing.assert_almost_equal(box[3:6], 19.59, 2)
 
 
 def test_smile_to_parmed_structure():
