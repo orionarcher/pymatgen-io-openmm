@@ -77,6 +77,8 @@ class TestOpenMMSolutionGen:
         ordered_mol = OpenMMSolutionGen._order_molecule_like_smile(smile, mol)
         np.testing.assert_almost_equal(ordered_mol.atomic_numbers, atomic_numbers)
 
+    #  TODO: add test for formally charged smile
+
     @pytest.mark.parametrize(
         "xyz_path, n_atoms, n_bonds",
         [
