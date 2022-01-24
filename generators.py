@@ -74,7 +74,7 @@ class OpenMMSolutionGen(InputGenerator):
 
     def __init__(
         self,
-        force_field: Union[str, List[Tuple[str, str]]] = "Sage",
+        force_field: Union[str, Dict[str, str]] = "Sage",
         temperature: float = 298,
         step_size: float = 0.001,
         friction_coefficient: int = 1,
@@ -228,7 +228,16 @@ class OpenMMSolutionGen(InputGenerator):
         for smile in smiles.keys():
             if smile in smile_geometries:
                 geometry = smile_geometries[smile]
+                if isinstance(geometry, (str, Path)):
+                    geometry = pymatgen.core.Molecule.from_file(geometry)
                 molecule_geometries[smile] = OpenMMSolutionGen._order_molecule_like_smile(smile, geometry)
+                assert len(geometry) > 0, (
+                    f"It appears Pymatgen was unable to establish "
+                    f"an isomorphism between the included geometry "
+                    f"for {smile} and the molecular graph generated "
+                    f"by the input file itself. Please ensure you "
+                    f"included a matching smile and geometry."
+                )
             else:
                 molecule_geometries[smile] = smile_to_molecule(smile)
 
@@ -372,7 +381,7 @@ class OpenMMSolutionGen(InputGenerator):
         topology: Topology,
         smile_strings: List[str],
         box: List[float],
-        force_field: Union[str, List[Tuple[str, str]]] = "sage",
+        force_field: Union[str, Dict[str, str]] = "sage",
         partial_charge_method: str = "am1bcc",
         partial_charge_scaling: Dict[str, float] = None,
         partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
@@ -450,26 +459,26 @@ class OpenMMSolutionGen(InputGenerator):
             small_molecules = {}
             large_or_water = {}
             # iterate through each molecule and forcefield input as list
-            for [smile, ffname] in force_field:
+            for smile, ff_name in force_field.items():
                 openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
                 # Assign mols and forcefield as small molecule vs AMBER or
                 # CHARMM
-                if ffname.lower() in small_ffs:
-                    small_molecules[openff_mol] = ffname.lower()
+                if ff_name.lower() in small_ffs:
+                    small_molecules[openff_mol] = ff_name.lower()
                 else:
-                    large_or_water[openff_mol] = ffname.lower()
+                    large_or_water[openff_mol] = ff_name.lower()
             forcefield_omm = omm_ForceField()
-            for v in large_or_water.values():
-                forcefield_omm.loadFile(v)
-            for k, v in small_molecules.items():
-                if "gaff" in v:
-                    gaff = GAFFTemplateGenerator(molecules=k, forcefield=v)
+            for ff in large_or_water.values():
+                forcefield_omm.loadFile(ff)
+            for mol, ff in small_molecules.items():
+                if "gaff" in ff:
+                    gaff = GAFFTemplateGenerator(molecules=mol, forcefield=ff)
                     forcefield_omm.registerTemplateGenerator(gaff.generator)
-                elif "smirnoff" in v or "openff" in v:
-                    sage = SMIRNOFFTemplateGenerator(molecules=k, forcefield=v)
+                elif "smirnoff" in ff or "openff" in ff:
+                    sage = SMIRNOFFTemplateGenerator(molecules=mol, forcefield=ff)
                     forcefield_omm.registerTemplateGenerator(sage.generator())
-            boxsize = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
-            nonbondedCutoff = min(10, boxsize / 2)
+            box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+            nonbondedCutoff = min(10, box_size // 2)
             periodic_box_vectors = np.multiply(
                 np.array([[box[3] - box[0], 0, 0], [0, box[4] - box[1], 0], [0, 0, box[5] - box[2]]]), 0.1
             )  # needs to be nanometers, assumes box in angstroms
