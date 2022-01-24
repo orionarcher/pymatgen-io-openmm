@@ -24,10 +24,13 @@ from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandl
 import openmm
 from openmm.unit import kelvin, picoseconds, elementary_charge, angstrom
 from openmm.app import Topology
+from openmm.app import ForceField as omm_ForceField
 from openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
+from openmm.app.forcefield import PME
+from openmmforcefields.generators import GAFFTemplateGenerator, SMIRNOFFTemplateGenerator
 
 # pymatgen
 import pymatgen.core
@@ -71,7 +74,7 @@ class OpenMMSolutionGen(InputGenerator):
 
     def __init__(
         self,
-        force_field: str = "Sage",
+        force_field: Union[str, List[Tuple[str, str]]] = "Sage",
         temperature: float = 298,
         step_size: float = 0.001,
         friction_coefficient: int = 1,
@@ -114,7 +117,7 @@ class OpenMMSolutionGen(InputGenerator):
         self.partial_charge_method = partial_charge_method
         self.partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
         self.partial_charges = partial_charges if partial_charges else []
-        self.initial_geometries = initial_geometries if initial_geometries else {}  # TODO: implement geometries!
+        self.initial_geometries = initial_geometries if initial_geometries else {}
         self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
@@ -149,7 +152,7 @@ class OpenMMSolutionGen(InputGenerator):
         topology = self._get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
-        coordinates = self._get_coordinates(smiles, box, self.packmol_random_seed)
+        coordinates = self._get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
             topology,
@@ -209,10 +212,7 @@ class OpenMMSolutionGen(InputGenerator):
 
     @staticmethod
     def _get_coordinates(
-        smiles: Dict[str, int],
-        box: List[float],
-        random_seed: int,
-        smile_geometries=None,
+        smiles: Dict[str, int], box: List[float], random_seed: int, smile_geometries: Dict
     ) -> np.ndarray:
         """
         Pack the box with the molecules specified by smiles.
@@ -224,8 +224,6 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             array of coordinates for each atom in the box.
         """
-        smile_geometries = smile_geometries if smile_geometries else {}
-
         molecule_geometries = {}
         for smile in smiles.keys():
             if smile in smile_geometries:
@@ -313,7 +311,7 @@ class OpenMMSolutionGen(InputGenerator):
         return forcefield
 
     @staticmethod
-    def _assign_charges_to_mols(  # TODO: specify partial charges and geometries matching with SMILEs
+    def _assign_charges_to_mols(
         smile_strings: List[str],
         partial_charge_method: str,
         partial_charge_scaling: Dict[str, float],
@@ -374,10 +372,10 @@ class OpenMMSolutionGen(InputGenerator):
         topology: Topology,
         smile_strings: List[str],
         box: List[float],
-        force_field: str = "sage",
+        force_field: Union[str, List[Tuple[str, str]]] = "sage",
         partial_charge_method: str = "am1bcc",
         partial_charge_scaling: Dict[str, float] = None,
-        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = None,
+        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
     ) -> openmm.System:
         """
         Parameterize an OpenMM system.
@@ -391,24 +389,93 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an OpenMM.system
         """
+
         partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
         partial_charges = partial_charges if partial_charges else []
         supported_force_fields = ["Sage"]
-        if force_field.lower() == "sage":
-            openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-            charged_openff_mols = OpenMMSolutionGen._assign_charges_to_mols(
-                smile_strings,
-                partial_charge_method,
-                partial_charge_scaling,
-                partial_charges,
-            )
-            openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_openff_mols)
-            box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
-            openff_topology.box_vectors = box_vectors
-            system = openff_forcefield.create_openmm_system(
-                openff_topology,
-                charge_from_molecules=charged_openff_mols,
-                allow_nonintegral_charges=True,
+        if isinstance(force_field, str):
+            if force_field.lower() == "sage":
+                openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+                charged_openff_mols = OpenMMSolutionGen._assign_charges_to_mols(
+                    smile_strings,
+                    partial_charge_method,
+                    partial_charge_scaling,
+                    partial_charges,
+                )
+                openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_openff_mols)
+                box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
+                openff_topology.box_vectors = box_vectors
+                system = openff_forcefield.create_openmm_system(
+                    openff_topology,
+                    charge_from_molecules=charged_openff_mols,
+                    allow_nonintegral_charges=True,
+                )
+                return system
+        else:
+            # TODO: Make decisions for user about ff name
+            # TODO: Dict instead of list of tuples
+            # TODO: Make periodic
+            small_ffs = [
+                "smirnoff99Frosst-1.0.2",
+                "smirnoff99Frosst-1.0.0",
+                "smirnoff99Frosst-1.1.0",
+                "smirnoff99Frosst-1.0.4",
+                "smirnoff99Frosst-1.0.8",
+                "smirnoff99Frosst-1.0.6",
+                "smirnoff99Frosst-1.0.3",
+                "smirnoff99Frosst-1.0.1",
+                "smirnoff99Frosst-1.0.5",
+                "smirnoff99Frosst-1.0.9",
+                "smirnoff99Frosst-1.0.7",
+                "openff-1.0.1",
+                "openff-1.1.1",
+                "openff-1.0.0-RC1",
+                "openff-1.2.0",
+                "openff-1.3.0",
+                "openff-2.0.0-rc.2",
+                "openff-2.0.0",
+                "openff-1.1.0",
+                "openff-1.0.0",
+                "openff-1.0.0-RC2",
+                "openff-1.3.1",
+                "openff-1.2.1",
+                "openff-1.3.1-alpha.1",
+                "openff-2.0.0-rc.1",
+                "gaff-1.4",
+                "gaff-1.8",
+                "gaff-1.81",
+                "gaff-2.1",
+                "gaff-2.11",
+            ]
+            small_molecules = {}
+            large_or_water = {}
+            # iterate through each molecule and forcefield input as list
+            for [smile, ffname] in force_field:
+                openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+                # Assign mols and forcefield as small molecule vs AMBER or
+                # CHARMM
+                if ffname.lower() in small_ffs:
+                    small_molecules[openff_mol] = ffname.lower()
+                else:
+                    large_or_water[openff_mol] = ffname.lower()
+            forcefield_omm = omm_ForceField()
+            for v in large_or_water.values():
+                forcefield_omm.loadFile(v)
+            for k, v in small_molecules.items():
+                if "gaff" in v:
+                    gaff = GAFFTemplateGenerator(molecules=k, forcefield=v)
+                    forcefield_omm.registerTemplateGenerator(gaff.generator)
+                elif "smirnoff" in v or "openff" in v:
+                    sage = SMIRNOFFTemplateGenerator(molecules=k, forcefield=v)
+                    forcefield_omm.registerTemplateGenerator(sage.generator())
+            boxsize = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
+            nonbondedCutoff = min(10, boxsize / 2)
+            periodic_box_vectors = np.multiply(
+                np.array([[box[3] - box[0], 0, 0], [0, box[4] - box[1], 0], [0, 0, box[5] - box[2]]]), 0.1
+            )  # needs to be nanometers, assumes box in angstroms
+            topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
+            system = forcefield_omm.createSystem(
+                topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff
             )
             return system
         raise NotImplementedError(
