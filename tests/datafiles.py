@@ -9,6 +9,7 @@ tests_path = Path(__file__).parent
 test_files_path = Path("test_files")
 input_set_path = test_files_path / "input_set"
 partial_charges = test_files_path / "partial_charge"
+geometries = test_files_path / "geometries"
 
 
 topology_path = resource_filename(__name__, str(input_set_path / "topology.pdb"))
@@ -29,3 +30,6 @@ PF6_xyz = resource_filename(__name__, str(partial_charges / "PF6.xyz"))
 PF6_charges = resource_filename(__name__, str(partial_charges / "PF6.npy"))
 Li_charges = resource_filename(__name__, str(partial_charges / "Li.npy"))
 Li_xyz = resource_filename(__name__, str(partial_charges / "Li.xyz"))
+
+trimer_pdb = resource_filename(__name__, str(geometries / "trimer.pdb"))
+trimer_txt = resource_filename(__name__, str(geometries / "trimer.txt"))
