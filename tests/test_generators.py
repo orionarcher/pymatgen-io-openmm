@@ -29,6 +29,8 @@ from pymatgen.io.openmm.tests.datafiles import (
     PF6_charges,
     Li_charges,
     Li_xyz,
+    trimer_pdb,
+    trimer_txt,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -64,6 +66,12 @@ class TestOpenMMSolutionGen:
         )
         assert len(coordinates) == 7
         np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
+        with open(trimer_txt, "r") as file:
+            trimer_smile = file.read()
+        coordinates = OpenMMSolutionGen._get_coordinates(
+            {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1, smile_geometries={trimer_smile: trimer_pdb}
+        )
+        assert len(coordinates) == 217
 
     @pytest.mark.parametrize(
         "xyz_path, smile, atomic_numbers",
@@ -217,7 +225,7 @@ class TestOpenMMSolutionGen:
         topology = OpenMMSolutionGen._get_openmm_topology({"O": 200, "CCO": 20})
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
-        force_field = [["O", "amber14/spce.xml"], ["CCO", "gaff-2.11"]]
+        force_field = {"O": "amber14/spce.xml", "CCO": "gaff-2.11"}
         partial_charge_method = "am1bcc"
         system = OpenMMSolutionGen._parameterize_system(
             topology,
