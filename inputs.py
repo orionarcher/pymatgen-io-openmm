@@ -43,6 +43,7 @@ class TopologyInput(InputFile):
             positions: coordinates for each particle in the topology
         """
         self.content = self._serialize(topology, positions)
+        # TODO: add an atom_type parameter
 
     @staticmethod
     def _serialize(topology, positions) -> str:
