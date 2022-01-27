@@ -10,23 +10,12 @@ from typing import Union, Optional, Dict, List, Tuple
 import numpy as np
 
 # openff
-import openff
-import openff.toolkit
-from openff.toolkit.typing.engines import smirnoff
 
 # openmm
-import openmm
-from openmm.unit import angstrom, kelvin, picoseconds
-from openmm.app import Topology
-from openmm.app import ForceField as omm_ForceField
+from openmm.unit import kelvin, picoseconds
 from openmm import (
     Context,
     LangevinMiddleIntegrator,
-)
-from openmm.app.forcefield import PME
-from openmmforcefields.generators import (
-    GAFFTemplateGenerator,
-    SMIRNOFFTemplateGenerator,
 )
 
 # pymatgen
@@ -43,7 +32,7 @@ from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
     get_openmm_topology,
-    assign_charges_to_mols,
+    parameterize_system,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -149,7 +138,7 @@ class OpenMMSolutionGen(InputGenerator):
             box = get_box(smiles, density)  # type: ignore
         coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
         smile_strings = list(smiles.keys())
-        system = self._parameterize_system(
+        system = parameterize_system(
             topology,
             smile_strings,
             box,
@@ -184,127 +173,3 @@ class OpenMMSolutionGen(InputGenerator):
             state_file=self.state_file,
         )
         return input_set
-
-    @staticmethod
-    def _parameterize_system(
-        topology: Topology,
-        smile_strings: List[str],
-        box: List[float],
-        force_field: Union[str, Dict[str, str]] = "sage",
-        partial_charge_method: str = "am1bcc",
-        partial_charge_scaling: Dict[str, float] = None,
-        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
-    ) -> openmm.System:
-        """
-        Parameterize an OpenMM system.
-
-        Args:
-            topology: an OpenMM topology.
-            smile_strings: a list of SMILEs representing each molecule in the system.
-            box: list of [xlo, ylo, zlo, xhi, yhi, zhi].
-            force_field: name of the force field. Currently only Sage is supported.
-
-        Returns:
-            an OpenMM.system
-        """
-
-        partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
-        partial_charges = partial_charges if partial_charges else []
-        supported_force_fields = ["Sage"]
-        if isinstance(force_field, str):
-            if force_field.lower() == "sage":
-                openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-                charged_openff_mols = assign_charges_to_mols(
-                    smile_strings,
-                    partial_charge_method,
-                    partial_charge_scaling,
-                    partial_charges,
-                )
-                openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_openff_mols)
-                box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
-                openff_topology.box_vectors = box_vectors
-                system = openff_forcefield.create_openmm_system(
-                    openff_topology,
-                    charge_from_molecules=charged_openff_mols,
-                    allow_nonintegral_charges=True,
-                )
-                return system
-        else:
-            # TODO: Make decisions for user about ff name
-            # TODO: Dict instead of list of tuples
-            # TODO: Make periodic
-            # TODO: figure out how to add partial charges
-            small_ffs = [
-                "smirnoff99Frosst-1.0.2",
-                "smirnoff99Frosst-1.0.0",
-                "smirnoff99Frosst-1.1.0",
-                "smirnoff99Frosst-1.0.4",
-                "smirnoff99Frosst-1.0.8",
-                "smirnoff99Frosst-1.0.6",
-                "smirnoff99Frosst-1.0.3",
-                "smirnoff99Frosst-1.0.1",
-                "smirnoff99Frosst-1.0.5",
-                "smirnoff99Frosst-1.0.9",
-                "smirnoff99Frosst-1.0.7",
-                "openff-1.0.1",
-                "openff-1.1.1",
-                "openff-1.0.0-RC1",
-                "openff-1.2.0",
-                "openff-1.3.0",
-                "openff-2.0.0-rc.2",
-                "openff-2.0.0",
-                "openff-1.1.0",
-                "openff-1.0.0",
-                "openff-1.0.0-RC2",
-                "openff-1.3.1",
-                "openff-1.2.1",
-                "openff-1.3.1-alpha.1",
-                "openff-2.0.0-rc.1",
-                "gaff-1.4",
-                "gaff-1.8",
-                "gaff-1.81",
-                "gaff-2.1",
-                "gaff-2.11",
-            ]
-            small_molecules = {}
-            large_or_water = {}
-            # iterate through each molecule and forcefield input as list
-            for smile, ff_name in force_field.items():
-                openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-                # Assign mols and forcefield as small molecule vs AMBER or
-                # CHARMM
-                if ff_name.lower() in small_ffs:
-                    small_molecules[openff_mol] = ff_name.lower()
-                else:
-                    large_or_water[openff_mol] = ff_name.lower()
-            forcefield_omm = omm_ForceField()
-            for ff in large_or_water.values():
-                forcefield_omm.loadFile(ff)
-            for mol, ff in small_molecules.items():
-                if "gaff" in ff:
-                    gaff = GAFFTemplateGenerator(molecules=mol, forcefield=ff)
-                    forcefield_omm.registerTemplateGenerator(gaff.generator)
-                elif "smirnoff" in ff or "openff" in ff:
-                    sage = SMIRNOFFTemplateGenerator(molecules=mol, forcefield=ff)
-                    forcefield_omm.registerTemplateGenerator(sage.generator())
-            box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
-            nonbondedCutoff = min(10, box_size // 2)
-            periodic_box_vectors = np.multiply(
-                np.array(
-                    [
-                        [box[3] - box[0], 0, 0],
-                        [0, box[4] - box[1], 0],
-                        [0, 0, box[5] - box[2]],
-                    ]
-                ),
-                0.1,
-            )  # needs to be nanometers, assumes box in angstroms
-            topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
-            system = forcefield_omm.createSystem(
-                topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff
-            )
-            return system
-        raise NotImplementedError(
-            f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
-            f"Please select one of the supported force fields."
-        )

@@ -25,6 +25,7 @@ from pymatgen.io.openmm.utils import (
     get_openmm_topology,
     add_mol_charges_to_forcefield,
     assign_charges_to_mols,
+    parameterize_system,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -256,3 +257,45 @@ def test_assign_charges_to_mols():
             for i in range(len(charge_array)):
                 charge_array[i] = force.getParticleParameters(i)[0]._value
     np.testing.assert_allclose(full_partial_array * 0.9, charge_array, atol=0.0001)
+
+
+def test_parameterize_system():
+    # TODO: add test here to see if I am adding charges?
+    topology = get_openmm_topology({"O": 200, "CCO": 20})
+    smile_strings = ["O", "CCO"]
+    box = [0, 0, 0, 19.59, 19.59, 19.59]
+    force_field = "Sage"
+    partial_charge_method = "am1bcc"
+    system = parameterize_system(
+        topology,
+        smile_strings,
+        box,
+        force_field=force_field,
+        partial_charge_method=partial_charge_method,
+        partial_charge_scaling={},
+        partial_charges=[],
+    )
+    assert system.getNumParticles() == 780
+    assert system.usesPeriodicBoundaryConditions()
+
+
+def test_parameterize_mixedforcefield_system():
+    # TODO: test with charges
+    # TODO: periodic boundaries assertion
+    # TODO: assert forcefields assigned correctly
+    topology = get_openmm_topology({"O": 200, "CCO": 20})
+    smile_strings = ["O", "CCO"]
+    box = [0, 0, 0, 19.59, 19.59, 19.59]
+    force_field = {"O": "amber14/spce.xml", "CCO": "gaff-2.11"}
+    partial_charge_method = "am1bcc"
+    system = parameterize_system(
+        topology,
+        smile_strings,
+        box,
+        force_field=force_field,
+        partial_charge_method=partial_charge_method,
+        partial_charge_scaling={},
+        partial_charges=[],
+    )
+    assert system.getNumParticles() == 780
+    assert system.usesPeriodicBoundaryConditions()

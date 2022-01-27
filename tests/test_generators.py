@@ -11,7 +11,6 @@ import numpy as np
 
 from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.generators import OpenMMSolutionGen
-from pymatgen.io.openmm.utils import get_openmm_topology
 from pymatgen.io.openmm.tests.datafiles import (
     PF6_xyz,
     PF6_charges,
@@ -28,46 +27,6 @@ __date__ = "Nov 2021"
 
 class TestOpenMMSolutionGen:
     #  TODO: add test for formally charged smile
-
-    def test_parameterize_system(self):
-        # TODO: add test here to see if I am adding charges?
-        topology = get_openmm_topology({"O": 200, "CCO": 20})
-        smile_strings = ["O", "CCO"]
-        box = [0, 0, 0, 19.59, 19.59, 19.59]
-        force_field = "Sage"
-        partial_charge_method = "am1bcc"
-        system = OpenMMSolutionGen._parameterize_system(
-            topology,
-            smile_strings,
-            box,
-            force_field=force_field,
-            partial_charge_method=partial_charge_method,
-            partial_charge_scaling={},
-            partial_charges=[],
-        )
-        assert system.getNumParticles() == 780
-        assert system.usesPeriodicBoundaryConditions()
-
-    def test_parameterize_mixedforcefield_system(self):
-        # TODO: test with charges
-        # TODO: periodic boundaries assertion
-        # TODO: assert forcefields assigned correctly
-        topology = get_openmm_topology({"O": 200, "CCO": 20})
-        smile_strings = ["O", "CCO"]
-        box = [0, 0, 0, 19.59, 19.59, 19.59]
-        force_field = {"O": "amber14/spce.xml", "CCO": "gaff-2.11"}
-        partial_charge_method = "am1bcc"
-        system = OpenMMSolutionGen._parameterize_system(
-            topology,
-            smile_strings,
-            box,
-            force_field=force_field,
-            partial_charge_method=partial_charge_method,
-            partial_charge_scaling={},
-            partial_charges=[],
-        )
-        assert system.getNumParticles() == 780
-        assert system.usesPeriodicBoundaryConditions()
 
     def test_get_input_set(self):
         generator = OpenMMSolutionGen(packmol_random_seed=1)
