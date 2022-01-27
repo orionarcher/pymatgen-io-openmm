@@ -4,7 +4,6 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 
 # base python
 from pathlib import Path
-import warnings
 from typing import Union, Optional, Dict, List, Tuple
 
 # scipy
@@ -14,11 +13,10 @@ import numpy as np
 import openff
 import openff.toolkit
 from openff.toolkit.typing.engines import smirnoff
-from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 
 # openmm
 import openmm
-from openmm.unit import kelvin, picoseconds, elementary_charge, angstrom
+from openmm.unit import angstrom, kelvin, picoseconds
 from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
 from openmm import (
@@ -43,10 +41,9 @@ from pymatgen.io.openmm.inputs import (
 from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.utils import (
     get_box,
-    get_atom_map,
-    infer_openff_mol,
     get_coordinates,
     get_openmm_topology,
+    assign_charges_to_mols,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -189,73 +186,6 @@ class OpenMMSolutionGen(InputGenerator):
         return input_set
 
     @staticmethod
-    def _add_mol_charges_to_forcefield(
-        forcefield: smirnoff.ForceField,
-        charged_openff_mol: List[openff.toolkit.topology.Molecule],
-    ) -> smirnoff.ForceField:
-
-        charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(charged_openff_mol)
-        forcefield["LibraryCharges"].add_parameter(parameter=charge_type)
-        return forcefield
-
-    @staticmethod
-    def _assign_charges_to_mols(
-        smile_strings: List[str],
-        partial_charge_method: str,
-        partial_charge_scaling: Dict[str, float],
-        partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]],
-    ):
-        """
-
-        This will modify the original force field, not make a copy.
-
-        Args:
-            forcefield: force field that will have partial charges added.
-            partial_charge_scaling: A dictionary of partial charge scaling for particular species. Keys
-            are SMILEs and values are the scaling factor.
-            partial_charges: A list of tuples, where the first element of each tuple is a molecular
-                geometry and the second element is an array of charges. The geometry can be a
-                pymatgen.Molecule or a path to an xyz file. The geometry and charges must have the
-                same atom ordering.
-
-        Returns:
-            forcefield with partial charges added.
-        """
-        # loop through partial charges to add to force field
-        matched_mols = set()
-        inferred_mols = set()
-        charged_mols = []
-        for smile in smile_strings:
-            # detect charge scaling, set scaling parameter
-            if smile in partial_charge_scaling.keys():
-                charge_scaling = partial_charge_scaling[smile]
-            else:
-                charge_scaling = 1
-            openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-            # assign charges from isomorphic charges, if they exist
-            is_isomorphic = False
-            for mol_xyz, charges in partial_charges:
-                inferred_mol = infer_openff_mol(mol_xyz)
-                inferred_mols.add(inferred_mol)
-                is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-                # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
-                if is_isomorphic:
-                    reordered_charges = np.array([charges[atom_map[i]] for i, _ in enumerate(charges)])
-                    openff_mol.partial_charges = reordered_charges * charge_scaling * elementary_charge
-                    matched_mols.add(inferred_mol)
-                    break
-            if not is_isomorphic:
-                # assign partial charges if there was no match
-                openff_mol.assign_partial_charges(partial_charge_method)
-                openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
-            # finally, add charged mol to force_field
-            charged_mols.append(openff_mol)
-            # return a warning if some partial charges were not matched to any mol_xyz
-        for unmatched_mol in inferred_mols - matched_mols:
-            warnings.warn(f"{unmatched_mol} in partial_charges is not isomorphic to any SMILE in the system.")
-        return charged_mols
-
-    @staticmethod
     def _parameterize_system(
         topology: Topology,
         smile_strings: List[str],
@@ -284,7 +214,7 @@ class OpenMMSolutionGen(InputGenerator):
         if isinstance(force_field, str):
             if force_field.lower() == "sage":
                 openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-                charged_openff_mols = OpenMMSolutionGen._assign_charges_to_mols(
+                charged_openff_mols = assign_charges_to_mols(
                     smile_strings,
                     partial_charge_method,
                     partial_charge_scaling,
@@ -303,6 +233,7 @@ class OpenMMSolutionGen(InputGenerator):
             # TODO: Make decisions for user about ff name
             # TODO: Dict instead of list of tuples
             # TODO: Make periodic
+            # TODO: figure out how to add partial charges
             small_ffs = [
                 "smirnoff99Frosst-1.0.2",
                 "smirnoff99Frosst-1.0.0",
