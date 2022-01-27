@@ -22,7 +22,6 @@ from pymatgen.io.openmm.generators import OpenMMSolutionGen
 from pymatgen.io.openmm.tests.datafiles import (
     CCO_xyz,
     CCO_charges,
-    FEC_r_xyz,
     FEC_s_xyz,
     FEC_charges,
     PF6_xyz,
@@ -66,7 +65,7 @@ class TestOpenMMSolutionGen:
         )
         assert len(coordinates) == 7
         np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
-        with open(trimer_txt, "r") as file:
+        with open(trimer_txt) as file:
             trimer_smile = file.read()
         coordinates = OpenMMSolutionGen._get_coordinates(
             {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1, smile_geometries={trimer_smile: trimer_pdb}
@@ -86,39 +85,6 @@ class TestOpenMMSolutionGen:
         np.testing.assert_almost_equal(ordered_mol.atomic_numbers, atomic_numbers)
 
     #  TODO: add test for formally charged smile
-
-    @pytest.mark.parametrize(
-        "xyz_path, n_atoms, n_bonds",
-        [
-            (CCO_xyz, 9, 8),
-            (FEC_r_xyz, 10, 10),
-            (FEC_s_xyz, 10, 10),
-            (PF6_xyz, 7, 6),
-        ],
-    )
-    def test_infer_openff_mol(self, xyz_path, n_atoms, n_bonds):
-        mol = pymatgen.core.Molecule.from_file(xyz_path)
-        openff_mol = OpenMMSolutionGen._infer_openff_mol(mol)
-        assert isinstance(openff_mol, openff.toolkit.topology.Molecule)
-        assert openff_mol.n_atoms == n_atoms
-        assert openff_mol.n_bonds == n_bonds
-
-    @pytest.mark.parametrize(
-        "xyz_path, smile, map_values",
-        [
-            (CCO_xyz, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
-            (FEC_r_xyz, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 9, 8, 5]),
-            (FEC_s_xyz, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 9, 8, 5]),
-            (PF6_xyz, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
-        ],
-    )
-    def test_get_atom_map(self, xyz_path, smile, map_values):
-        mol = pymatgen.core.Molecule.from_file(xyz_path)
-        inferred_mol = OpenMMSolutionGen._infer_openff_mol(mol)
-        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        isomorphic, atom_map = OpenMMSolutionGen._get_atom_map(inferred_mol, openff_mol)
-        assert isomorphic
-        assert map_values == list(atom_map.values())
 
     @pytest.mark.parametrize(
         "charges_path, smile, atom_values",

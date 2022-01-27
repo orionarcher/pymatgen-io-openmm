@@ -1,12 +1,15 @@
 """
 Utility functions for OpenMM simulation setup.
 """
-from typing import Dict, List
+from typing import Dict, List, Union, Tuple
+from pathlib import Path
 import tempfile
 
 import numpy as np
 from openbabel import pybel
 import parmed
+import rdkit
+import openff
 
 import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
@@ -122,3 +125,47 @@ def calculate_molarity(volume, n_solute):
     NA = 6.02214e23
     molarity = n_solute / (volume * NA)
     return molarity
+
+
+def get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
+    """
+    Get a mapping between two openff Molecules.
+    """
+    # do not apply formal charge restrictions
+    kwargs = dict(
+        return_atom_map=True,
+        formal_charge_matching=False,
+    )
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
+    if isomorphic:
+        return True, atom_map
+    # relax stereochemistry restrictions
+    kwargs["atom_stereochemistry_matching"] = False
+    kwargs["bond_stereochemistry_matching"] = False
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
+    if isomorphic:
+        print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        return True, atom_map
+    # relax bond order restrictions
+    kwargs["bond_order_matching"] = False
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
+    if isomorphic:
+        print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        print(f"bond_order restrictions ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        return True, atom_map
+    return False, {}
+
+
+def infer_openff_mol(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:
+    """
+    Infer an OpenFF molecule from xyz coordinates.
+    """
+    if isinstance(mol_geometry, (str, Path)):
+        mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
+    with tempfile.NamedTemporaryFile() as f:
+        # these next 4 lines are cursed
+        pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
+        pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
+        rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
+    inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)  # OpenFF Molecule
+    return inferred_mol

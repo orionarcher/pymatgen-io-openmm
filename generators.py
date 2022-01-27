@@ -46,6 +46,7 @@ from pymatgen.io.openmm.utils import (
     get_box,
     smile_to_parmed_structure,
     smile_to_molecule,
+    get_atom_map,
 )
 from pymatgen.io.packmol import PackmolBoxGen
 from pymatgen.io.babel import BabelMolAdaptor
@@ -265,7 +266,7 @@ class OpenMMSolutionGen(InputGenerator):
             geometry = pymatgen.core.Molecule.from_file(str(geometry))
         inferred_mol = OpenMMSolutionGen._infer_openff_mol(geometry)
         openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        is_isomorphic, atom_map = OpenMMSolutionGen._get_atom_map(inferred_mol, openff_mol)
+        is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
         new_molecule = pymatgen.core.Molecule.from_sites([geometry.sites[i] for i in atom_map.values()])
         return new_molecule
 
@@ -282,32 +283,6 @@ class OpenMMSolutionGen(InputGenerator):
             rdmol, hydrogens_are_explicit=True
         )  # OpenFF Molecule
         return inferred_mol
-
-    @staticmethod
-    def _get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
-        # do not apply formal charge restrictions
-        kwargs = dict(
-            return_atom_map=True,
-            formal_charge_matching=False,
-        )
-        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
-        if isomorphic:
-            return True, atom_map
-        # relax stereochemistry restrictions
-        kwargs["atom_stereochemistry_matching"] = False
-        kwargs["bond_stereochemistry_matching"] = False
-        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
-        if isomorphic:
-            print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
-            return True, atom_map
-        # relax bond order restrictions
-        kwargs["bond_order_matching"] = False
-        isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
-        if isomorphic:
-            print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
-            print(f"bond_order restrictions ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
-            return True, atom_map
-        return False, {}
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
@@ -358,7 +333,7 @@ class OpenMMSolutionGen(InputGenerator):
             for mol_xyz, charges in partial_charges:
                 inferred_mol = OpenMMSolutionGen._infer_openff_mol(mol_xyz)
                 inferred_mols.add(inferred_mol)
-                is_isomorphic, atom_map = OpenMMSolutionGen._get_atom_map(inferred_mol, openff_mol)
+                is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
                 # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
                 if is_isomorphic:
                     reordered_charges = np.array([charges[atom_map[i]] for i, _ in enumerate(charges)])

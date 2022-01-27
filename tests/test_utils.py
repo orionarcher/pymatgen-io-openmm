@@ -1,5 +1,7 @@
 import numpy as np
 import parmed
+import pytest
+import openff.toolkit.topology
 import pymatgen
 
 from pymatgen.io.openmm.utils import (
@@ -10,6 +12,15 @@ from pymatgen.io.openmm.utils import (
     n_mols_from_volume_ratio,
     n_solute_from_molarity,
     calculate_molarity,
+    get_atom_map,
+    infer_openff_mol,
+)
+
+from pymatgen.io.openmm.tests.datafiles import (
+    CCO_xyz,
+    FEC_r_xyz,
+    FEC_s_xyz,
+    PF6_xyz,
 )
 
 
@@ -64,3 +75,38 @@ def test_n_solute_from_molarity():
 def test_calculate_molarity():
     nm3_to_L = 1e-24
     np.testing.assert_almost_equal(calculate_molarity(4 ** 3 * nm3_to_L, 39), 1, decimal=1)
+
+
+@pytest.mark.parametrize(
+    "xyz_path, smile, map_values",
+    [
+        (CCO_xyz, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+        (FEC_r_xyz, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 9, 8, 5]),
+        (FEC_s_xyz, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 9, 8, 5]),
+        (PF6_xyz, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
+    ],
+)
+def test_get_atom_map(xyz_path, smile, map_values):
+    mol = pymatgen.core.Molecule.from_file(xyz_path)
+    inferred_mol = infer_openff_mol(mol)
+    openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+    isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
+    assert isomorphic
+    assert map_values == list(atom_map.values())
+
+
+@pytest.mark.parametrize(
+    "xyz_path, n_atoms, n_bonds",
+    [
+        (CCO_xyz, 9, 8),
+        (FEC_r_xyz, 10, 10),
+        (FEC_s_xyz, 10, 10),
+        (PF6_xyz, 7, 6),
+    ],
+)
+def test_infer_openff_mol(xyz_path, n_atoms, n_bonds):
+    mol = pymatgen.core.Molecule.from_file(xyz_path)
+    openff_mol = infer_openff_mol(mol)
+    assert isinstance(openff_mol, openff.toolkit.topology.Molecule)
+    assert openff_mol.n_atoms == n_atoms
+    assert openff_mol.n_bonds == n_bonds
