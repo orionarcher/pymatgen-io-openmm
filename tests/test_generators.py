@@ -28,8 +28,6 @@ from pymatgen.io.openmm.tests.datafiles import (
     PF6_charges,
     Li_charges,
     Li_xyz,
-    trimer_pdb,
-    trimer_txt,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -50,27 +48,6 @@ class TestOpenMMSolutionGen:
         fec_smile = "O=C1OC[C@H](F)O1"
         topology = OpenMMSolutionGen._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
         assert topology.getNumAtoms() == 950
-
-    def test_get_coordinates(self):
-        coordinates = OpenMMSolutionGen._get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
-        assert isinstance(coordinates, np.ndarray)
-        assert len(coordinates) == 780
-        assert np.min(coordinates) > -0.2
-        assert np.max(coordinates) < 19.8
-        assert coordinates.size == 780 * 3
-
-    def test_get_coordinates_added_geometry(self):
-        coordinates = OpenMMSolutionGen._get_coordinates(
-            {"F[P-](F)(F)(F)(F)F": 1}, [0, 0, 0, 3, 3, 3], 1, smile_geometries={"F[P-](F)(F)(F)(F)F": PF6_xyz}
-        )
-        assert len(coordinates) == 7
-        np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
-        with open(trimer_txt) as file:
-            trimer_smile = file.read()
-        coordinates = OpenMMSolutionGen._get_coordinates(
-            {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1, smile_geometries={trimer_smile: trimer_pdb}
-        )
-        assert len(coordinates) == 217
 
     #  TODO: add test for formally charged smile
 

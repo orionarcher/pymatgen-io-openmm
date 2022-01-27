@@ -4,8 +4,6 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 
 # base python
 from pathlib import Path
-import pathlib
-import tempfile
 import warnings
 from typing import Union, Optional, Dict, List, Tuple
 
@@ -29,7 +27,10 @@ from openmm import (
     LangevinMiddleIntegrator,
 )
 from openmm.app.forcefield import PME
-from openmmforcefields.generators import GAFFTemplateGenerator, SMIRNOFFTemplateGenerator
+from openmmforcefields.generators import (
+    GAFFTemplateGenerator,
+    SMIRNOFFTemplateGenerator,
+)
 
 # pymatgen
 import pymatgen.core
@@ -44,13 +45,10 @@ from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.utils import (
     get_box,
     smile_to_parmed_structure,
-    smile_to_molecule,
     get_atom_map,
     infer_openff_mol,
-    order_molecule_like_smile,
+    get_coordinates,
 )
-from pymatgen.io.packmol import PackmolBoxGen
-from pymatgen.io.xyz import XYZ
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
@@ -153,7 +151,7 @@ class OpenMMSolutionGen(InputGenerator):
         topology = self._get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
-        coordinates = self._get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
+        coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
         smile_strings = list(smiles.keys())
         system = self._parameterize_system(
             topology,
@@ -210,55 +208,6 @@ class OpenMMSolutionGen(InputGenerator):
         for struct, count in zip(structures, counts):
             combined_structs += struct * count
         return combined_structs.topology
-
-    @staticmethod
-    def _get_coordinates(
-        smiles: Dict[str, int], box: List[float], random_seed: int, smile_geometries: Dict
-    ) -> np.ndarray:
-        """
-        Pack the box with the molecules specified by smiles.
-
-        Args:
-            smiles: keys are smiles and values are number of that molecule to pack
-            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]
-
-        Returns:
-            array of coordinates for each atom in the box.
-        """
-        molecule_geometries = {}
-        for smile in smiles.keys():
-            if smile in smile_geometries:
-                geometry = smile_geometries[smile]
-                if isinstance(geometry, (str, Path)):
-                    geometry = pymatgen.core.Molecule.from_file(geometry)
-                molecule_geometries[smile] = order_molecule_like_smile(smile, geometry)
-                assert len(geometry) > 0, (
-                    f"It appears Pymatgen was unable to establish "
-                    f"an isomorphism between the included geometry "
-                    f"for {smile} and the molecular graph generated "
-                    f"by the input file itself. Please ensure you "
-                    f"included a matching smile and geometry."
-                )
-            else:
-                molecule_geometries[smile] = smile_to_molecule(smile)
-
-        packmol_molecules = []
-        for i, smile_count_tuple in enumerate(smiles.items()):
-            smile, count = smile_count_tuple
-            packmol_molecules.append(
-                {
-                    "name": str(i),
-                    "number": count,
-                    "coords": molecule_geometries[smile],
-                }
-            )
-        with tempfile.TemporaryDirectory() as scratch_dir:
-            pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
-            pw.write_input(scratch_dir)
-            pw.run(scratch_dir)
-            coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
-        raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
-        return raw_coordinates
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
@@ -431,7 +380,14 @@ class OpenMMSolutionGen(InputGenerator):
             box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
             nonbondedCutoff = min(10, box_size // 2)
             periodic_box_vectors = np.multiply(
-                np.array([[box[3] - box[0], 0, 0], [0, box[4] - box[1], 0], [0, 0, box[5] - box[2]]]), 0.1
+                np.array(
+                    [
+                        [box[3] - box[0], 0, 0],
+                        [0, box[4] - box[1], 0],
+                        [0, 0, box[5] - box[2]],
+                    ]
+                ),
+                0.1,
             )  # needs to be nanometers, assumes box in angstroms
             topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
             system = forcefield_omm.createSystem(

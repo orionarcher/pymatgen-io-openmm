@@ -15,14 +15,10 @@ from pymatgen.io.openmm.utils import (
     get_atom_map,
     infer_openff_mol,
     order_molecule_like_smile,
+    get_coordinates,
 )
 
-from pymatgen.io.openmm.tests.datafiles import (
-    CCO_xyz,
-    FEC_r_xyz,
-    FEC_s_xyz,
-    PF6_xyz,
-)
+from pymatgen.io.openmm.tests.datafiles import CCO_xyz, FEC_r_xyz, FEC_s_xyz, PF6_xyz, trimer_txt, trimer_pdb
 
 
 def test_get_box():
@@ -124,3 +120,26 @@ def test_order_molecule_like_smile(xyz_path, smile, atomic_numbers):
     mol = pymatgen.core.Molecule.from_file(xyz_path)
     ordered_mol = order_molecule_like_smile(smile, mol)
     np.testing.assert_almost_equal(ordered_mol.atomic_numbers, atomic_numbers)
+
+
+def test_get_coordinates():
+    coordinates = get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
+    assert isinstance(coordinates, np.ndarray)
+    assert len(coordinates) == 780
+    assert np.min(coordinates) > -0.2
+    assert np.max(coordinates) < 19.8
+    assert coordinates.size == 780 * 3
+
+
+def test_get_coordinates_added_geometry():
+    coordinates = get_coordinates(
+        {"F[P-](F)(F)(F)(F)F": 1}, [0, 0, 0, 3, 3, 3], 1, smile_geometries={"F[P-](F)(F)(F)(F)F": PF6_xyz}
+    )
+    assert len(coordinates) == 7
+    np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
+    with open(trimer_txt) as file:
+        trimer_smile = file.read()
+    coordinates = get_coordinates(
+        {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1, smile_geometries={trimer_smile: trimer_pdb}
+    )
+    assert len(coordinates) == 217

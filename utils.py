@@ -2,6 +2,7 @@
 Utility functions for OpenMM simulation setup.
 """
 from typing import Dict, List, Union, Tuple
+import pathlib
 from pathlib import Path
 import tempfile
 
@@ -13,6 +14,8 @@ import openff
 
 import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
+from pymatgen.io.xyz import XYZ
+from pymatgen.io.packmol import PackmolBoxGen
 
 
 def smile_to_parmed_structure(smile: str) -> parmed.Structure:
@@ -182,3 +185,60 @@ def order_molecule_like_smile(smile: str, geometry: Union[pymatgen.core.Molecule
     is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
     new_molecule = pymatgen.core.Molecule.from_sites([geometry.sites[i] for i in atom_map.values()])
     return new_molecule
+
+
+def get_coordinates(
+    smiles: Dict[str, int],
+    box: List[float],
+    random_seed: int = -1,
+    smile_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
+) -> np.ndarray:
+    """
+    Pack the box with the molecules specified by smiles.
+
+    Args:
+        smiles: keys are smiles and values are number of that molecule to pack
+        box: list of [xlo, ylo, zlo, xhi, yhi, zhi]
+        random_seed: the random seed used by packmol
+        smile_geometries: a dictionary of smiles and their respective geometries. The
+            geometries can be pymatgen Molecules or any file with geometric information
+            that can be parsed by OpenBabel.
+
+    Returns:
+        array of coordinates for each atom in the box.
+    """
+    smile_geometries = smile_geometries if smile_geometries else {}
+    molecule_geometries = {}
+    for smile in smiles.keys():
+        if smile in smile_geometries:
+            geometry = smile_geometries[smile]
+            if isinstance(geometry, (str, Path)):
+                geometry = pymatgen.core.Molecule.from_file(geometry)
+            molecule_geometries[smile] = order_molecule_like_smile(smile, geometry)
+            assert len(geometry) > 0, (
+                f"It appears Pymatgen was unable to establish "
+                f"an isomorphism between the included geometry "
+                f"for {smile} and the molecular graph generated "
+                f"by the input file itself. Please ensure you "
+                f"included a matching smile and geometry."
+            )
+        else:
+            molecule_geometries[smile] = smile_to_molecule(smile)
+
+    packmol_molecules = []
+    for i, smile_count_tuple in enumerate(smiles.items()):
+        smile, count = smile_count_tuple
+        packmol_molecules.append(
+            {
+                "name": str(i),
+                "number": count,
+                "coords": molecule_geometries[smile],
+            }
+        )
+    with tempfile.TemporaryDirectory() as scratch_dir:
+        pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
+        pw.write_input(scratch_dir)
+        pw.run(scratch_dir)
+        coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
+    raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
+    return raw_coordinates
