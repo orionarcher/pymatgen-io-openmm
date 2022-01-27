@@ -11,6 +11,7 @@ from openbabel import pybel
 import parmed
 import rdkit
 import openff
+import openmm
 
 import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
@@ -242,3 +243,23 @@ def get_coordinates(
         coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
     raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
     return raw_coordinates
+
+
+def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
+    """
+    Returns an openmm topology with the given SMILEs at the given counts.
+
+    The topology does not contain coordinates.
+
+    Parameters:
+        smiles: keys are smiles and values are number of that molecule to pack
+
+    Returns:
+        an openmm.app.Topology
+    """
+    structures = [smile_to_parmed_structure(smile) for smile in smiles.keys()]
+    counts = list(smiles.values())
+    combined_structs = parmed.Structure()
+    for struct, count in zip(structures, counts):
+        combined_structs += struct * count
+    return combined_structs.topology

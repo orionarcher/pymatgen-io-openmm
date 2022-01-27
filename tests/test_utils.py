@@ -3,6 +3,7 @@ import parmed
 import pytest
 import openff.toolkit.topology
 import pymatgen
+import openmm
 
 from pymatgen.io.openmm.utils import (
     get_box,
@@ -16,6 +17,7 @@ from pymatgen.io.openmm.utils import (
     infer_openff_mol,
     order_molecule_like_smile,
     get_coordinates,
+    get_openmm_topology,
 )
 
 from pymatgen.io.openmm.tests.datafiles import CCO_xyz, FEC_r_xyz, FEC_s_xyz, PF6_xyz, trimer_txt, trimer_pdb
@@ -143,3 +145,15 @@ def test_get_coordinates_added_geometry():
         {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1, smile_geometries={trimer_smile: trimer_pdb}
     )
     assert len(coordinates) == 217
+
+
+def test_get_openmm_topology():
+    topology = get_openmm_topology({"O": 200, "CCO": 20})
+    assert isinstance(topology, openmm.app.Topology)
+    assert topology.getNumAtoms() == 780
+    assert topology.getNumResidues() == 220
+    assert topology.getNumBonds() == 560
+    ethanol_smile = "CCO"
+    fec_smile = "O=C1OC[C@H](F)O1"
+    topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
+    assert topology.getNumAtoms() == 950

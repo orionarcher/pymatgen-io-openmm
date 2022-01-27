@@ -9,7 +9,6 @@ import openff.toolkit.topology
 from openff.toolkit.typing.engines import smirnoff
 
 # openmm
-import openmm
 from openmm.unit import elementary_charge
 from openmm import NonbondedForce
 
@@ -18,7 +17,7 @@ import pymatgen
 
 from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.generators import OpenMMSolutionGen
-
+from pymatgen.io.openmm.utils import get_openmm_topology
 from pymatgen.io.openmm.tests.datafiles import (
     CCO_xyz,
     CCO_charges,
@@ -38,17 +37,6 @@ __date__ = "Nov 2021"
 
 
 class TestOpenMMSolutionGen:
-    def test_get_openmm_topology(self):
-        topology = OpenMMSolutionGen._get_openmm_topology({"O": 200, "CCO": 20})
-        assert isinstance(topology, openmm.app.Topology)
-        assert topology.getNumAtoms() == 780
-        assert topology.getNumResidues() == 220
-        assert topology.getNumBonds() == 560
-        ethanol_smile = "CCO"
-        fec_smile = "O=C1OC[C@H](F)O1"
-        topology = OpenMMSolutionGen._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
-        assert topology.getNumAtoms() == 950
-
     #  TODO: add test for formally charged smile
 
     @pytest.mark.parametrize(
@@ -101,7 +89,7 @@ class TestOpenMMSolutionGen:
             partial_charges,
         )
         # construct a System to make testing easier
-        topology = OpenMMSolutionGen._get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
+        topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
         openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
         openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols_scaled)
         system = openff_forcefield.create_openmm_system(
@@ -132,7 +120,7 @@ class TestOpenMMSolutionGen:
 
     def test_parameterize_system(self):
         # TODO: add test here to see if I am adding charges?
-        topology = OpenMMSolutionGen._get_openmm_topology({"O": 200, "CCO": 20})
+        topology = get_openmm_topology({"O": 200, "CCO": 20})
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = "Sage"
@@ -153,7 +141,7 @@ class TestOpenMMSolutionGen:
         # TODO: test with charges
         # TODO: periodic boundaries assertion
         # TODO: assert forcefields assigned correctly
-        topology = OpenMMSolutionGen._get_openmm_topology({"O": 200, "CCO": 20})
+        topology = get_openmm_topology({"O": 200, "CCO": 20})
         smile_strings = ["O", "CCO"]
         box = [0, 0, 0, 19.59, 19.59, 19.59]
         force_field = {"O": "amber14/spce.xml", "CCO": "gaff-2.11"}

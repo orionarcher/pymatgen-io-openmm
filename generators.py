@@ -9,7 +9,6 @@ from typing import Union, Optional, Dict, List, Tuple
 
 # scipy
 import numpy as np
-import parmed
 
 # openff
 import openff
@@ -44,10 +43,10 @@ from pymatgen.io.openmm.inputs import (
 from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.utils import (
     get_box,
-    smile_to_parmed_structure,
     get_atom_map,
     infer_openff_mol,
     get_coordinates,
+    get_openmm_topology,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -148,7 +147,7 @@ class OpenMMSolutionGen(InputGenerator):
         assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
         smiles = {smile: count for smile, count in smiles.items() if count > 0}
         # create dynamic openmm objects with internal methods
-        topology = self._get_openmm_topology(smiles)
+        topology = get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
         coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
@@ -188,26 +187,6 @@ class OpenMMSolutionGen(InputGenerator):
             state_file=self.state_file,
         )
         return input_set
-
-    @staticmethod
-    def _get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
-        """
-        Returns an openmm topology with the given SMILEs at the given counts.
-
-        The topology does not contain coordinates.
-
-        Parameters:
-            smiles: keys are smiles and values are number of that molecule to pack
-
-        Returns:
-            an openmm.app.Topology
-        """
-        structures = [smile_to_parmed_structure(smile) for smile in smiles.keys()]
-        counts = list(smiles.values())
-        combined_structs = parmed.Structure()
-        for struct, count in zip(structures, counts):
-            combined_structs += struct * count
-        return combined_structs.topology
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
