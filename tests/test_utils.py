@@ -14,6 +14,7 @@ from pymatgen.io.openmm.utils import (
     calculate_molarity,
     get_atom_map,
     infer_openff_mol,
+    order_molecule_like_smile,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -110,3 +111,16 @@ def test_infer_openff_mol(xyz_path, n_atoms, n_bonds):
     assert isinstance(openff_mol, openff.toolkit.topology.Molecule)
     assert openff_mol.n_atoms == n_atoms
     assert openff_mol.n_bonds == n_bonds
+
+
+@pytest.mark.parametrize(
+    "xyz_path, smile, atomic_numbers",
+    [
+        (CCO_xyz, "CCO", (6, 6, 8, 1, 1, 1, 1, 1, 1)),
+        (PF6_xyz, "F[P-](F)(F)(F)(F)F", (9, 15, 9, 9, 9, 9, 9)),
+    ],
+)
+def test_order_molecule_like_smile(xyz_path, smile, atomic_numbers):
+    mol = pymatgen.core.Molecule.from_file(xyz_path)
+    ordered_mol = order_molecule_like_smile(smile, mol)
+    np.testing.assert_almost_equal(ordered_mol.atomic_numbers, atomic_numbers)

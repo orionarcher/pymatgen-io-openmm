@@ -11,7 +11,6 @@ from typing import Union, Optional, Dict, List, Tuple
 
 # scipy
 import numpy as np
-import rdkit
 import parmed
 
 # openff
@@ -47,9 +46,10 @@ from pymatgen.io.openmm.utils import (
     smile_to_parmed_structure,
     smile_to_molecule,
     get_atom_map,
+    infer_openff_mol,
+    order_molecule_like_smile,
 )
 from pymatgen.io.packmol import PackmolBoxGen
-from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -231,7 +231,7 @@ class OpenMMSolutionGen(InputGenerator):
                 geometry = smile_geometries[smile]
                 if isinstance(geometry, (str, Path)):
                     geometry = pymatgen.core.Molecule.from_file(geometry)
-                molecule_geometries[smile] = OpenMMSolutionGen._order_molecule_like_smile(smile, geometry)
+                molecule_geometries[smile] = order_molecule_like_smile(smile, geometry)
                 assert len(geometry) > 0, (
                     f"It appears Pymatgen was unable to establish "
                     f"an isomorphism between the included geometry "
@@ -259,30 +259,6 @@ class OpenMMSolutionGen(InputGenerator):
             coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
         raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
         return raw_coordinates
-
-    @staticmethod
-    def _order_molecule_like_smile(smile: str, geometry: Union[pymatgen.core.Molecule, str, Path]):
-        if isinstance(geometry, (str, Path)):
-            geometry = pymatgen.core.Molecule.from_file(str(geometry))
-        inferred_mol = OpenMMSolutionGen._infer_openff_mol(geometry)
-        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-        new_molecule = pymatgen.core.Molecule.from_sites([geometry.sites[i] for i in atom_map.values()])
-        return new_molecule
-
-    @staticmethod
-    def _infer_openff_mol(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:
-        if isinstance(mol_geometry, (str, Path)):
-            mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
-        with tempfile.NamedTemporaryFile() as f:
-            # these next 4 lines are cursed
-            pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
-            pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
-            rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
-        inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(
-            rdmol, hydrogens_are_explicit=True
-        )  # OpenFF Molecule
-        return inferred_mol
 
     @staticmethod
     def _add_mol_charges_to_forcefield(
@@ -331,7 +307,7 @@ class OpenMMSolutionGen(InputGenerator):
             # assign charges from isomorphic charges, if they exist
             is_isomorphic = False
             for mol_xyz, charges in partial_charges:
-                inferred_mol = OpenMMSolutionGen._infer_openff_mol(mol_xyz)
+                inferred_mol = infer_openff_mol(mol_xyz)
                 inferred_mols.add(inferred_mol)
                 is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
                 # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
