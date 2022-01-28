@@ -73,3 +73,22 @@ class TestOpenMMSolutionGen:
             "state.xml",
         }
         assert input_set.validate()
+
+    def test_get_input_set_w_charges_and_forcefields(self):
+        pf6_charge_array = np.load(PF6_charges)
+        li_charge_array = np.load(Li_charges)
+        generator = OpenMMSolutionGen(
+            partial_charges=[(PF6_xyz, pf6_charge_array), (Li_xyz, li_charge_array)],
+            partial_charge_scaling={"Li": 0.9, "PF6": 0.9},
+            packmol_random_seed=1,
+            force_field={"O": "spce"}
+        )
+        input_set = generator.get_input_set({"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1)
+        assert isinstance(input_set, OpenMMSet)
+        assert set(input_set.inputs.keys()) == {
+            "topology.pdb",
+            "system.xml",
+            "integrator.xml",
+            "state.xml",
+        }
+        assert input_set.validate()
