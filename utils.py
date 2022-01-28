@@ -13,10 +13,9 @@ import parmed
 import rdkit
 import openff
 from openff.toolkit.typing.engines import smirnoff
-from openff.toolkit.typing.engines.smirnoff.parameters import \
-    LibraryChargeHandler
+from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 import openmm
-from openmm.unit import elementary_charge, angstrom
+from openmm.unit import elementary_charge
 from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
 from openmm.app.forcefield import PME
@@ -40,8 +39,7 @@ def smile_to_parmed_structure(smile: str) -> parmed.Structure:
     mol.make3D()
     with tempfile.NamedTemporaryFile() as f:
         mol.write(format="mol", filename=f.name, overwrite=True)
-        structure = parmed.load_file(f.name)[
-            0]  # load_file is returning a list for some reason
+        structure = parmed.load_file(f.name)[0]  # load_file is returning a list for some reason
     return structure
 
 
@@ -79,8 +77,7 @@ def get_box(smiles: Dict[str, int], density: float) -> List[float]:
     return [0, 0, 0, side_length, side_length, side_length]
 
 
-def n_mols_from_mass_ratio(n_mol: int, smiles: List[str],
-                           mass_ratio: List[float]) -> np.ndarray:
+def n_mols_from_mass_ratio(n_mol: int, smiles: List[str], mass_ratio: List[float]) -> np.ndarray:
     """
     Calculates the number of mols needed to yield a given mass ratio.
 
@@ -100,8 +97,7 @@ def n_mols_from_mass_ratio(n_mol: int, smiles: List[str],
 
 
 def n_mols_from_volume_ratio(
-        n_mol: int, smiles: List[str], volume_ratio: List[float],
-        densities: List[float]
+    n_mol: int, smiles: List[str], volume_ratio: List[float], densities: List[float]
 ) -> np.ndarray:
     """
     Calculates the number of mols needed to yield a given volume ratio.
@@ -155,34 +151,27 @@ def get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
         return_atom_map=True,
         formal_charge_matching=False,
     )
-    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-        openff_mol, inferred_mol, **kwargs)
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
     if isomorphic:
         return True, atom_map
     # relax stereochemistry restrictions
     kwargs["atom_stereochemistry_matching"] = False
     kwargs["bond_stereochemistry_matching"] = False
-    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-        openff_mol, inferred_mol, **kwargs)
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
     if isomorphic:
-        print(
-            f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
         return True, atom_map
     # relax bond order restrictions
     kwargs["bond_order_matching"] = False
-    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
-        openff_mol, inferred_mol, **kwargs)
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
     if isomorphic:
-        print(
-            f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
-        print(
-            f"bond_order restrictions ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        print(f"bond_order restrictions ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
         return True, atom_map
     return False, {}
 
 
-def infer_openff_mol(mol_geometry: Union[
-    pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:
+def infer_openff_mol(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> openff.toolkit.topology.Molecule:
     """
     Infer an OpenFF molecule from xyz coordinates.
     """
@@ -190,19 +179,14 @@ def infer_openff_mol(mol_geometry: Union[
         mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
     with tempfile.NamedTemporaryFile() as f:
         # these next 4 lines are cursed
-        pybel_mol = BabelMolAdaptor(
-            mol_geometry).pybel_mol  # pymatgen Molecule
-        pybel_mol.write("mol2", filename=f.name,
-                        overwrite=True)  # pybel Molecule
-        rdmol = rdkit.Chem.MolFromMol2File(f.name,
-                                           removeHs=False)  # rdkit Molecule
-    inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(rdmol,
-                                                               hydrogens_are_explicit=True)  # OpenFF Molecule
+        pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
+        pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
+        rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
+    inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)  # OpenFF Molecule
     return inferred_mol
 
 
-def order_molecule_like_smile(smile: str, geometry: Union[
-    pymatgen.core.Molecule, str, Path]):
+def order_molecule_like_smile(smile: str, geometry: Union[pymatgen.core.Molecule, str, Path]):
     """
     Order sites in a pymatgen Molecule to match the canonical ordering generated by rdkit.
     """
@@ -211,17 +195,15 @@ def order_molecule_like_smile(smile: str, geometry: Union[
     inferred_mol = infer_openff_mol(geometry)
     openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
     is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-    new_molecule = pymatgen.core.Molecule.from_sites(
-        [geometry.sites[i] for i in atom_map.values()])
+    new_molecule = pymatgen.core.Molecule.from_sites([geometry.sites[i] for i in atom_map.values()])
     return new_molecule
 
 
 def get_coordinates(
-        smiles: Dict[str, int],
-        box: List[float],
-        random_seed: int = -1,
-        smile_geometries: Dict[
-            str, Union[pymatgen.core.Molecule, str, Path]] = None,
+    smiles: Dict[str, int],
+    box: List[float],
+    random_seed: int = -1,
+    smile_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
 ) -> np.ndarray:
     """
     Pack the box with the molecules specified by smiles.
@@ -244,8 +226,7 @@ def get_coordinates(
             geometry = smile_geometries[smile]
             if isinstance(geometry, (str, Path)):
                 geometry = pymatgen.core.Molecule.from_file(geometry)
-            molecule_geometries[smile] = order_molecule_like_smile(smile,
-                                                                   geometry)
+            molecule_geometries[smile] = order_molecule_like_smile(smile, geometry)
             assert len(geometry) > 0, (
                 f"It appears Pymatgen was unable to establish "
                 f"an isomorphism between the included geometry "
@@ -267,12 +248,10 @@ def get_coordinates(
             }
         )
     with tempfile.TemporaryDirectory() as scratch_dir:
-        pw = PackmolBoxGen(seed=random_seed).get_input_set(
-            molecules=packmol_molecules, box=box)
+        pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
         pw.write_input(scratch_dir)
         pw.run(scratch_dir)
-        coordinates = XYZ.from_file(
-            pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
+        coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
     raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
     return raw_coordinates
 
@@ -298,24 +277,22 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
 
 
 def add_mol_charges_to_forcefield(
-        forcefield: smirnoff.ForceField,
-        charged_openff_mol: List[openff.toolkit.topology.Molecule],
+    forcefield: smirnoff.ForceField,
+    charged_openff_mol: List[openff.toolkit.topology.Molecule],
 ) -> smirnoff.ForceField:
     """
     This is currently depreciated. It may be used in the future.
     """
-    charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(
-        charged_openff_mol)
+    charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(charged_openff_mol)
     forcefield["LibraryCharges"].add_parameter(parameter=charge_type)
     return forcefield
 
 
 def assign_charges_to_mols(
-        smile_strings: List[str],
-        partial_charge_method: str,
-        partial_charge_scaling: Dict[str, float],
-        partial_charges: List[
-            Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]],
+    smile_strings: List[str],
+    partial_charge_method: str,
+    partial_charge_scaling: Dict[str, float],
+    partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]],
 ):
     """
 
@@ -352,8 +329,7 @@ def assign_charges_to_mols(
             is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
             # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
             if is_isomorphic:
-                reordered_charges = np.array(
-                    [charges[atom_map[i]] for i, _ in enumerate(charges)])
+                reordered_charges = np.array([charges[atom_map[i]] for i, _ in enumerate(charges)])
                 openff_mol.partial_charges = reordered_charges * charge_scaling * elementary_charge
                 matched_mols.add(inferred_mol)
                 break
@@ -365,20 +341,18 @@ def assign_charges_to_mols(
         charged_mols.append(openff_mol)
         # return a warning if some partial charges were not matched to any mol_xyz
     for unmatched_mol in inferred_mols - matched_mols:
-        warnings.warn(
-            f"{unmatched_mol} in partial_charges is not isomorphic to any SMILE in the system.")
+        warnings.warn(f"{unmatched_mol} in partial_charges is not isomorphic to any SMILE in the system.")
     return charged_mols
 
 
 def parameterize_system(
-        topology: Topology,
-        smile_strings: List[str],
-        box: List[float],
-        force_field: Union[str, Dict[str, str]] = "sage",
-        partial_charge_method: str = "am1bcc",
-        partial_charge_scaling: Dict[str, float] = None,
-        partial_charges: List[
-            Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
+    topology: Topology,
+    smile_strings: List[str],
+    box: List[float],
+    force_field: Union[str, Dict[str, str]] = "sage",
+    partial_charge_method: str = "am1bcc",
+    partial_charge_scaling: Dict[str, float] = None,
+    partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
 ) -> openmm.System:
     """
     Parameterize an OpenMM system.
@@ -399,8 +373,7 @@ def parameterize_system(
         partial_charge_method: Method for OpenFF partial charge assignment
                                 for small molecules without charges provided
                                 in partial_charges
-        partial_charge_scaling: Scaling for partial charges, either
-                                uniformly as a float or per molecule as a dict
+        partial_charge_scaling: Scaling for partial charges, as a dict
                                 of {str: float, . . .}, e.g. {"[Li+]": 0.8}
         partial_charges: List of tuples of (molecule, charges).
                         The Molecule can be a Pymatgen Molecule or the
@@ -417,61 +390,29 @@ def parameterize_system(
     basic_water_ffs = ["tip3p", "spce", "tip4p"]
     basic_small_ffs = ["gaff", "sage"]
 
-    all_small_ffs = [
-        "smirnoff99Frosst-1.0.2",
-        "smirnoff99Frosst-1.0.0",
-        "smirnoff99Frosst-1.1.0",
-        "smirnoff99Frosst-1.0.4",
-        "smirnoff99Frosst-1.0.8",
-        "smirnoff99Frosst-1.0.6",
-        "smirnoff99Frosst-1.0.3",
-        "smirnoff99Frosst-1.0.1",
-        "smirnoff99Frosst-1.0.5",
-        "smirnoff99Frosst-1.0.9",
-        "smirnoff99Frosst-1.0.7",
-        "openff-1.0.1",
-        "openff-1.1.1",
-        "openff-1.0.0-RC1",
-        "openff-1.2.0",
-        "openff-1.3.0",
-        "openff-2.0.0-rc.2",
-        "openff-2.0.0",
-        "openff-1.1.0",
-        "openff-1.0.0",
-        "openff-1.0.0-RC2",
-        "openff-1.3.1",
-        "openff-1.2.1",
-        "openff-1.3.1-alpha.1",
-        "openff-2.0.0-rc.1",
-        "gaff-1.4",
-        "gaff-1.8",
-        "gaff-1.81",
-        "gaff-2.1",
-        "gaff-2.11",
-    ]
+    all_small_ffs = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS + GAFFTemplateGenerator.INSTALLED_FORCEFIELDS
+
     forcefield_omm = omm_ForceField()
     if isinstance(force_field, str):
-        charged_off_mols = assign_charges_to_mols(smile_strings=smile_strings,
-                                                  partial_charges=partial_charges,
-                                                  partial_charge_scaling=partial_charge_scaling,
-                                                  partial_charge_method=partial_charge_method)
+        charged_off_mols = assign_charges_to_mols(
+            smile_strings=smile_strings,
+            partial_charges=partial_charges,
+            partial_charge_scaling=partial_charge_scaling,
+            partial_charge_method=partial_charge_method,
+        )
         if force_field.lower() in basic_small_ffs:
             if force_field.lower() == "sage":
-                sage = SMIRNOFFTemplateGenerator(molecules=charged_off_mols,
-                                                 forcefield="openff-2.0.0")
+                sage = SMIRNOFFTemplateGenerator(molecules=charged_off_mols, forcefield="openff-2.0.0")
                 forcefield_omm.registerTemplateGenerator(sage.generator)
             elif force_field.lower() == "gaff":
-                gaff = GAFFTemplateGenerator(molecules=charged_off_mols,
-                                             forcefield="gaff-2.11")
+                gaff = GAFFTemplateGenerator(molecules=charged_off_mols, forcefield="gaff-2.11")
                 forcefield_omm.registerTemplateGenerator(gaff.generator)
         else:
             if "sage" in force_field.lower():
-                sage = SMIRNOFFTemplateGenerator(molecules=charged_off_mols,
-                                                 forcefield=force_field.lower())
+                sage = SMIRNOFFTemplateGenerator(molecules=charged_off_mols, forcefield=force_field.lower())
                 forcefield_omm.registerTemplateGenerator(sage.generator)
             elif "gaff" in force_field.lower():
-                gaff = GAFFTemplateGenerator(molecules=charged_off_mols,
-                                             forcefield=force_field.lower())
+                gaff = GAFFTemplateGenerator(molecules=charged_off_mols, forcefield=force_field.lower())
                 forcefield_omm.registerTemplateGenerator(gaff.generator)
 
     else:
@@ -481,19 +422,18 @@ def parameterize_system(
         # iterate through each molecule and forcefield input as list
         # Add charges to the molecule if provided
         for smile in smile_strings:
-            openff_mol = openff.toolkit.topology.Molecule.from_smiles(
-                smile)
+            openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
             found_isomorphic = False
             if len(partial_charges) > 0:
                 for mol, charges in partial_charges:
                     inferred_mol = infer_openff_mol(mol)
-                    is_isomorphic, atom_map = get_atom_map(inferred_mol,
-                                                           openff_mol)
+                    is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
                     if is_isomorphic:
-                        charged_mol = assign_charges_to_mols(smile_strings=[
-                            smile], partial_charges=[(mol, charges)],
+                        charged_mol = assign_charges_to_mols(
+                            smile_strings=[smile],
+                            partial_charges=[(mol, charges)],
                             partial_charge_method=partial_charge_method,
-                            partial_charge_scaling=partial_charge_scaling
+                            partial_charge_scaling=partial_charge_scaling,
                         )[0]
                         found_isomorphic = True
                 if found_isomorphic:
@@ -511,9 +451,8 @@ def parameterize_system(
                     large_or_water[mol_to_load] = ff_name.lower()
             else:
                 small_molecules[mol_to_load] = "sage"
-            # Assign mols and forcefield as small molecule vs AMBER or
-            # CHARMM
 
+        # Determine category of forcefield for deciding which water model
         large_ff_category = ""
         for ff in large_or_water.values():
             temp_ff_string = ""
@@ -528,13 +467,9 @@ def parameterize_system(
             if large_ff_category == "":
                 large_ff_category = temp_ff_string
             else:
-                if large_ff_category == temp_ff_string:
-                    continue
-                else:
-                    warnings.warn(
-                        f"Did you mean to mix {temp_ff_string} and "
-                        f"{large_ff_category} force fields?"
-                    )
+                if large_ff_category != temp_ff_string:
+                    warnings.warn(f"Did you mean to mix {temp_ff_string} and " f"{large_ff_category} force fields?")
+
         ff_to_load = ""
         for ff in large_or_water.values():
             if ff in basic_water_ffs:
@@ -555,11 +490,8 @@ def parameterize_system(
                         if ff == "tip4p":
                             ff_to_load = "charmm36/tip4pew.xml"
                     else:
-                        warnings.warn(
-                            f"Did you mean to use {ff} with the "
-                            f"{large_ff_category} force field?"
-                        )
-                ## If there isn't a large molecule forcefield required,
+                        warnings.warn(f"Did you mean to use {ff} with the " f"{large_ff_category} force field?")
+                # If there isn't a large molecule forcefield required,
                 # assume amber14
                 else:
                     if ff == "spce":
@@ -581,8 +513,7 @@ def parameterize_system(
                     ff = ff_name
                 gaff = GAFFTemplateGenerator(molecules=mol, forcefield=ff)
                 forcefield_omm.registerTemplateGenerator(gaff.generator)
-            elif "smirnoff" in ff_name or "openff" in ff_name or "sage" in \
-                    ff_name:
+            elif "smirnoff" in ff_name or "openff" in ff_name or "sage" in ff_name:
                 if ff_name.lower() == "sage":
                     ff = "openff-2.0.0"
                 else:
@@ -598,13 +529,12 @@ def parameterize_system(
             [0, box[4] - box[1], 0],
             [0, 0, box[5] - box[2]],
         ]
-
     )
     topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
-    system = forcefield_omm.createSystem(topology=topology,
-                                         nonbondedMethod=PME,
-                                         nonbondedCutoff=nonbondedCutoff)
+    system = forcefield_omm.createSystem(topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff)
     return system
+
+
 # raise NotImplementedError(
 #     f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
 #     f"Please select one of the supported force fields."

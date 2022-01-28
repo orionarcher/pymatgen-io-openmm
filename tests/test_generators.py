@@ -81,7 +81,7 @@ class TestOpenMMSolutionGen:
             partial_charges=[(PF6_xyz, pf6_charge_array), (Li_xyz, li_charge_array)],
             partial_charge_scaling={"Li": 0.9, "PF6": 0.9},
             packmol_random_seed=1,
-            force_field={"O": "spce"}
+            force_field={"O": "spce"},
         )
         input_set = generator.get_input_set({"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1)
         assert isinstance(input_set, OpenMMSet)
