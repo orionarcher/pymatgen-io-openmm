@@ -6,9 +6,13 @@ Concrete implementations of InputSet for the OpenMM IO.
 from pathlib import Path
 from typing import Union, Optional, Dict
 
+from monty.serialization import loadfn
+
 # openmm
 import openmm
 from openmm.app import Simulation
+
+import MDAnalysis as mda
 
 # pymatgen
 from pymatgen.io.core import InputSet
@@ -132,3 +136,74 @@ class OpenMMSet(InputSet):
             state_input = self.inputs[self.state_file]
             simulation.context.setState(state_input.get_state())  # type: ignore
         return simulation
+
+
+class OpenMMAlchemySet(OpenMMSet):
+    """
+    An InputSet for an alchemical reaction workflow.
+    """
+
+    @classmethod
+    def from_directory(
+        cls, directory: Union[str, Path], rxn_atoms_file="rxn_atoms.json", force_field_file="force_field.json", **kwargs
+    ):
+        input_set = super().from_directory(directory, **kwargs)
+        input_set.inputs = {
+            **input_set.inputs,
+            rxn_atoms_file: loadfn(rxn_atoms_file),
+            force_field_file: loadfn(force_field_file),
+        }
+        input_set.rxn_atoms_file = rxn_atoms_file
+        input_set.force_field_file = force_field_file
+        input_set.__class__ = OpenMMAlchemySet
+        return input_set
+
+    def run(self, n_cycles):
+        """
+        Run the networking procedure for n_cycles.
+
+        Args:
+            cycles:
+
+        Returns:
+
+        """
+        for i in range(len(n_cycles)):
+            self.single_cycle()
+        return 1
+
+    def get_universe(self):
+        """
+        Returns an mda universe of the simulation. Useful for debugging atom selections.
+
+        Returns:
+
+        """
+        topology = self.inputs[self.topology_file]
+        topology = topology.get_topology()
+        u = mda.Universe(topology)
+        return u
+
+    def get_atom_group(self, group_name):
+        """
+        Creates an MDAnalysis Universe and queries it to get the dynamic atoms
+
+        Returns:
+
+        """
+        u = self.get_universe()
+        group = u.select_atoms("string")
+        return group
+
+    def single_cycle(self):
+        """
+        A single cycle of the reaction scheme.
+        """
+
+    def _update_input_files(self):
+        """
+        Internal method to update the topology and system files
+
+        Returns:
+
+        """
