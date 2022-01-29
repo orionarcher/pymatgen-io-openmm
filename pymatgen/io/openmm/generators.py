@@ -5,12 +5,15 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 # base python
 from pathlib import Path
 from typing import Union, Optional, Dict, List, Tuple
+from io import StringIO
 
 import json
 
 
 # scipy
 import numpy as np
+
+import MDAnalysis as mda
 
 # openmm
 from openmm.unit import kelvin, picoseconds
@@ -34,7 +37,6 @@ from pymatgen.io.openmm.utils import (
     get_coordinates,
     get_openmm_topology,
     parameterize_system,
-    topology_to_universe,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -177,13 +179,13 @@ class OpenMMSolutionGen(InputGenerator):
         return input_set
 
 
-class OpenMMReactionGen(OpenMMSolutionGen):
+class OpenMMAlchemyGen(OpenMMSolutionGen):
     """
     An InputGenerator for openmm alchemy.
     """
 
     def __init__(self, rxn_atoms_file="rxn_atoms.json", force_field_file="force_field.json", **kwargs):
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
         self.rxn_atoms_file = "rxn_atoms.json"
         self.force_field_file = "force_field.json"
 
@@ -196,9 +198,8 @@ class OpenMMReactionGen(OpenMMSolutionGen):
         box: Optional[List[float]] = None,
     ) -> InputSet:
         input_set = super().get_input_set(smiles, density, box)
-        topology = TopologyInput.from_string(input_set[self.topology_file]).get_topology()
-        # system = TopologyInput.from_string(input_set[self.system_file]).get_system()  # probably not needed
-        universe = topology_to_universe(topology)
+        with StringIO(input_set[self.topology_file].get_string()) as topology_file:
+            universe = mda.Universe(topology_file, format="pdb")
         atom_groups = {name: universe.select_atoms(select_string) for name, select_string in select_dict.items()}
         group_ix = {name: atom_group.ix for name, atom_group in atom_groups.items()}
         forcefield_dict = self.force_field
