@@ -592,3 +592,17 @@ def parameterize_system(
         topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff
     )
     return system
+
+
+def topology_to_universe(topology: Topology):
+    """
+    probably no longer needed.
+    """
+    return
+
+
+def get_atom_ix_in_universe(universe, select_strings):
+    """
+    given a universe and select strings, this will return the indices of the selected atoms.
+    """
+    return
