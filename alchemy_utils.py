@@ -43,7 +43,6 @@ class AlchemicalReaction(MSONable):
         create_bonds: List[Tuple[str, str]] = None,
         delete_bonds: List[Tuple[str, str]] = None,
         delete_atoms: List[str] = None,
-        rxn_trigger_ix: int = 0,
     ):
         self.select_dict = select_dict if select_dict else {}
         self.create_bonds = create_bonds if create_bonds else []
@@ -82,7 +81,7 @@ class AlchemicalReaction(MSONable):
                 atoms_ix_0 = universe.select_atoms(select_dict[bond[0]]).ix
                 atoms_ix_1 = universe.select_atoms(select_dict[bond[1]]).ix
                 # loop through each type of atom in bond
-                for atom_ix_list in [atoms_ix_0, atoms_ix_1]:
+                for half_rxn_ix, atom_ix_list in enumerate([atoms_ix_0, atoms_ix_1]):
                     # loop through each unique atom of that type
                     for atom_ix in atom_ix_list:
                         res_ix = universe.atoms[atom_ix].residue.ix
@@ -92,6 +91,7 @@ class AlchemicalReaction(MSONable):
                                 "res_ix": res_ix,
                                 "type": rxn_type,
                                 "bond_n": bond_n,
+                                "half_rxn_ix": half_rxn_ix,
                             }
                         )
         # loop through atoms of each type
@@ -167,8 +167,32 @@ class AlchemicalReaction(MSONable):
         res_sizes = [res.atoms.n_atoms for res in universe.residues]
         res_counts = list(smiles.values())
         all_atoms_df = AlchemicalReaction._expand_to_all_atoms(trig_df, res_sizes, res_counts)
+        trigger_atoms_0 = all_atoms_df[
+            (all_atoms_df.type == "create_bonds") & (all_atoms_df.bond_n == 0) & (all_atoms_df.half_rxn_ix == 0)
+        ]["trigger_ix"].values
+        trigger_atoms_1 = all_atoms_df[
+            (all_atoms_df.type == "create_bonds") & (all_atoms_df.bond_n == 0) & (all_atoms_df.half_rxn_ix == 1)
+        ]["trigger_ix"].values
+        # TODO: create two lists of trigger atom ix and export with half reactions
         half_reactions = AlchemicalReaction._build_half_reactions_dict(all_atoms_df)
-        return half_reactions
+        return half_reactions, trigger_atoms_0, trigger_atoms_1
+
+    def get_half_reactions_and_trigger_atoms(self, smiles):
+        """
+
+        Args:
+            smiles:
+
+        Returns:
+            half_reactions, trigger_atoms_0, trigger_atoms_1
+        """
+        return AlchemicalReaction._build_half_reactions(
+            smiles,
+            self.select_dict,
+            self.create_bonds,
+            self.delete_bonds,
+            self.delete_atoms,
+        )
 
     # def get_bonds_to_create(self, smiles, return_ix=False):
     #     universe = get_openmm_topology(smiles)
