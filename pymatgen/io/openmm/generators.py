@@ -215,9 +215,11 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         """
         input_set = super().get_input_set(smiles, density, box)
         half_rxns, triggers_0, triggers_1 = reaction.get_half_rxns_and_triggers(smiles)
+        n_particles = input_set[self.system_file].get_system().getNumParticles()
         reaction_spec = {
             "half_reactions": half_rxns,
             "trigger_atoms": [triggers_0, triggers_1],
+            "current_to_original_index": range(n_particles),
             "force_field": self.force_field,
         }
         rxn_input_set = OpenMMAlchemySet(
