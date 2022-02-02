@@ -208,7 +208,6 @@ class AlchemicalReaction(MSONable):
             self.delete_atoms,
             return_atoms_df=True,
         )
-        atoms_df
         return atoms_df[["atom_ix", "type", "trigger_ix"]]
 
     @staticmethod
