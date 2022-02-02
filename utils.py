@@ -347,16 +347,14 @@ def assign_charges_to_mols(
 
 def assign_small_molecule_ff(molecules: List[openff.toolkit.topology.Molecule], forcefield_name: str):
     """
+    Args:
+    molecules: List of openff Molecule objects
+    forcefield_name: Name of forcefield to apply to the Molecules, can be
+                    the absolute path recognized by OpenMM,
+                    e.g. "openff-2.0.0" or the generic name, e.g. "sage"
 
-    Parameters
-    ----------
-    molecules
-    forcefield_name
-
-    Returns
+    Returns:
     OpenMM Template
-    -------
-
     """
     smirnoff_ff_names = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS
     gaff_ff_names = GAFFTemplateGenerator.INSTALLED_FORCEFIELDS
@@ -376,6 +374,59 @@ def assign_small_molecule_ff(molecules: List[openff.toolkit.topology.Molecule], 
             f"Please select one of the supported force fields."
         )
     return template
+
+
+def assign_biopolymer_and_water_ff(openmm_forcefield: openmm.app.forcefield, forcefield_assignment: List[str]):
+    """
+
+    Args:
+    openmm_forcefield: OpenMM forcefield to be updated with forcefield choices
+    forcefield_assignment: List of forcefield names to be added to the OpenMM
+                        forcefield. Supports casual naming, e.g. "tip3p" or
+                        "spce" instead of specigying the full path in OpenMM
+
+    Returns:
+    OpenMM Forcefield populated with chosen forcefields
+    """
+    water_assignment = {
+        "amber": {"spce": "amber14/spce.xml", "tip3p": "amber14/tip3p.xml", "tip4p": "amber14/tip4pew.xml"},
+        "charmm": {"spce": "charmm36/spce.xml", "tip3p": "charmm36/water.xml", "tip4p": "charmm36/tip4pew.xml"},
+    }
+    basic_water_ffs = ["tip3p", "spce", "tip4p"]
+    biopolymer_ff_category = None
+    for ff in forcefield_assignment:
+        temp_ff_string = None
+        if "amber" in ff.lower():
+            temp_ff_string = "amber"
+        elif "charmm" in ff.lower():
+            temp_ff_string = "charmm"
+        if temp_ff_string:
+            if biopolymer_ff_category is None:
+                biopolymer_ff_category = temp_ff_string
+            else:
+                if biopolymer_ff_category != temp_ff_string:
+                    warnings.warn(
+                        f"Did you mean to mix {temp_ff_string} and " f"{biopolymer_ff_category} force fields?"
+                    )
+
+    ff_to_load = None
+    for ff in forcefield_assignment:
+        if ff in basic_water_ffs:
+            # Ensure the water model matches the large molecule model
+            if biopolymer_ff_category:
+                if ff in water_assignment[biopolymer_ff_category].keys():
+                    ff_to_load = water_assignment[biopolymer_ff_category][ff]
+                else:
+                    warnings.warn(f"Did you mean to use {ff} with the " f"" f"{biopolymer_ff_category} force field?")
+            # If there isn't a large molecule forcefield required,
+            # assume amber14
+            else:
+                ff_to_load = water_assignment["amber"][ff]
+        # TODO: Add lookup to ensure the ff is allowable
+        else:
+            ff_to_load == ff
+        openmm_forcefield.loadFile(ff_to_load)
+    return openmm_forcefield
 
 
 def parameterize_system(
@@ -419,7 +470,6 @@ def parameterize_system(
     """
     partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
     partial_charges = partial_charges if partial_charges else []
-    basic_water_ffs = ["tip3p", "spce", "tip4p"]
     basic_small_ffs = ["gaff", "sage"]
 
     all_small_ffs = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS + GAFFTemplateGenerator.INSTALLED_FORCEFIELDS
@@ -438,7 +488,7 @@ def parameterize_system(
 
     else:
         small_molecules = {}
-        large_or_water = {}
+        biopolymer_or_water = []
         # iterate through each smile, if no forcefielded provided use Sage
         # iterate through each molecule and forcefield input as list
         # Add charges to the molecule if provided
@@ -454,50 +504,10 @@ def parameterize_system(
                 if ff_name.lower() in all_small_ffs or ff_name.lower() in basic_small_ffs:
                     small_molecules[charged_mol] = ff_name
                 else:
-                    large_or_water[charged_mol] = ff_name
+                    biopolymer_or_water.append(ff_name)
             else:
                 small_molecules[charged_mol] = "sage"
-
-        # Determine category of forcefield for deciding which water model
-        large_ff_category = None
-        for ff in large_or_water.values():
-            temp_ff_string = None
-            if "amber" in ff.lower():
-                temp_ff_string = "amber"
-            elif "charmm" in ff.lower():
-                temp_ff_string = "charmm"
-            elif "amoeba" in ff.lower():
-                temp_ff_string = "amoeba"
-            else:
-                continue
-            if large_ff_category is None:
-                large_ff_category = temp_ff_string
-            else:
-                if large_ff_category != temp_ff_string:
-                    warnings.warn(f"Did you mean to mix {temp_ff_string} and " f"{large_ff_category} force fields?")
-
-        ff_to_load = None
-        water_assignment = {
-            "amber": {"spce": "amber14/spce.xml", "tip3p": "amber14/tip3p.xml", "tip4p": "amber14/tip4pew.xml"},
-            "charmm": {"spce": "charmm36/spce.xml", "tip3p": "charmm36/water.xml", "tip4p": "charmm36/tip4pew.xml"},
-        }
-        for ff in large_or_water.values():
-            if ff in basic_water_ffs:
-                # Ensure the water model matches the large molecule model
-                if large_ff_category:
-                    if ff in water_assignment[large_ff_category].keys():
-                        ff_to_load = water_assignment[large_ff_category][ff]
-                    else:
-                        warnings.warn(f"Did you mean to use {ff} with the " f"{large_ff_category} force field?")
-                # If there isn't a large molecule forcefield required,
-                # assume amber14
-                else:
-                    ff_to_load = water_assignment["amber"][ff]
-            # TODO: Add lookup to ensure the ff is allowable
-            else:
-                ff_to_load == ff
-            forcefield_omm.loadFile(ff_to_load)
-        # Add small molecules to forcefield
+        forcefield_omm = assign_biopolymer_and_water_ff(forcefield_omm, biopolymer_or_water)
         for mol, ff_name in small_molecules.items():
             template = assign_small_molecule_ff(molecules=[mol], forcefield_name=ff_name)
             forcefield_omm.registerTemplateGenerator(template.generator)
