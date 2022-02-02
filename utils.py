@@ -345,6 +345,39 @@ def assign_charges_to_mols(
     return charged_mols
 
 
+def assign_small_molecule_ff(molecules: List[openff.toolkit.topology.Molecule], forcefield_name: str):
+    """
+
+    Parameters
+    ----------
+    molecules
+    forcefield_name
+
+    Returns
+    OpenMM Template
+    -------
+
+    """
+    smirnoff_ff_names = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS
+    gaff_ff_names = GAFFTemplateGenerator.INSTALLED_FORCEFIELDS
+    template = None
+    if forcefield_name == "sage" or forcefield_name in smirnoff_ff_names:
+        ff_name = "openff-2.0.0" if forcefield_name == "sage" else forcefield_name
+        template = SMIRNOFFTemplateGenerator(molecules=molecules, forcefield=ff_name)
+
+    elif forcefield_name == "gaff" or forcefield_name in gaff_ff_names:
+        ff_name = "gaff-2.11" if forcefield_name == "gaff" else forcefield_name
+        template = GAFFTemplateGenerator(molecules=molecules, forcefield=ff_name)
+    else:
+        raise NotImplementedError(
+            f"{forcefield_name} is not supported."
+            f"currently only these force fields are supported:"
+            f" {' '.join(smirnoff_ff_names+gaff_ff_names)}.\n"
+            f"Please select one of the supported force fields."
+        )
+    return template
+
+
 def parameterize_system(
     topology: Topology,
     smile_strings: List[str],
@@ -384,7 +417,6 @@ def parameterize_system(
     Returns:
         an OpenMM.system
     """
-
     partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
     partial_charges = partial_charges if partial_charges else []
     basic_water_ffs = ["tip3p", "spce", "tip4p"]
@@ -394,26 +426,15 @@ def parameterize_system(
 
     forcefield_omm = omm_ForceField()
     if isinstance(force_field, str):
+        ff_name = force_field.lower()
         charged_off_mols = assign_charges_to_mols(
             smile_strings=smile_strings,
             partial_charges=partial_charges,
             partial_charge_scaling=partial_charge_scaling,
             partial_charge_method=partial_charge_method,
         )
-        if force_field.lower() in basic_small_ffs:
-            if force_field.lower() == "sage":
-                sage = SMIRNOFFTemplateGenerator(molecules=charged_off_mols, forcefield="openff-2.0.0")
-                forcefield_omm.registerTemplateGenerator(sage.generator)
-            elif force_field.lower() == "gaff":
-                gaff = GAFFTemplateGenerator(molecules=charged_off_mols, forcefield="gaff-2.11")
-                forcefield_omm.registerTemplateGenerator(gaff.generator)
-        else:
-            if "sage" in force_field.lower():
-                sage = SMIRNOFFTemplateGenerator(molecules=charged_off_mols, forcefield=force_field.lower())
-                forcefield_omm.registerTemplateGenerator(sage.generator)
-            elif "gaff" in force_field.lower():
-                gaff = GAFFTemplateGenerator(molecules=charged_off_mols, forcefield=force_field.lower())
-                forcefield_omm.registerTemplateGenerator(gaff.generator)
+        template = assign_small_molecule_ff(molecules=charged_off_mols, forcefield_name=ff_name)
+        forcefield_omm.registerTemplateGenerator(template.generator)
 
     else:
         small_molecules = {}
@@ -421,41 +442,26 @@ def parameterize_system(
         # iterate through each smile, if no forcefielded provided use Sage
         # iterate through each molecule and forcefield input as list
         # Add charges to the molecule if provided
-        for smile in smile_strings:
-            openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-            found_isomorphic = False
-            if len(partial_charges) > 0:
-                for mol, charges in partial_charges:
-                    inferred_mol = infer_openff_mol(mol)
-                    is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-                    if is_isomorphic:
-                        charged_mol = assign_charges_to_mols(
-                            smile_strings=[smile],
-                            partial_charges=[(mol, charges)],
-                            partial_charge_method=partial_charge_method,
-                            partial_charge_scaling=partial_charge_scaling,
-                        )[0]
-                        found_isomorphic = True
-                if found_isomorphic:
-                    mol_to_load = charged_mol
-                else:
-                    mol_to_load = openff_mol
-            else:
-                mol_to_load = openff_mol
-            # Assign ff to each molecule
+        charged_mols = assign_charges_to_mols(
+            smile_strings=smile_strings,
+            partial_charges=partial_charges,
+            partial_charge_method=partial_charge_method,
+            partial_charge_scaling=partial_charge_scaling,
+        )
+        for smile, charged_mol in zip(smile_strings, charged_mols):
             if smile in force_field.keys():
                 ff_name = force_field[smile]
                 if ff_name.lower() in all_small_ffs or ff_name.lower() in basic_small_ffs:
-                    small_molecules[mol_to_load] = ff_name.lower()
+                    small_molecules[charged_mol] = ff_name
                 else:
-                    large_or_water[mol_to_load] = ff_name.lower()
+                    large_or_water[charged_mol] = ff_name
             else:
-                small_molecules[mol_to_load] = "sage"
+                small_molecules[charged_mol] = "sage"
 
         # Determine category of forcefield for deciding which water model
-        large_ff_category = ""
+        large_ff_category = None
         for ff in large_or_water.values():
-            temp_ff_string = ""
+            temp_ff_string = None
             if "amber" in ff.lower():
                 temp_ff_string = "amber"
             elif "charmm" in ff.lower():
@@ -464,62 +470,38 @@ def parameterize_system(
                 temp_ff_string = "amoeba"
             else:
                 continue
-            if large_ff_category == "":
+            if large_ff_category is None:
                 large_ff_category = temp_ff_string
             else:
                 if large_ff_category != temp_ff_string:
                     warnings.warn(f"Did you mean to mix {temp_ff_string} and " f"{large_ff_category} force fields?")
 
-        ff_to_load = ""
+        ff_to_load = None
+        water_assignment = {
+            "amber": {"spce": "amber14/spce.xml", "tip3p": "amber14/tip3p.xml", "tip4p": "amber14/tip4pew.xml"},
+            "charmm": {"spce": "charmm36/spce.xml", "tip3p": "charmm36/water.xml", "tip4p": "charmm36/tip4pew.xml"},
+        }
         for ff in large_or_water.values():
             if ff in basic_water_ffs:
                 # Ensure the water model matches the large molecule model
                 if large_ff_category:
-                    if large_ff_category == "amber":
-                        if ff == "spce":
-                            ff_to_load = "amber14/spce.xml"
-                        if ff == "tip3p":
-                            ff_to_load = "amber14/tip3p.xml"
-                        if ff == "tip4p":
-                            ff_to_load = "amber14/tip4pew.xml"
-                    elif large_ff_category == "charmm":
-                        if ff == "spce":
-                            ff_to_load = "charmm36/spce.xml"
-                        if ff == "tip3p":
-                            ff_to_load = "charmm36/water.xml"
-                        if ff == "tip4p":
-                            ff_to_load = "charmm36/tip4pew.xml"
+                    if ff in water_assignment[large_ff_category].keys():
+                        ff_to_load = water_assignment[large_ff_category][ff]
                     else:
                         warnings.warn(f"Did you mean to use {ff} with the " f"{large_ff_category} force field?")
                 # If there isn't a large molecule forcefield required,
                 # assume amber14
                 else:
-                    if ff == "spce":
-                        ff_to_load = "amber14/spce.xml"
-                    if ff == "tip3p":
-                        ff_to_load = "amber14/tip3p.xml"
-                    if ff == "tip4p":
-                        ff_to_load = "amber14/tip4pew.xml"
+                    ff_to_load = water_assignment["amber"][ff]
             # TODO: Add lookup to ensure the ff is allowable
             else:
                 ff_to_load == ff
             forcefield_omm.loadFile(ff_to_load)
         # Add small molecules to forcefield
         for mol, ff_name in small_molecules.items():
-            if "gaff" in ff_name.lower():
-                if ff_name.lower() == "gaff":
-                    ff = "gaff-2.11"
-                else:
-                    ff = ff_name
-                gaff = GAFFTemplateGenerator(molecules=mol, forcefield=ff)
-                forcefield_omm.registerTemplateGenerator(gaff.generator)
-            elif "smirnoff" in ff_name or "openff" in ff_name or "sage" in ff_name:
-                if ff_name.lower() == "sage":
-                    ff = "openff-2.0.0"
-                else:
-                    ff = ff_name
-                sage = SMIRNOFFTemplateGenerator(molecules=mol, forcefield=ff)
-                forcefield_omm.registerTemplateGenerator(sage.generator)
+            template = assign_small_molecule_ff(molecules=[mol], forcefield_name=ff_name)
+            forcefield_omm.registerTemplateGenerator(template.generator)
+
     box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
     nonbondedCutoff = min(10, box_size // 2)
     # TODO: Make insensitive to input units
@@ -533,9 +515,3 @@ def parameterize_system(
     topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
     system = forcefield_omm.createSystem(topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff)
     return system
-
-
-# raise NotImplementedError(
-#     f"currently only these force fields are supported: {' '.join(supported_force_fields)}.\n"
-#     f"Please select one of the supported force fields."
-# )
