@@ -72,37 +72,88 @@ class AlchemicalReaction(MSONable):
     @staticmethod
     def _build_reactive_atoms_df(universe, select_dict, create_bonds, delete_bonds, delete_atoms):
         participating_atoms = []
-        for rxn_type, bonds in {"create_bonds": create_bonds, "delete_bonds": delete_bonds}.items():
+        # loop to reuse code for create_bonds and delete_bonds
+        for rxn_type, bonds in {
+            "create_bonds": create_bonds,
+            "delete_bonds": delete_bonds,
+        }.items():
+            # loop through every unique bond type
             for bond_n, bond in enumerate(bonds):
                 atoms_ix_0 = universe.select_atoms(select_dict[bond[0]]).ix
                 atoms_ix_1 = universe.select_atoms(select_dict[bond[1]]).ix
+                # loop through each type of atom in bond
                 for atom_ix_list in [atoms_ix_0, atoms_ix_1]:
+                    # loop through each unique atom of that type
                     for atom_ix in atom_ix_list:
                         res_ix = universe.atoms[atom_ix].residue.ix
                         participating_atoms.append(
-                            {"atom_ix": atom_ix, "res_ix": res_ix, "type": rxn_type, "bond_n": bond_n}
+                            {
+                                "atom_ix": atom_ix,
+                                "res_ix": res_ix,
+                                "type": rxn_type,
+                                "bond_n": bond_n,
+                            }
                         )
+        # loop through atoms of each type
         for atoms in delete_atoms:
             atom_ix_array = universe.select_atoms(select_dict[atoms]).ix
+            # loop through each unique atom of that type
             for atom_ix in atom_ix_array:
-                participating_atoms.append({"atom_ix": atom_ix, "type": "delete_atom", "bond_n": None})
+                res_ix = universe.atoms[atom_ix].residue.ix
+                participating_atoms.append(
+                    {
+                        "atom_ix": atom_ix,
+                        "res_ix": res_ix,
+                        "type": "delete_atom",
+                        "bond_n": None,
+                    }
+                )
         return pd.DataFrame(participating_atoms)
 
     @staticmethod
-    def _build_half_reactions_dict(df, universe):
+    def _get_trigger_atoms(df, universe):
         trigger_atom_ix = df[((df.type == "create_bonds") & (df.bond_n == 0))]["atom_ix"]
-        half_reactions = {}
+        trigger_atom_dfs = []
         for ix in trigger_atom_ix:
             within_two_bonds = f"(index {ix}) or (bonded index {ix}) or (bonded bonded index {ix})"
             nearby_atoms_ix = universe.select_atoms(within_two_bonds).ix
             atoms_df = df[np.isin(df["atom_ix"], nearby_atoms_ix)]
+            atoms_df["trigger_ix"] = ix
+            trigger_atom_dfs.append(atoms_df)
+        return pd.concat(trigger_atom_dfs)
+
+    @staticmethod
+    def _expand_to_all_atoms(trig_df, res_sizes, res_counts):
+        trig_df = trig_df.sort_values("res_ix")
+        res_offsets = np.cumsum(np.array(res_sizes) * (np.array(res_counts) - 1))
+        res_offsets = np.insert(res_offsets, 0, 0)
+        big_df_list = []
+        for res_ix, res_df in trig_df.groupby(["res_ix"]):
+            expanded_df = pd.concat([res_df] * res_counts[res_ix])
+            n_atoms = len(res_df)
+            offsets = np.arange(res_offsets[res_ix], res_offsets[res_ix + 1] + 1, res_sizes[res_ix])
+            offset_array = np.repeat(offsets, n_atoms)
+            expanded_df.atom_ix += offset_array
+            expanded_df.trigger_ix += offset_array
+            big_df_list += [expanded_df]
+        big_df = pd.concat(big_df_list)
+        return big_df
+
+    @staticmethod
+    def _build_half_reactions_dict(all_atoms_df):
+        half_reactions = {}
+        for trigger_ix, atoms_df in all_atoms_df.groupby(["trigger_ix"]):
             create_ix = list(atoms_df[atoms_df.type == "create_bonds"].sort_values("bond_n")["atom_ix"])
             delete_ix = atoms_df[atoms_df.type == "delete_bonds"]
             unique_bond_n = delete_ix["bond_n"].unique()
             delete_ix = [tuple(delete_ix[delete_ix["bond_n"] == bond_n]["atom_ix"].values) for bond_n in unique_bond_n]
             delete_atom_ix = list(atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].values)
-            half_reaction = {"create_bonds": create_ix, "delete_bonds": delete_ix, "delete_atoms": delete_atom_ix}
-            half_reactions[ix] = half_reaction
+            half_reaction = {
+                "create_bonds": create_ix,
+                "delete_bonds": delete_ix,
+                "delete_atoms": delete_atom_ix,
+            }
+            half_reactions[trigger_ix] = half_reaction
         return half_reactions
 
     @staticmethod
@@ -112,10 +163,12 @@ class AlchemicalReaction(MSONable):
         df = AlchemicalReaction._build_reactive_atoms_df(
             universe, select_dict, create_bonds, delete_bonds, delete_atoms
         )
-        half_reactions = AlchemicalReaction._build_half_reactions_dict(df, universe)
-
+        trig_df = AlchemicalReaction._get_trigger_atoms(df, universe)
+        res_sizes = [res.atoms.n_atoms for res in universe.residues]
+        res_counts = list(smiles.values())
+        all_atoms_df = AlchemicalReaction._expand_to_all_atoms(trig_df, res_sizes, res_counts)
+        half_reactions = AlchemicalReaction._build_half_reactions_dict(all_atoms_df)
         return half_reactions
-        # TODO: loop to create_bonds many half_reactions
 
     # def get_bonds_to_create(self, smiles, return_ix=False):
     #     universe = get_openmm_topology(smiles)

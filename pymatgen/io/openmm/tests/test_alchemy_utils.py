@@ -46,19 +46,19 @@ def acetic_ethanol_hydrolysis_del_water(select_dict):
 
 class TestAlchemicalReaction:
     def test_smiles_to_universe(self):
-        smiles = {"O": 1, "CCO": 1}
+        smiles = {"O": 2, "CCO": 2}
         universe = smiles_to_universe(smiles)
         assert len(universe.atoms) == 12
         assert len(universe.atoms.residues) == 2
 
     def test_extract_reactant_group_w_atoms(self, select_dict):
-        smiles = {"CC(=O)O": 1, "CCO": 1}
+        smiles = {"CC(=O)O": 2, "O": 3, "CCO": 2}
         create_bonds = [("acetic_acid_C", "ethanol_O")]
         delete_atoms = ["acetic_acid_O", "acetic_acid_H", "ethanol_H"]
         AlchemicalReaction._build_half_reactions(smiles, select_dict, create_bonds, [], delete_atoms)
 
     def test_extract_reactant_group_w_bonds(self, select_dict):
-        smiles = {"CC(=O)O": 1, "CCO": 1}
+        smiles = {"CC(=O)O": 2, "O": 3, "CCO": 2}
         create_bonds = [("acetic_acid_C", "ethanol_O"), ("acetic_acid_O", "ethanol_H")]
         delete_bonds = [("ethanol_O", "ethanol_H"), ("acetic_acid_O", "acetic_acid_C")]
         AlchemicalReaction._build_half_reactions(smiles, select_dict, create_bonds, delete_bonds, [])
