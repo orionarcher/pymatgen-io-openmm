@@ -5,15 +5,14 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 # base python
 from pathlib import Path
 from typing import Union, Optional, Dict, List, Tuple
-from io import StringIO
 
 import json
+from monty.json import MontyEncoder
 
 
 # scipy
 import numpy as np
 
-import MDAnalysis as mda
 
 # openmm
 from openmm.unit import kelvin, picoseconds
@@ -38,6 +37,7 @@ from pymatgen.io.openmm.utils import (
     get_openmm_topology,
     parameterize_system,
 )
+from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
@@ -184,36 +184,51 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
     An InputGenerator for openmm alchemy.
     """
 
-    def __init__(self, rxn_atoms_file="rxn_atoms.json", force_field_file="force_field.json", **kwargs):
+    def __init__(self, rxn_atoms_file="reaction_spec.json", **kwargs):
         super().__init__(**kwargs)
-        self.rxn_atoms_file = "rxn_atoms.json"
-        self.force_field_file = "force_field.json"
+        self.reaction_spec_file = rxn_atoms_file
 
     def get_input_set(  # type: ignore
         self,
         smiles: Dict[str, int],
-        select_dict: Dict[str, str],
-        reactions: List[Tuple[str, str]],
+        reaction: AlchemicalReaction = None,
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ) -> InputSet:
+        """
+        This executes all of the logic to create the input set. It generates coordinates, instantiates
+        the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
+        all information needed to generate a simulaiton. In addition, it also identifies what atoms
+        will participate in a given AlchemicalReaction and includes that information in the reaction_spec.
+
+        Please note that if the molecules are chiral, then the SMILEs must specify a
+        particular stereochemistry.
+
+        Args:
+            smiles: keys are smiles and values are number of that molecule to pack.
+            reaction: a AlchemicalReaction object specifying the desired reaction to perform.
+            density: the density of the system. density OR box must be given as an argument.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+
+        Returns:
+            an OpenMM.InputSet
+        """
         input_set = super().get_input_set(smiles, density, box)
-        with StringIO(input_set[self.topology_file].get_string()) as topology_file:
-            universe = mda.Universe(topology_file, format="pdb")
-        atom_groups = {name: universe.select_atoms(select_string) for name, select_string in select_dict.items()}
-        group_ix = {name: atom_group.ix for name, atom_group in atom_groups.items()}
-        forcefield_dict = self.force_field
+        half_rxns, triggers_0, triggers_1 = reaction.get_half_rxns_and_triggers(smiles)
+        reaction_spec = {
+            "half_reactions": half_rxns,
+            "trigger_atoms": [triggers_0, triggers_1],
+            "force_field": self.force_field,
+        }
         rxn_input_set = OpenMMAlchemySet(
             inputs={
                 **input_set.inputs,
-                self.rxn_atoms_file: json.dumps(group_ix),
-                self.force_field_file: json.dumps(forcefield_dict),
+                self.reaction_spec_file: json.dumps(reaction_spec, cls=MontyEncoder),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
             integrator_file=self.integrator_file,
             state_file=self.state_file,
-            rxn_atoms_file=self.rxn_atoms_file,
-            force_field_file=self.force_field_file,
+            rxn_atoms_file=self.reaction_spec_file,
         )
         return rxn_input_set
