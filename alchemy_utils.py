@@ -50,23 +50,6 @@ class AlchemicalReaction(MSONable):
         self.delete_atoms = delete_atoms if delete_atoms else []
 
     # TODO: need to make sure that we won't get an error if something reacts with itself
-    @staticmethod
-    def _extract_reactant_group(select_dict, reactant_list, universe, return_ix):  # rename
-        atom_list = []
-        for reactant_names in reactant_list:
-            if isinstance(reactant_names, str):
-                select_str = select_dict[reactant_names]
-                atoms = universe.select_atoms(select_str)
-                atoms = atoms.ix if return_ix else atoms
-                atom_list.append(atoms)
-            elif isinstance(reactant_names, tuple):
-                select_strs = [select_dict[reactant_name] for reactant_name in reactant_names]
-                atoms_tuple = tuple(universe.select_atoms(select_str) for select_str in select_strs)
-                atoms_tuple = tuple(atom_group.ix for atom_group in atoms_tuple) if return_ix else atoms_tuple
-                atom_list.append(atoms_tuple)
-            else:
-                Exception("reactant_list must be a list of tuple or str")
-        return atom_list
 
     @staticmethod
     def _build_reactive_atoms_df(universe, select_dict, create_bonds, delete_bonds, delete_atoms):
@@ -157,7 +140,15 @@ class AlchemicalReaction(MSONable):
         return half_reactions
 
     @staticmethod
-    def _build_half_reactions(smiles, select_dict, create_bonds, delete_bonds, delete_atoms):
+    def _build_half_reactions(
+        smiles,
+        select_dict,
+        create_bonds,
+        delete_bonds,
+        delete_atoms,
+        return_trigger_atoms=False,
+        return_atoms_df=False,
+    ):
         smiles_1 = {smile: 1 for smile in smiles.keys()}
         universe = smiles_to_universe(smiles_1)
         df = AlchemicalReaction._build_reactive_atoms_df(
@@ -173,9 +164,13 @@ class AlchemicalReaction(MSONable):
         trigger_atoms_1 = all_atoms_df[
             (all_atoms_df.type == "create_bonds") & (all_atoms_df.bond_n == 0) & (all_atoms_df.half_rxn_ix == 1)
         ]["trigger_ix"].values
-        # TODO: create two lists of trigger atom ix and export with half reactions
         half_reactions = AlchemicalReaction._build_half_reactions_dict(all_atoms_df)
-        return half_reactions, trigger_atoms_0, trigger_atoms_1
+        return_args = tuple([half_reactions])
+        if return_trigger_atoms:
+            return_args += (trigger_atoms_0, trigger_atoms_1)
+        if return_atoms_df:
+            return_args += tuple([all_atoms_df])
+        return return_args
 
     def get_half_reactions_and_trigger_atoms(self, smiles):
         """
@@ -192,16 +187,39 @@ class AlchemicalReaction(MSONable):
             self.create_bonds,
             self.delete_bonds,
             self.delete_atoms,
+            return_trigger_atoms=True,
         )
 
-    # def get_bonds_to_create(self, smiles, return_ix=False):
-    #     universe = get_openmm_topology(smiles)
-    #     return AlchemicalReaction._extract_reactant_group(self.select_dict, self.create_bonds, universe, return_ix)
-    #
-    # def get_bonds_to_delete(self, smiles, return_ix=False):
-    #     universe = get_openmm_topology(smiles)
-    #     return AlchemicalReaction._extract_reactant_group(self.select_dict, self.delete_bonds, universe, return_ix)
-    #
-    # def get_atoms_to_delete(self, smiles, return_ix=False):
-    #     universe = get_openmm_topology(smiles)
-    #     return AlchemicalReaction._extract_reactant_group(self.select_dict, self.delete_atoms, universe, return_ix)
+    def get_reactive_atoms_df(self, smiles):
+        """
+        Returns the DataFrame of all atoms that participate in the reaction. Intended primarily for debugging.
+
+        Args:
+            smiles:
+
+        Returns:
+
+        """
+        _, atoms_df = AlchemicalReaction._build_half_reactions(
+            smiles,
+            self.select_dict,
+            self.create_bonds,
+            self.delete_bonds,
+            self.delete_atoms,
+            return_atoms_df=True,
+        )
+        atoms_df
+        return atoms_df[["atom_ix", "type", "trigger_ix"]]
+
+    @staticmethod
+    def get_universe(smiles):
+        """
+        This is a wrapper around utils.smiles_to_universe.
+
+        Args:
+            smiles:
+
+        Returns:
+
+        """
+        return smiles_to_universe(smiles)
