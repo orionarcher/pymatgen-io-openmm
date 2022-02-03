@@ -1,7 +1,11 @@
 # base python
 
 # cheminformatics
+import json
+
 import numpy as np
+
+from monty.json import MontyDecoder
 
 # openff
 
@@ -9,8 +13,14 @@ import numpy as np
 
 # pymatgen
 
-from pymatgen.io.openmm.sets import OpenMMSet
-from pymatgen.io.openmm.generators import OpenMMSolutionGen
+from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
+from pymatgen.io.openmm.generators import OpenMMSolutionGen, OpenMMAlchemyGen
+
+# from pymatgen.io.openmm.tests.test_alchemy_utils import (
+#     acetic_ethanol_hydrolysis,
+#     acetic_ethanol_hydrolysis_del_water,
+#     select_dict,
+# )
 from pymatgen.io.openmm.tests.datafiles import (
     PF6_xyz,
     PF6_charges,
@@ -128,3 +138,29 @@ class TestOpenMMSolutionGen:
             "state.xml",
         }
         assert input_set.validate()
+
+
+class TestOpenMMAlchemyGen:
+    def test_get_alchemical_input_set(self, acetic_ethanol_condensation):
+        generator = OpenMMAlchemyGen(force_field="sage")
+        input_set = generator.get_input_set(
+            {"O": 200, "CC(=O)O": 10, "CCO": 10},
+            reaction=acetic_ethanol_condensation,
+            density=1,
+        )
+        assert isinstance(input_set, OpenMMAlchemySet)
+        assert set(input_set.inputs.keys()) == {
+            "topology.pdb",
+            "system.xml",
+            "integrator.xml",
+            "state.xml",
+            "reaction_spec.json",
+        }
+        assert input_set.validate()
+        rxn_spec = json.loads(input_set.inputs["reaction_spec.json"], cls=MontyDecoder)
+        assert len(rxn_spec["trigger_atoms"][0]) == 10
+        assert len(rxn_spec["trigger_atoms"][1]) == 10
+        assert len(rxn_spec["half_reactions"]) == 20
+        assert rxn_spec["force_field"] == "sage"
+
+    # TODO: add another reaction with multiple reactive sites
