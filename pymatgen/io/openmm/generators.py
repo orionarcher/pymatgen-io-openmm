@@ -219,7 +219,7 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         reaction_spec = {
             "half_reactions": half_rxns,
             "trigger_atoms": [triggers_0, triggers_1],
-            "current_to_original_index": range(n_particles),
+            "current_to_original_index": list(range(n_particles)),
             "force_field": self.force_field,
         }
         rxn_input_set = OpenMMAlchemySet(
