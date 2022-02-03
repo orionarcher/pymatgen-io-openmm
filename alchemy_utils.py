@@ -172,7 +172,7 @@ class AlchemicalReaction(MSONable):
             return_args += tuple([all_atoms_df])
         return return_args
 
-    def get_half_reactions_and_trigger_atoms(self, smiles):
+    def get_half_rxns_and_triggers(self, smiles):
         """
 
         Args:
@@ -213,7 +213,7 @@ class AlchemicalReaction(MSONable):
     @staticmethod
     def get_universe(smiles):
         """
-        This is a wrapper around utils.smiles_to_universe.
+        This is a wrapper around smiles_to_universe.
 
         Args:
             smiles:
