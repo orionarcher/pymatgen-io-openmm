@@ -1,16 +1,20 @@
 # base python
+import json
 import tempfile
 
 # pymatgen
+from monty.json import MontyDecoder
+
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
     StateInput,
 )
-from pymatgen.io.openmm.sets import OpenMMSet
+from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
 
 from pymatgen.io.openmm.tests.datafiles import (
     input_set_dir,
     corrupted_state_path,
+    alchemy_input_set_path,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -64,3 +68,25 @@ class TestOpenMMSet:
         assert input_set2.state_file == "state.xml"
         assert isinstance(input_set2.inputs["topology.pdb"], TopologyInput)
         assert isinstance(input_set2.inputs["state.xml"], StateInput)
+
+
+class TestOpenMMAlchemySet:
+    def test_from_directory(self):
+        """
+        to do
+        """
+        input_set = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
+        assert isinstance(input_set, OpenMMAlchemySet)
+        assert set(input_set.inputs.keys()) == {
+            "topology.pdb",
+            "system.xml",
+            "integrator.xml",
+            "state.xml",
+            "reaction_spec.json",
+        }
+        assert input_set.validate()
+        rxn_spec = json.loads(input_set.inputs["reaction_spec.json"], cls=MontyDecoder)
+        assert len(rxn_spec["trigger_atoms"][0]) == 10
+        assert len(rxn_spec["trigger_atoms"][1]) == 10
+        assert len(rxn_spec["half_reactions"]) == 20
+        assert rxn_spec["force_field"] == "sage"

@@ -3,16 +3,16 @@ Concrete implementations of InputSet for the OpenMM IO.
 """
 
 # base python
+import json
 from pathlib import Path
 from typing import Union, Optional, Dict
 
-from monty.serialization import loadfn
+from monty.json import MontyDecoder
 
 # openmm
 import openmm
 from openmm.app import Simulation
 
-import MDAnalysis as mda
 
 # pymatgen
 from pymatgen.io.core import InputSet
@@ -144,17 +144,16 @@ class OpenMMAlchemySet(OpenMMSet):
     """
 
     @classmethod
-    def from_directory(
-        cls, directory: Union[str, Path], rxn_atoms_file="rxn_atoms.json", force_field_file="force_field.json", **kwargs
-    ):
+    def from_directory(cls, directory: Union[str, Path], rxn_atoms_file="reaction_spec.json", **kwargs):
         input_set = super().from_directory(directory, **kwargs)
+        source_dir = Path(directory)
+        with open(source_dir / rxn_atoms_file) as file:
+            file_string = file.read()
         input_set.inputs = {
             **input_set.inputs,
-            rxn_atoms_file: loadfn(rxn_atoms_file),
-            force_field_file: loadfn(force_field_file),
+            rxn_atoms_file: file_string,
         }
         input_set.rxn_atoms_file = rxn_atoms_file
-        input_set.force_field_file = force_field_file
         input_set.__class__ = OpenMMAlchemySet
         return input_set
 
@@ -168,34 +167,30 @@ class OpenMMAlchemySet(OpenMMSet):
         Returns:
 
         """
+        self._prepare()
         for i in range(len(n_cycles)):
-            self.single_cycle()
+            self._single_cycle()
+        self._conclude()
         return 1
 
-    def get_universe(self):
+    def _prepare(self):
+        rxn_spec = json.loads(self.inputs[self.rxn_atoms_file], cls=MontyDecoder)
+        self.half_reactions = rxn_spec["half_reactions"]
+        self.trigger_atoms = rxn_spec["trigger_atoms"]
+        self.index_map = rxn_spec["current_to_original_index"]
+        self.force_field = rxn_spec["force_field"]
+
+    def _conclude(self):
         """
-        Returns an mda universe of the simulation. Useful for debugging atom selections.
-
-        Returns:
-
+        Conclude and update files
         """
-        topology = self.inputs[self.topology_file]
-        topology = topology.get_topology()
-        u = mda.Universe(topology)
-        return u
+        self._update_input_files()
+        del self.half_reactions
+        del self.trigger_atoms
+        del self.index_map
+        del self.force_field
 
-    def get_atom_group(self, group_name):
-        """
-        Creates an MDAnalysis Universe and queries it to get the dynamic atoms
-
-        Returns:
-
-        """
-        u = self.get_universe()
-        group = u.select_atoms("string")
-        return group
-
-    def single_cycle(self):
+    def single_cycle(self, positions, topology, half_reactions, trigger_atoms, current_to_original_index, force_field):
         """
         A single cycle of the reaction scheme.
         """
