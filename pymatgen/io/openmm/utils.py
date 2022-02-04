@@ -28,6 +28,7 @@ import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
+from pymatgen.io.openmm.inputs import TopologyInput
 
 
 def smile_to_parmed_structure(smile: str) -> parmed.Structure:
@@ -305,6 +306,27 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
     for struct, count in zip(structures, counts):
         combined_structs += struct * count
     return combined_structs.topology
+
+
+def smiles_in_topology(topology: openmm.app.Topology):
+    """
+    Extracts all the unique SMILEs from a OpenMM topology.
+
+    Args:
+        topology: an OpenMM.Topology
+
+    Returns:
+        list of unique smiles
+
+    """
+    topology_str = TopologyInput(topology).get_string()
+    all_ob_mols = pybel.readstring("pdb", topology_str).OBMol.Separate()
+    smiles = []
+    for ob_mol in all_ob_mols:
+        smile = pybel.Molecule(ob_mol).write("smi").strip()
+        smiles.append(smile)
+    unique_smiles = np.unique(smiles)
+    return list(unique_smiles)
 
 
 def add_mol_charges_to_forcefield(

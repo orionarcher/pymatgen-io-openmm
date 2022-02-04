@@ -2,6 +2,7 @@ import numpy as np
 import parmed
 import pytest
 import openff.toolkit.topology
+
 import pymatgen
 import openmm
 from openff.toolkit.typing.engines import smirnoff
@@ -10,6 +11,7 @@ from openff.toolkit.typing.engines import smirnoff
 from openmm.unit import elementary_charge
 from openmm import NonbondedForce
 
+from pymatgen.io.openmm.inputs import TopologyInput
 from pymatgen.io.openmm.utils import (
     get_box,
     smile_to_molecule,
@@ -26,6 +28,7 @@ from pymatgen.io.openmm.utils import (
     add_mol_charges_to_forcefield,
     assign_charges_to_mols,
     parameterize_system,
+    smiles_in_topology,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -39,6 +42,7 @@ from pymatgen.io.openmm.tests.datafiles import (
     FEC_charges,
     Li_charges,
     PF6_charges,
+    topology_path,
 )
 
 
@@ -186,6 +190,12 @@ def test_get_openmm_topology():
     fec_smile = "O=C1OC[C@H](F)O1"
     topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
     assert topology.getNumAtoms() == 950
+
+
+def test_smiles_in_topology():
+    topology = TopologyInput.from_file(topology_path).get_topology()
+    unique_smiles = smiles_in_topology(topology)
+    assert set(unique_smiles) == {"CCO", "O"}
 
 
 @pytest.mark.parametrize(
