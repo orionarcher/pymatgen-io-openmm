@@ -1,7 +1,7 @@
 """
 Utility functions for OpenMM simulation setup.
 """
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Union, Tuple, Optional
 import pathlib
 from pathlib import Path
 import warnings
@@ -308,7 +308,7 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
     return combined_structs.topology
 
 
-def smiles_in_topology(topology: openmm.app.Topology):
+def smiles_in_topology(topology: openmm.app.Topology, positions: Optional[Union[List, np.ndarray]] = None):
     """
     Extracts all the unique SMILEs from a OpenMM topology.
 
@@ -319,11 +319,13 @@ def smiles_in_topology(topology: openmm.app.Topology):
         list of unique smiles
 
     """
-    topology_str = TopologyInput(topology).get_string()
+    topology_str = TopologyInput(topology, positions).get_string()
     all_ob_mols = pybel.readstring("pdb", topology_str).OBMol.Separate()
     smiles = []
     for ob_mol in all_ob_mols:
-        smile = pybel.Molecule(ob_mol).write("smi").strip()
+        ob_mol.PerceiveBondOrders()
+        pb_mol = pybel.Molecule(ob_mol)
+        smile = pb_mol.write("smi").strip()
         smiles.append(smile)
     unique_smiles = np.unique(smiles)
     return list(unique_smiles)

@@ -146,6 +146,6 @@ class TestOpenMMAlchemyGen:
             reaction=acetic_ethanol_condensation,
             density=1,
         )
-        return input_set
+        assert input_set
 
     # TODO: add another reaction with multiple reactive sites
