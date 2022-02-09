@@ -90,3 +90,7 @@ class TestOpenMMAlchemySet:
         assert len(rxn_spec["trigger_atoms"][1]) == 10
         assert len(rxn_spec["half_reactions"]) == 20
         assert rxn_spec["force_field"] == "sage"
+
+    def test_run(self):
+        input_set = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
+        input_set.run(2, 200)
