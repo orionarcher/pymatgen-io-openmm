@@ -92,7 +92,8 @@ def test_n_solute_from_molarity():
 
 def test_calculate_molarity():
     nm3_to_L = 1e-24
-    np.testing.assert_almost_equal(calculate_molarity(4 ** 3 * nm3_to_L, 39), 1, decimal=1)
+    np.testing.assert_almost_equal(calculate_molarity(4 ** 3 * nm3_to_L, 39),
+                                   1, decimal=1)
 
 
 @pytest.mark.parametrize(
@@ -144,7 +145,8 @@ def test_order_molecule_like_smile(xyz_path, smile, atomic_numbers):
 
 
 def test_get_coordinates():
-    coordinates = get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
+    coordinates = get_coordinates({"O": 200, "CCO": 20},
+                                  [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
     assert isinstance(coordinates, np.ndarray)
     assert len(coordinates) == 780
     assert np.min(coordinates) > -0.2
@@ -154,14 +156,17 @@ def test_get_coordinates():
 
 def test_get_coordinates_added_geometry():
     coordinates = get_coordinates(
-        {"F[P-](F)(F)(F)(F)F": 1}, [0, 0, 0, 3, 3, 3], 1, smile_geometries={"F[P-](F)(F)(F)(F)F": PF6_xyz}
+        {"F[P-](F)(F)(F)(F)F": 1}, [0, 0, 0, 3, 3, 3], 1,
+        smile_geometries={"F[P-](F)(F)(F)(F)F": PF6_xyz}
     )
     assert len(coordinates) == 7
-    np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
+    np.testing.assert_almost_equal(
+        np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
     with open(trimer_txt) as file:
         trimer_smile = file.read()
     coordinates = get_coordinates(
-        {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1, smile_geometries={trimer_smile: trimer_pdb}
+        {trimer_smile: 1}, [0, 0, 0, 20, 20, 20], 1,
+        smile_geometries={trimer_smile: trimer_pdb}
     )
     assert len(coordinates) == 217
 
@@ -191,8 +196,10 @@ def test_get_openmm_topology():
 def test_add_mol_charges_to_forcefield(charges_path, smile, atom_values):
     charges = np.load(charges_path)
     openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-    atom_map = {i: j for i, j in enumerate(atom_values)}  # this saves some space
-    mapped_charges = np.array([charges[atom_map[i]] for i in range(len(charges))])
+    atom_map = {i: j for i, j in
+                enumerate(atom_values)}  # this saves some space
+    mapped_charges = np.array(
+        [charges[atom_map[i]] for i in range(len(charges))])
     openff_mol.partial_charges = mapped_charges * elementary_charge
     forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
     add_mol_charges_to_forcefield(forcefield, openff_mol)
@@ -201,7 +208,8 @@ def test_add_mol_charges_to_forcefield(charges_path, smile, atom_values):
     for force in system.getForces():
         if type(force) == NonbondedForce:
             for i in range(force.getNumParticles()):
-                assert force.getParticleParameters(i)[0]._value == mapped_charges[i]
+                assert force.getParticleParameters(i)[0]._value == \
+                       mapped_charges[i]
 
 
 def test_assign_charges_to_mols():
@@ -214,14 +222,16 @@ def test_assign_charges_to_mols():
     # set up force field
     ethanol_smile = "CCO"
     fec_smile = "O=C1OC[C@H](F)O1"
-    openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+    openff_forcefield = smirnoff.ForceField(
+        "openff_unconstrained-2.0.0.offxml")
     charged_mols = assign_charges_to_mols(
         [ethanol_smile, fec_smile],
         "am1bcc",
         {},
         partial_charges,
     )
-    openff_forcefield_scaled = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+    openff_forcefield_scaled = smirnoff.ForceField(
+        "openff_unconstrained-2.0.0.offxml")
     charged_mols_scaled = assign_charges_to_mols(
         [ethanol_smile, fec_smile],
         "am1bcc",
@@ -230,8 +240,10 @@ def test_assign_charges_to_mols():
     )
     # construct a System to make testing easier
     topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
-    openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
-    openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols_scaled)
+    openff_topology = openff.toolkit.topology.Topology.from_openmm(topology,
+                                                                   charged_mols)
+    openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(
+        topology, charged_mols_scaled)
     system = openff_forcefield.create_openmm_system(
         openff_topology,
         charge_from_molecules=charged_mols,
@@ -244,7 +256,8 @@ def test_assign_charges_to_mols():
     # this does not ensure correct ordering, as we already test that with
     # other methods
     fec_charges_reordered = fec_charges[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
-    full_partial_array = np.append(np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50))
+    full_partial_array = np.append(np.tile(ethanol_charges, 50),
+                                   np.tile(fec_charges_reordered, 50))
     for force in system.getForces():
         if type(force) == NonbondedForce:
             charge_array = np.zeros(force.getNumParticles())
@@ -256,7 +269,8 @@ def test_assign_charges_to_mols():
             charge_array = np.zeros(force.getNumParticles())
             for i in range(len(charge_array)):
                 charge_array[i] = force.getParticleParameters(i)[0]._value
-    np.testing.assert_allclose(full_partial_array * 0.9, charge_array, atol=0.0001)
+    np.testing.assert_allclose(full_partial_array * 0.9, charge_array,
+                               atol=0.0001)
 
 
 def test_parameterize_system():
@@ -279,14 +293,21 @@ def test_parameterize_system():
     assert system.usesPeriodicBoundaryConditions()
 
 
-def test_parameterize_mixedforcefield_system():
+# @pytest.mark.parametrize(
+#
+# )
+
+@pytest.mark.parametrize("w_ff, sm_ff", [("spce", "gaff"), ("spce",
+                                                            "sage"),
+                                         ("tip3p", "gaff")])
+def test_parameterize_mixedforcefield_system(w_ff, sm_ff):
     # TODO: test with charges
     # TODO: periodic boundaries assertion
     # TODO: assert forcefields assigned correctly
     topology = get_openmm_topology({"O": 200, "CCO": 20})
     smile_strings = ["O", "CCO"]
     box = [0, 0, 0, 19.59, 19.59, 19.59]
-    force_field = {"O": "amber14/spce.xml", "CCO": "gaff-2.11"}
+    force_field = {"O": w_ff, "CCO": sm_ff}
     partial_charge_method = "am1bcc"
     system = parameterize_system(
         topology,
@@ -297,5 +318,45 @@ def test_parameterize_mixedforcefield_system():
         partial_charge_scaling={},
         partial_charges=[],
     )
+    assert len(system.getForces()) > 0
+    wforce = system.getForces()[0].getBondParameters(0)
+    notwforce = system.getForces()[0].getBondParameters(401)
+    assert wforce != notwforce
     assert system.getNumParticles() == 780
     assert system.usesPeriodicBoundaryConditions()
+
+
+@pytest.mark.parametrize("modela, modelb", [("spce", "tip3p"),
+                                            ("amber14/tip3p.xml",
+                                             "amber14/tip3pfb.xml")])
+
+def test_water_models(modela, modelb):
+    topology = get_openmm_topology({"O": 200})
+    smile_strings = ["O"]
+    box = [0, 0, 0, 19.59, 19.59, 19.59]
+    force_field_a = {"O": modela}
+    partial_charge_method = "am1bcc"
+    system_a = parameterize_system(
+        topology,
+        smile_strings,
+        box,
+        force_field=force_field_a,
+        partial_charge_method=partial_charge_method,
+        partial_charge_scaling={},
+        partial_charges=[],
+    )
+    force_field_b = {"O": modelb}
+    partial_charge_method = "am1bcc"
+    system_b = parameterize_system(
+        topology,
+        smile_strings,
+        box,
+        force_field=force_field_b,
+        partial_charge_method=partial_charge_method,
+        partial_charge_scaling={},
+        partial_charges=[],
+    )
+    force_a = system_a.getForces()[0].getBondParameters(0)
+    force_b = system_b.getForces()[0].getBondParameters(0)
+    # assert rOH is different for two different water models
+    assert force_a[2] != force_b[2]

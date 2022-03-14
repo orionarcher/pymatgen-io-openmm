@@ -370,7 +370,7 @@ def assign_small_molecule_ff(molecules: List[openff.toolkit.topology.Molecule], 
         raise NotImplementedError(
             f"{forcefield_name} is not supported."
             f"currently only these force fields are supported:"
-            f" {' '.join(smirnoff_ff_names+gaff_ff_names)}.\n"
+            f" {' '.join(smirnoff_ff_names + gaff_ff_names)}.\n"
             f"Please select one of the supported force fields."
         )
     return template
@@ -389,10 +389,11 @@ def assign_biopolymer_and_water_ff(openmm_forcefield: openmm.app.forcefield, for
     OpenMM Forcefield populated with chosen forcefields
     """
     water_assignment = {
-        "amber": {"spce": "amber14/spce.xml", "tip3p": "amber14/tip3p.xml", "tip4p": "amber14/tip4pew.xml"},
-        "charmm": {"spce": "charmm36/spce.xml", "tip3p": "charmm36/water.xml", "tip4p": "charmm36/tip4pew.xml"},
+        "amber": {"spce": "amber14/spce.xml", "tip3p": "amber14/tip3p.xml"},
+        "charmm": {"spce": "charmm36/spce.xml", "tip3p": "charmm36/water.xml"},
+        "no_biomolecule": {"spce": "spce.xml", "tip3p": "tip3p.xml"},
     }
-    basic_water_ffs = ["tip3p", "spce", "tip4p"]
+    basic_water_ffs = ["tip3p", "spce"]
     biopolymer_ff_category = None
     for ff in forcefield_assignment:
         temp_ff_string = None
@@ -421,10 +422,11 @@ def assign_biopolymer_and_water_ff(openmm_forcefield: openmm.app.forcefield, for
             # If there isn't a large molecule forcefield required,
             # assume amber14
             else:
-                ff_to_load = water_assignment["amber"][ff]
+                ff_to_load = water_assignment["no_biomolecule"][ff]
         # TODO: Add lookup to ensure the ff is allowable
+        # This allows custom ff strings
         else:
-            ff_to_load == ff
+            ff_to_load = ff
         openmm_forcefield.loadFile(ff_to_load)
     return openmm_forcefield
 
@@ -449,11 +451,12 @@ def parameterize_system(
                     small molecule, e.g. {"O": "spce"}. Small molecule
                     forcefields and water models can either be provided
                     informally, i.e. "gaff" or "sage" for small molecules,
-                    or "spce", "tip3p", or "tip4p" for water, or can be
+                    or "spce" pr "tip3p" for water, or can be
                     formally defined with OpenMM filenames,
                     e.g. "charmm36/water.xml". Large molecule forcefields
                     must be specified with the full path,
-                    e.g. "amber14/protein.ff14SB.xml".
+                    e.g. "amber14/protein.ff14SB.xml". 4 or more point water
+                    models are currently not supported!
         partial_charge_method: Method for OpenFF partial charge assignment
                                 for small molecules without charges provided
                                 in partial_charges

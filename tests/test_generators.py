@@ -92,3 +92,27 @@ class TestOpenMMSolutionGen:
             "state.xml",
         }
         assert input_set.validate()
+
+    def test_formal_charge(self):
+        trimer_smile = "O=C1[C@@H](C)[C@@H](C(C)C)OC(O)=C1/C(CCCCCCCC/C(O[H])=C2C([C@@H](C)[C@@H](C(C)C)OC/2=O)=O)=[N+]([H])/CCN(CC/[N+]([H])=C(CCCCCCCC/C(O[H])=C3C([C@@H](C)[C@@H](C(C)C)OC/3=O)=O)/C4=C(O)O[C@H](C(C)C)[C@H](C)C4=O)CC/[NH+]=C(CCCCCCCC/C(O[H])=C5C([C@@H](C)[C@@H](C(C)C)OC/5=O)=O)/C6=C(O)O[C@H](C(C)C)[C@H](C)C6=O"
+        openmm_generator = OpenMMSolutionGen(
+            temperature=298,
+            step_size=0.001,
+            partial_charge_method="mmff94",
+            force_field={"O": "spce", trimer_smile: "gaff"}
+
+        )
+
+        molecules = {"O": 200,
+                     trimer_smile: 1}
+
+        input_set = openmm_generator.get_input_set(molecules, density=0.8)
+
+        assert isinstance(input_set, OpenMMSet)
+        assert set(input_set.inputs.keys()) == {
+            "topology.pdb",
+            "system.xml",
+            "integrator.xml",
+            "state.xml",
+        }
+        assert input_set.validate()
