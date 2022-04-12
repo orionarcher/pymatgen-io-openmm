@@ -221,6 +221,7 @@ class OpenMMAlchemySet(OpenMMSet):
             smiles = smiles_in_topology(topology, positions)
             openff_mols = [openff.toolkit.topology.Molecule.from_smiles(smile) for smile in smiles]
             # quick and dirty re-parameterization
+            # TODO: reparameterize with GAFF to avoid smiles!
             openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             openff_topology = openff.toolkit.topology.Topology.from_openmm(
                 topology,
