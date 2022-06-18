@@ -196,9 +196,9 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         box: Optional[List[float]] = None,
     ) -> InputSet:
         """
-        This executes all of the logic to create the input set. It generates coordinates, instantiates
+        This executes all the logic to create the input set. It generates coordinates, instantiates
         the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
-        all information needed to generate a simulaiton. In addition, it also identifies what atoms
+        all information needed to generate a simulation. In addition, it also identifies what atoms
         will participate in a given AlchemicalReaction and includes that information in the reaction_spec.
 
         Please note that if the molecules are chiral, then the SMILEs must specify a

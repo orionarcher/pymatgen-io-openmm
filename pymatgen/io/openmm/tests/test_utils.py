@@ -29,6 +29,7 @@ from pymatgen.io.openmm.utils import (
     assign_charges_to_mols,
     parameterize_system,
     smiles_in_topology,
+    get_obmol,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -192,17 +193,22 @@ def test_get_openmm_topology():
     assert topology.getNumAtoms() == 950
 
 
+def test_get_obmol():
+    obmol = get_obmol({"O": 200, "CCO": 20})
+    return obmol
+
+
 def test_smiles_in_topology():
-    # topology = TopologyInput.from_file(topology_path).get_topology()
-    # unique_smiles = smiles_in_topology(topology)
-    # assert set(unique_smiles) == {"CCO", "O"}
+    topology = get_openmm_topology({"O": 200, "CCO": 20})
+    unique_smiles = smiles_in_topology(topology)
+    assert set(unique_smiles) == {"CCO", "O"}
     topology2_path = alchemy_input_set_path / "topology.pdb"
     state_path = alchemy_input_set_path / "state.xml"
     state = StateInput.from_file(state_path).get_state()
     positions = state.getPositions(asNumpy=True)._value
     topology2 = TopologyInput.from_file(topology2_path).get_topology()
-    smiles_in_topology(topology2, positions)
-    # assert set(unique_smiles) == {"CCO", "O"}
+    unique_smiles = smiles_in_topology(topology2, positions)
+    assert set(unique_smiles) == {"CCO", "O", "CC(=O)O"}
 
 
 @pytest.mark.parametrize(

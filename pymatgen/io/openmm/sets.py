@@ -12,8 +12,7 @@ from monty.json import MontyDecoder
 # openmm
 import openmm
 import openff
-from openff.toolkit.typing.engines import smirnoff
-from openmm.app import Simulation
+from openmm.app import Simulation, PME
 from openmm.app.modeller import Modeller
 import numpy as np
 
@@ -35,7 +34,7 @@ __maintainer__ = "Orion Cohen"
 __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
-from pymatgen.io.openmm.utils import smiles_in_topology
+from pymatgen.io.openmm.utils import smiles_in_topology, assign_small_molecule_ff
 
 
 class OpenMMSet(InputSet):
@@ -220,18 +219,29 @@ class OpenMMAlchemySet(OpenMMSet):
             topology = self._update_topology(topology, positions, cutoff_distance)
             smiles = smiles_in_topology(topology, positions)
             openff_mols = [openff.toolkit.topology.Molecule.from_smiles(smile) for smile in smiles]
+            ff_template = assign_small_molecule_ff(openff_mols, "sage")
             # quick and dirty re-parameterization
+            # TODO: perhaps instead of using the topology to add bonds with the modeler
+            #  we can instead maintain a molecule list (in OpenBabel?) and add and remove
+            #  bonds from that, allowing us to keep the topology information consistent.
+            # then generate new
+            # another
+
             # TODO: reparameterize with GAFF to avoid smiles!
-            openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-            openff_topology = openff.toolkit.topology.Topology.from_openmm(
-                topology,
-                unique_molecules=openff_mols,
-            )
-            # openff_topology.box_vectors = box_vectors
-            system = openff_forcefield.create_openmm_system(
-                openff_topology,
-                allow_nonintegral_charges=True,
-            )
+            forcefield = openmm.app.ForceField()
+            forcefield.registerTemplateGenerator(ff_template.generator)
+            nonbondedCutoff = 5  # TODO: change this! use state!
+            system = forcefield.createSystem(topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff)
+            # openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+            # openff_topology = openff.toolkit.topology.Topology.from_openmm(
+            #     topology,
+            #     unique_molecules=openff_mols,
+            # )
+            # # openff_topology.box_vectors = box_vectors
+            # system = openff_forcefield.create_openmm_system(
+            #     openff_topology,
+            #     allow_nonintegral_charges=True,
+            # )
             system.setDefaultPeriodicBoxVectors(*state.getPeriodicBoxVectors())
             print("loop")
 

@@ -1,24 +1,25 @@
 """
 Utility functions for OpenMM simulation setup.
 """
-from typing import Dict, List, Union, Tuple, Optional
 import pathlib
-from pathlib import Path
-import warnings
 import tempfile
+import warnings
+from pathlib import Path
+from typing import Dict, List, Union, Tuple, Optional
 
 import numpy as np
-from openbabel import pybel
+import openbabel
+import openff
+import openmm
 import parmed
 import rdkit
-import openff
+from openbabel import pybel
 from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
-import openmm
-from openmm.unit import elementary_charge
-from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
+from openmm.app import Topology
 from openmm.app.forcefield import PME
+from openmm.unit import elementary_charge
 from openmmforcefields.generators import (
     GAFFTemplateGenerator,
     SMIRNOFFTemplateGenerator,
@@ -26,9 +27,9 @@ from openmmforcefields.generators import (
 
 import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
-from pymatgen.io.xyz import XYZ
-from pymatgen.io.packmol import PackmolBoxGen
 from pymatgen.io.openmm.inputs import TopologyInput
+from pymatgen.io.packmol import PackmolBoxGen
+from pymatgen.io.xyz import XYZ
 
 
 def smile_to_parmed_structure(smile: str) -> parmed.Structure:
@@ -306,6 +307,51 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
     for struct, count in zip(structures, counts):
         combined_structs += struct * count
     return combined_structs.topology
+
+
+"""
+Plan:
+1. pack mol with geometries generated from openbabel
+2. create an appropriate topology file
+3. infer bonding with OpenBabel, THIS SHOULD WORK
+4. test that it works with an array of smiles
+5. test adding bonds and removing bonds
+6. test regenerating PDB
+7. test regenerating unique mols
+8. implement and loop!
+"""
+
+
+def get_obmol(smiles: Dict[str, int]):
+    """
+    temp
+    """
+    mol = pybel.readstring("smi", "O")
+    mol2 = pybel.readstring("smi", "O")
+    mol.addh()
+    mol2.addh()
+
+    mol2_atoms = list(openbabel.OBMolAtomIter(mol2.OBMol))
+    mol2_bonds = list(openbabel.OBMolBondIter(mol2.OBMol))
+    atom = mol2_atoms[0]
+    mol2_bonds[0]
+    for atom in mol2_atoms:
+        mol.OBMol.AddAtom(atom)
+
+    ob_mol = mol.OBMol
+
+    list(smiles.values())
+
+    combined_mol = openbabel.OBMol()
+    for smile, count in smiles.items():
+        mol = pybel.readstring("smi", smile)
+        mol.addh()
+        ob_mol = mol.OBMol
+        combined_mol.AddResidue(ob_mol)
+        for i in range(count):
+            return
+
+    return
 
 
 def smiles_in_topology(topology: openmm.app.Topology, positions: Optional[Union[List, np.ndarray]] = None):
