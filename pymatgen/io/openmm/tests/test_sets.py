@@ -28,7 +28,9 @@ class TestOpenMMSet:
         assert input_set.state_file == "state.xml"
         assert isinstance(input_set.inputs["topology.pdb"], TopologyInput)
         assert isinstance(input_set.inputs["state.xml"], StateInput)
-        input_set2 = OpenMMSet.from_directory(input_set_dir, state_file="wrong_file.xml")
+        input_set2 = OpenMMSet.from_directory(
+            input_set_dir, state_file="wrong_file.xml"
+        )
         assert len(input_set2.inputs) == 3
         assert input_set2.topology_file == "topology.pdb"
         assert input_set2.state_file is None
@@ -36,7 +38,9 @@ class TestOpenMMSet:
     def test_validate(self):
         input_set = OpenMMSet.from_directory(input_set_dir)
         assert input_set.validate()
-        corrupted_input_set = OpenMMSet.from_directory(input_set_dir, state_file=corrupted_state_path)
+        corrupted_input_set = OpenMMSet.from_directory(
+            input_set_dir, state_file=corrupted_state_path
+        )
         assert not corrupted_input_set.validate()
 
     def test_get_simulation(self):

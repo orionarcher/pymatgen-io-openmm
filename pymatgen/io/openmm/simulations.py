@@ -49,7 +49,9 @@ def equilibrate_pressure(
     assert (
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
-    barostat_force_index = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 10))
+    barostat_force_index = system.addForce(
+        MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 10)
+    )
     context.reinitialize(preserveState=True)
     simulation.step(steps)
     system.removeForce(barostat_force_index)

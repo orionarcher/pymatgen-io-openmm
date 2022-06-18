@@ -64,7 +64,9 @@ class OpenMMSolutionGen(InputGenerator):
         friction_coefficient: int = 1,
         partial_charge_method: str = "am1bcc",
         partial_charge_scaling: Optional[Dict[str, float]] = None,
-        partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
+        partial_charges: Optional[
+            List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]
+        ] = None,
         initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
         packmol_random_seed: int = -1,
         topology_file: Union[str, Path] = "topology.pdb",
@@ -99,7 +101,9 @@ class OpenMMSolutionGen(InputGenerator):
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
         self.partial_charge_method = partial_charge_method
-        self.partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
+        self.partial_charge_scaling = (
+            partial_charge_scaling if partial_charge_scaling else {}
+        )
         self.partial_charges = partial_charges if partial_charges else []
         self.initial_geometries = initial_geometries if initial_geometries else {}
         self.packmol_random_seed = packmol_random_seed
@@ -130,13 +134,17 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an OpenMM.InputSet
         """
-        assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
+        assert (density is None) ^ (
+            box is None
+        ), "Density OR box must be included, but not both."
         smiles = {smile: count for smile, count in smiles.items() if count > 0}
         # create dynamic openmm objects with internal methods
         topology = get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
-        coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
+        coordinates = get_coordinates(
+            smiles, box, self.packmol_random_seed, self.initial_geometries
+        )
         smile_strings = list(smiles.keys())
         system = parameterize_system(
             topology,

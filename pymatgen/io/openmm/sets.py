@@ -76,7 +76,9 @@ class OpenMMSet(InputSet):
             integrator_file=integrator_file,
         )
         if Path(source_dir / state_file).is_file():
-            openmm_set.inputs[state_file] = StateInput.from_file(source_dir / state_file)
+            openmm_set.inputs[state_file] = StateInput.from_file(
+                source_dir / state_file
+            )
             openmm_set.state_file = state_file  # should this be a dict-like assignment?
         return openmm_set
 
