@@ -3,3 +3,8 @@ openmm
 parmed
 numpy
 pytest
+openbabel
+rdkit
+openff-toolkit
+packmol
+openmmforcefields
