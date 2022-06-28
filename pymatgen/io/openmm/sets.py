@@ -46,7 +46,7 @@ class OpenMMSet(InputSet):
     ):
         """
         Instantiates an InputSet from a directory containing a Topology PDB, a
-        System XML, a Integrator XML, and (optionally) a State XML. If no State
+        System XML, an Integrator XML, and (optionally) a State XML. If no State
         is given, system coordinates must be manually assigned.
 
         Args:
