@@ -16,7 +16,7 @@ setup(
     name="pymatgen-analysis-myaddon",
     packages=find_namespace_packages(include=["pymatgen.analysis.*"]),
     version="0.0.1",
-    install_requires=["pymatgen>=2022.0.3"],
+    install_requires=["pymatgen>=2022.3.22"],
     extras_require={},
     package_data={},
     author="materials virtual lab",
