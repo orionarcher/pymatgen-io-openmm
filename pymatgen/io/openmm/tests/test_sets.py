@@ -33,7 +33,7 @@ class TestOpenMMSet:
         )
         assert len(input_set2.inputs) == 3
         assert input_set2.topology_file == "topology.pdb"
-        assert input_set2.state_file is None
+        assert input_set2.get('state_file') is None
 
     def test_validate(self):
         input_set = OpenMMSet.from_directory(input_set_dir)

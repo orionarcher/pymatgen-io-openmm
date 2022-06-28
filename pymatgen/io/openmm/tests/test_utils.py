@@ -84,16 +84,16 @@ def test_n_mols_from_volume_ratio():
 
 def test_n_solute_from_molarity():
     nm3_to_L = 1e-24
-    n_solute = n_solute_from_molarity(1, 2 ** 3 * nm3_to_L)
+    n_solute = n_solute_from_molarity(1, 2**3 * nm3_to_L)
     np.testing.assert_allclose(n_solute, 5)
-    n_solute = n_solute_from_molarity(1, 4 ** 3 * nm3_to_L)
+    n_solute = n_solute_from_molarity(1, 4**3 * nm3_to_L)
     np.testing.assert_allclose(n_solute, 39)
 
 
 def test_calculate_molarity():
     nm3_to_L = 1e-24
     np.testing.assert_almost_equal(
-        calculate_molarity(4 ** 3 * nm3_to_L, 39), 1, decimal=1
+        calculate_molarity(4**3 * nm3_to_L, 39), 1, decimal=1
     )
 
 
@@ -193,8 +193,8 @@ def test_get_openmm_topology():
     [
         (Li_charges, "[Li+]", [0]),
         (CCO_charges, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
-        (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
-        (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 9, 5, 6, 7, 8]),
+        (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 8, 9, 5]),
+        (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 8, 9, 5]),
         (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
     ],
 )
@@ -210,8 +210,14 @@ def test_add_mol_charges_to_forcefield(charges_path, smile, atom_values):
     system = forcefield.create_openmm_system(topology)
     for force in system.getForces():
         if type(force) == NonbondedForce:
-            for i in range(force.getNumParticles()):
-                assert force.getParticleParameters(i)[0]._value == mapped_charges[i]
+            expected = np.array(
+                [
+                    force.getParticleParameters(i)[0]._value
+                    for i in range(force.getNumParticles())
+                ]
+            )
+            np.testing.assert_allclose(expected, mapped_charges, atol=0.01)
+            pass
 
 
 def test_assign_charges_to_mols():
