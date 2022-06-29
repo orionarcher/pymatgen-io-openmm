@@ -30,6 +30,46 @@ from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
 
 
+def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
+    """
+    Convert a SMILE to an array of atom types.
+
+    Args:
+        smiles:
+
+    Returns:
+
+    """
+    mols = [smile_to_molecule(smile) for smile in smiles.keys()]
+    offset = 0
+    types = []
+    for mol in mols:
+        types.append(np.arange(offset, offset + len(mol)))
+        offset += len(mol)
+    return np.tile(types, smiles.values())
+
+
+def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None) -> np.ndarray:
+    """
+    Convert a list of SMILEs to an array of residue names.
+
+    Args:
+        smiles:
+        names: dictionary of residue names for each smile, where keys are smiles
+        and values are residue names. If not provided, residue names will be set
+        to the smile.
+
+    Returns:
+        resname_array: array of residue names.
+    """
+    smile_sizes = {smile: len(smile_to_molecule(smile)) for smile in smiles.keys()}
+    name_n_atoms = {}
+    for smile in smiles.keys():
+        name = names[smile] if smile in names else smile
+        name_n_atoms[name] = smiles[smile] * smile_sizes[smile]
+    return np.tile(name_n_atoms.keys(), name_n_atoms.values())
+
+
 def smile_to_parmed_structure(smile: str) -> parmed.Structure:
     """
     Convert a SMILE to a Parmed.Structure.
@@ -39,9 +79,8 @@ def smile_to_parmed_structure(smile: str) -> parmed.Structure:
     mol.make3D()
     with tempfile.NamedTemporaryFile() as f:
         mol.write(format="mol", filename=f.name, overwrite=True)
-        structure = parmed.load_file(f.name)[
-            0
-        ]  # load_file is returning a list for some reason
+        # load_file is returning a list for some reason
+        structure = parmed.load_file(f.name)[0]
     return structure
 
 
