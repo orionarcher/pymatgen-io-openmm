@@ -44,12 +44,9 @@ from pymatgen.io.openmm.tests.datafiles import (
 )
 
 
-def test_get_box():
-    box = get_box({"O": 200, "CCO": 20}, 1)
-    assert isinstance(box, list)
-    assert len(box) == 6
-    np.testing.assert_almost_equal(box[0:3], 0, 2)
-    np.testing.assert_almost_equal(box[3:6], 19.59, 2)
+def test_xyz_to_molecule():
+    # TODO: add test
+    return
 
 
 def test_smiles_to_atom_type_array():
@@ -64,6 +61,14 @@ def test_smiles_to_resname_array():
     resname_array = smiles_to_resname_array(smiles)
     assert resname_array[0] == "O"
     assert resname_array[15] == "CCO"
+
+
+def test_get_box():
+    box = get_box({"O": 200, "CCO": 20}, 1)
+    assert isinstance(box, list)
+    assert len(box) == 6
+    np.testing.assert_almost_equal(box[0:3], 0, 2)
+    np.testing.assert_almost_equal(box[3:6], 19.59, 2)
 
 
 def test_smile_to_parmed_structure():
@@ -307,7 +312,7 @@ def test_parameterize_system():
 
 
 @pytest.mark.parametrize("w_ff, sm_ff", [("spce", "gaff"), ("spce", "sage"), ("tip3p", "gaff")])
-def test_parameterize_mixedforcefield_system(w_ff, sm_ff):
+def test_parameterize_mixed_forcefield_system(w_ff, sm_ff):
     # TODO: test with charges
     # TODO: periodic boundaries assertion
     # TODO: assert forcefields assigned correctly
