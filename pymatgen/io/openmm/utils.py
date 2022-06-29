@@ -515,8 +515,8 @@ def parameterize_system(
     Returns:
         an OpenMM.system
     """
-    partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
-    partial_charges = partial_charges if partial_charges else []
+    partial_charge_scaling = partial_charge_scaling or {}
+    partial_charges = partial_charges or []
     basic_small_ffs = ["gaff", "sage"]
 
     all_small_ffs = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS + GAFFTemplateGenerator.INSTALLED_FORCEFIELDS

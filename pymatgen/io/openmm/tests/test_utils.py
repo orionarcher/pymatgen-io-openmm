@@ -8,7 +8,7 @@ from openff.toolkit.typing.engines import smirnoff
 
 # openmm
 from openmm.unit import elementary_charge
-from openmm import NonbondedForce
+from openmm.openmm import NonbondedForce
 
 from pymatgen.io.openmm.utils import (
     get_box,
@@ -55,8 +55,8 @@ def test_get_box():
 def test_smiles_to_atom_type_array():
     smiles = {"O": 5, "CCO": 2}
     atom_type_array = smiles_to_atom_type_array(smiles)
-    assert atom_type_array[15] == 3
     assert atom_type_array[0] == 0
+    assert atom_type_array[15] == 3
 
 
 def test_smiles_to_resname_array():
@@ -108,9 +108,7 @@ def test_n_solute_from_molarity():
 
 def test_calculate_molarity():
     nm3_to_L = 1e-24
-    np.testing.assert_almost_equal(
-        calculate_molarity(4**3 * nm3_to_L, 39), 1, decimal=1
-    )
+    np.testing.assert_almost_equal(calculate_molarity(4**3 * nm3_to_L, 39), 1, decimal=1)
 
 
 @pytest.mark.parametrize(
@@ -162,9 +160,7 @@ def test_order_molecule_like_smile(xyz_path, smile, atomic_numbers):
 
 
 def test_get_coordinates():
-    coordinates = get_coordinates(
-        {"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {}
-    )
+    coordinates = get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
     assert isinstance(coordinates, np.ndarray)
     assert len(coordinates) == 780
     assert np.min(coordinates) > -0.2
@@ -226,14 +222,8 @@ def test_add_mol_charges_to_forcefield(charges_path, smile, atom_values):
     system = forcefield.create_openmm_system(topology)
     for force in system.getForces():
         if type(force) == NonbondedForce:
-            expected = np.array(
-                [
-                    force.getParticleParameters(i)[0]._value
-                    for i in range(force.getNumParticles())
-                ]
-            )
+            expected = np.array([force.getParticleParameters(i)[0]._value for i in range(force.getNumParticles())])
             np.testing.assert_allclose(expected, mapped_charges, atol=0.01)
-            pass
 
 
 def test_assign_charges_to_mols():
@@ -262,12 +252,8 @@ def test_assign_charges_to_mols():
     )
     # construct a System to make testing easier
     topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
-    openff_topology = openff.toolkit.topology.Topology.from_openmm(
-        topology, charged_mols
-    )
-    openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(
-        topology, charged_mols_scaled
-    )
+    openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
+    openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols_scaled)
     system = openff_forcefield.create_openmm_system(
         openff_topology,
         charge_from_molecules=charged_mols,
@@ -280,9 +266,7 @@ def test_assign_charges_to_mols():
     # this does not ensure correct ordering, as we already test that with
     # other methods
     fec_charges_reordered = fec_charges[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
-    full_partial_array = np.append(
-        np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50)
-    )
+    full_partial_array = np.append(np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50))
     for force in system.getForces():
         if type(force) == NonbondedForce:
             charge_array = np.zeros(force.getNumParticles())
@@ -322,9 +306,7 @@ def test_parameterize_system():
 # )
 
 
-@pytest.mark.parametrize(
-    "w_ff, sm_ff", [("spce", "gaff"), ("spce", "sage"), ("tip3p", "gaff")]
-)
+@pytest.mark.parametrize("w_ff, sm_ff", [("spce", "gaff"), ("spce", "sage"), ("tip3p", "gaff")])
 def test_parameterize_mixedforcefield_system(w_ff, sm_ff):
     # TODO: test with charges
     # TODO: periodic boundaries assertion
@@ -351,9 +333,7 @@ def test_parameterize_mixedforcefield_system(w_ff, sm_ff):
     assert system.usesPeriodicBoundaryConditions()
 
 
-@pytest.mark.parametrize(
-    "modela, modelb", [("spce", "tip3p"), ("amber14/tip3p.xml", "amber14/tip3pfb.xml")]
-)
+@pytest.mark.parametrize("modela, modelb", [("spce", "tip3p"), ("amber14/tip3p.xml", "amber14/tip3pfb.xml")])
 def test_water_models(modela, modelb):
     topology = get_openmm_topology({"O": 200})
     smile_strings = ["O"]
