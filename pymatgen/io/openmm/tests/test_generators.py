@@ -94,7 +94,7 @@ class TestOpenMMSolutionGen:
         assert input_set.validate()
 
     def test_get_input_set_w_geometries(self):
-        # TODO: add test for initial_geometreis kwarg
+        # TODO: add test for initial_geometries kwarg
         return
 
     def test_formal_charge(self):

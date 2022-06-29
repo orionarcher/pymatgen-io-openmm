@@ -28,6 +28,7 @@ from pymatgen.io.openmm.utils import (
     parameterize_system,
     smiles_to_atom_type_array,
     smiles_to_resname_array,
+    xyz_to_molecule,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -174,21 +175,23 @@ def test_get_coordinates():
 
 
 def test_get_coordinates_added_geometry():
+    pf6_geometry = xyz_to_molecule(PF6_xyz)
     coordinates = get_coordinates(
         {"F[P-](F)(F)(F)(F)F": 1},
         [0, 0, 0, 3, 3, 3],
         1,
-        smile_geometries={"F[P-](F)(F)(F)(F)F": PF6_xyz},
+        smile_geometries={"F[P-](F)(F)(F)(F)F": pf6_geometry},
     )
     assert len(coordinates) == 7
     np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
     with open(trimer_txt) as file:
         trimer_smile = file.read()
+    trimer_geometry = xyz_to_molecule(trimer_pdb)
     coordinates = get_coordinates(
         {trimer_smile: 1},
         [0, 0, 0, 20, 20, 20],
         1,
-        smile_geometries={trimer_smile: trimer_pdb},
+        smile_geometries={trimer_smile: trimer_geometry},
     )
     assert len(coordinates) == 217
 
