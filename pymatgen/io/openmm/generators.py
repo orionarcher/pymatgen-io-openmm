@@ -69,6 +69,7 @@ class OpenMMSolutionGen(InputGenerator):
         ] = None,
         initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
         packmol_random_seed: int = -1,
+        packmol_timeout: int = 30,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
@@ -107,6 +108,7 @@ class OpenMMSolutionGen(InputGenerator):
         self.partial_charges = partial_charges if partial_charges else []
         self.initial_geometries = initial_geometries if initial_geometries else {}
         self.packmol_random_seed = packmol_random_seed
+        self.packmol_timeout = packmol_timeout
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
@@ -143,7 +145,7 @@ class OpenMMSolutionGen(InputGenerator):
         if box is None:
             box = get_box(smiles, density)  # type: ignore
         coordinates = get_coordinates(
-            smiles, box, self.packmol_random_seed, self.initial_geometries
+            smiles, box, self.packmol_random_seed, self.packmol_timeout, self.initial_geometries
         )
         smile_strings = list(smiles.keys())
         system = parameterize_system(

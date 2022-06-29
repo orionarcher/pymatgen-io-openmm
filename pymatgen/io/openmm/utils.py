@@ -230,6 +230,7 @@ def get_coordinates(
     smiles: Dict[str, int],
     box: List[float],
     random_seed: int = -1,
+    packmol_timeout: int = 30,
     smile_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
 ) -> np.ndarray:
     """
@@ -279,7 +280,7 @@ def get_coordinates(
             molecules=packmol_molecules, box=box
         )
         pw.write_input(scratch_dir)
-        pw.run(scratch_dir)
+        pw.run(scratch_dir, timeout = packmol_timeout)
         coordinates = XYZ.from_file(
             pathlib.Path(scratch_dir, "packmol_out.xyz")
         ).as_dataframe()
