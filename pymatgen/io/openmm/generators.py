@@ -13,7 +13,7 @@ import numpy as np
 
 # openmm
 from openmm.unit import kelvin, picoseconds
-from openmm import (
+from openmm.openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
@@ -64,9 +64,7 @@ class OpenMMSolutionGen(InputGenerator):
         friction_coefficient: int = 1,
         partial_charge_method: str = "am1bcc",
         partial_charge_scaling: Optional[Dict[str, float]] = None,
-        partial_charges: Optional[
-            List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]
-        ] = None,
+        partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
         initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
         packmol_random_seed: int = -1,
         topology_file: Union[str, Path] = "topology.pdb",
@@ -101,16 +99,32 @@ class OpenMMSolutionGen(InputGenerator):
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
         self.partial_charge_method = partial_charge_method
-        self.partial_charge_scaling = (
-            partial_charge_scaling if partial_charge_scaling else {}
-        )
-        self.partial_charges = partial_charges if partial_charges else []
-        self.initial_geometries = initial_geometries if initial_geometries else {}
+        self.partial_charge_scaling = partial_charge_scaling or {}
+        self.partial_charges = partial_charges or []
+        self.initial_geometries = initial_geometries or {}
         self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
         self.state_file = state_file
+
+    def _get_input_settings(
+        self,
+        smiles: Dict[str, int],
+        density: Optional[float] = None,
+        box: Optional[List[float]] = None,
+    ) -> Dict:
+
+        settings_dict = {
+            "force_field": self.force_field,
+            "temperature": self.temperature,
+            "step_size": self.step_size,
+            "friction_coefficient": self.friction_coefficient,
+            "partial_charge_method": self.partial_charge_method,
+            "partial_charge_scaling": self.partial_charge_scaling,
+            "partial_charges": self.partial_charges,
+        }
+        return settings_dict
 
     def get_input_set(  # type: ignore
         self,
@@ -134,17 +148,13 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an OpenMM.InputSet
         """
-        assert (density is None) ^ (
-            box is None
-        ), "Density OR box must be included, but not both."
+        assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
         smiles = {smile: count for smile, count in smiles.items() if count > 0}
         # create dynamic openmm objects with internal methods
         topology = get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
-        coordinates = get_coordinates(
-            smiles, box, self.packmol_random_seed, self.initial_geometries
-        )
+        coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
         smile_strings = list(smiles.keys())
         system = parameterize_system(
             topology,
