@@ -26,6 +26,8 @@ from pymatgen.io.openmm.utils import (
     add_mol_charges_to_forcefield,
     assign_charges_to_mols,
     parameterize_system,
+    smiles_to_atom_type_array,
+    smiles_to_resname_array,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -48,6 +50,20 @@ def test_get_box():
     assert len(box) == 6
     np.testing.assert_almost_equal(box[0:3], 0, 2)
     np.testing.assert_almost_equal(box[3:6], 19.59, 2)
+
+
+def test_smiles_to_atom_type_array():
+    smiles = {"O": 5, "CCO": 2}
+    atom_type_array = smiles_to_atom_type_array(smiles)
+    assert atom_type_array[15] == 3
+    assert atom_type_array[0] == 0
+
+
+def test_smiles_to_resname_array():
+    smiles = {"O": 5, "CCO": 2}
+    resname_array = smiles_to_resname_array(smiles)
+    assert resname_array[0] == "O"
+    assert resname_array[15] == "CCO"
 
 
 def test_smile_to_parmed_structure():
