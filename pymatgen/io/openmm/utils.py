@@ -74,6 +74,12 @@ def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None
     return np.array(resnames)
 
 
+def xyz_to_molecule(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> pymatgen.core.Molecule:
+    if isinstance(mol_geometry, (str, Path)):
+        mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
+    return mol_geometry
+
+
 def smile_to_parmed_structure(smile: str) -> parmed.Structure:
     """
     Convert a SMILE to a Parmed.Structure.
