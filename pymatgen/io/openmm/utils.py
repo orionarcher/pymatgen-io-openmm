@@ -40,13 +40,15 @@ def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
     Returns:
 
     """
-    mols = [smile_to_molecule(smile) for smile in smiles.keys()]
     offset = 0
-    types = []
-    for mol in mols:
-        types.append(np.arange(offset, offset + len(mol)))
+    all_types_list = []
+    for smile, count in smiles.items():
+        mol = smile_to_molecule(smile)
+        types = np.arange(offset, offset + len(mol))
+        types_array = np.hstack([types for _ in range(count)])
+        all_types_list.append(types_array)
         offset += len(mol)
-    return np.tile(types, smiles.values())
+    return np.concatenate(all_types_list)
 
 
 def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None) -> np.ndarray:
@@ -62,12 +64,13 @@ def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None
     Returns:
         resname_array: array of residue names.
     """
-    smile_sizes = {smile: len(smile_to_molecule(smile)) for smile in smiles.keys()}
-    name_n_atoms = {}
+    names = names or {}
+    resnames = []
     for smile in smiles.keys():
-        name = names[smile] if smile in names else smile
-        name_n_atoms[name] = smiles[smile] * smile_sizes[smile]
-    return np.tile(name_n_atoms.keys(), name_n_atoms.values())
+        smile_size = len(smile_to_molecule(smile))
+        name = names.get(smile) or smile
+        resnames.extend([name] * smiles[smile] * smile_size)
+    return np.array(resnames)
 
 
 def smile_to_parmed_structure(smile: str) -> parmed.Structure:
