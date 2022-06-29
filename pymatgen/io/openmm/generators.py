@@ -33,6 +33,7 @@ from pymatgen.io.openmm.utils import (
     get_coordinates,
     get_openmm_topology,
     parameterize_system,
+    xyz_to_molecule,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -89,6 +90,8 @@ class OpenMMSolutionGen(InputGenerator):
                 geometry and the second element is an array of charges. The geometry can be a
                 pymatgen.Molecule or a path to an xyz file. The geometry and charges must have the
                 same atom ordering.
+            initial_geometries:
+            packmol_random_seed: The random seed for Packmol. If -1, a random seed will be generated.
             topology_file: Location to save the Topology PDB.
             system_file: Location to save the System xml.
             integrator_file: Location to save the Integrator xml.
@@ -101,7 +104,23 @@ class OpenMMSolutionGen(InputGenerator):
         self.partial_charge_method = partial_charge_method
         self.partial_charge_scaling = partial_charge_scaling or {}
         self.partial_charges = partial_charges or []
+        for charge_tuple in self.partial_charges:
+            if len(charge_tuple) != 2:
+                raise ValueError(
+                    "partial_charges must be a list of tuples, where the first element is a "
+                    "pymatgen.Molecule or a path to an xyz file and the second element is an "
+                    "array of charges."
+                )
+        self.partial_charges = list(
+            map(
+                lambda charge_tuple: (xyz_to_molecule(charge_tuple[0]), charge_tuple[1]),
+                self.partial_charges,
+            )
+        )
         self.initial_geometries = initial_geometries or {}
+        self.initial_geometries = {
+            smile: xyz_to_molecule(geometry) for smile, geometry in self.initial_geometries.items()
+        }
         self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
