@@ -15,6 +15,7 @@ import openff
 from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 import openmm
+from openmm.openmm import System
 from openmm.unit import elementary_charge
 from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
@@ -483,7 +484,7 @@ def parameterize_system(
     partial_charge_method: str = "am1bcc",
     partial_charge_scaling: Dict[str, float] = None,
     partial_charges: List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]] = [],
-) -> openmm.System:  # type: ignore
+) -> System:
     """
     Parameterize an OpenMM system.
 
