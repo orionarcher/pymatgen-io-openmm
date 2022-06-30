@@ -1,7 +1,7 @@
 """
 Utility functions for OpenMM simulation setup.
 """
-from typing import Dict, List, Union, Tuple
+from typing import Dict, List, Tuple, Union
 import pathlib
 from pathlib import Path
 import warnings
@@ -222,7 +222,9 @@ def get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
     return False, {}
 
 
-def infer_openff_mol(mol_geometry: pymatgen.core.Molecule) -> openff.toolkit.topology.Molecule:
+def infer_openff_mol(
+    mol_geometry: pymatgen.core.Molecule,
+) -> openff.toolkit.topology.Molecule:
     """
     Infer an OpenFF molecule from xyz coordinates.
     """
@@ -463,7 +465,7 @@ def assign_biopolymer_and_water_ff(openmm_forcefield: openmm.app.forcefield, for
                 if ff in water_assignment[biopolymer_ff_category].keys():
                     ff_to_load = water_assignment[biopolymer_ff_category][ff]
                 else:
-                    warnings.warn(f"Did you mean to use {ff} with the " f"" f"{biopolymer_ff_category} force field?")
+                    warnings.warn(f"Did you mean to use {ff} with the " f"{biopolymer_ff_category} force field?")
             # If there isn't a large molecule forcefield required,
             # assume amber14
             else:
@@ -484,7 +486,8 @@ def parameterize_system(
     partial_charge_method: str = "am1bcc",
     partial_charge_scaling: Dict[str, float] = None,
     partial_charges: List[Tuple[pymatgen.core.Molecule, np.ndarray]] = [],
-) -> System:
+    return_charged_mols: bool = False,
+) -> Union[System, Tuple[System, List[openff.toolkit.topology.Molecule]]]:
     """
     Parameterize an OpenMM system.
 
@@ -525,13 +528,13 @@ def parameterize_system(
     forcefield_omm = omm_ForceField()
     if isinstance(force_field, str):
         ff_name = force_field.lower()
-        charged_off_mols = assign_charges_to_mols(
+        charged_mols = assign_charges_to_mols(
             smile_strings=smile_strings,
             partial_charges=partial_charges,
             partial_charge_scaling=partial_charge_scaling,
             partial_charge_method=partial_charge_method,
         )
-        template = assign_small_molecule_ff(molecules=charged_off_mols, forcefield_name=ff_name)
+        template = assign_small_molecule_ff(molecules=charged_mols, forcefield_name=ff_name)
         forcefield_omm.registerTemplateGenerator(template.generator)
 
     else:
@@ -572,4 +575,6 @@ def parameterize_system(
     )
     topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
     system = forcefield_omm.createSystem(topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff)
+    if return_charged_mols:
+        return system, charged_mols
     return system
