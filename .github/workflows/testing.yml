@@ -23,22 +23,24 @@ jobs:
       uses: actions/setup-python@v2
       with:
         python-version: ${{ matrix.python-version }}
+#    - name: Install dependencies
+#    - uses: conda-incubator/setup-miniconda@v2
+#      with:
+#        python-version: ${{ matrix.python-version }}
+#        environment-file: test_env/test_env.yaml
+#
+#        channels: conda-forge,defaults
+#
+#        activate-environment: test
+#        auto-update-conda: false
+#        auto-activate-base: false
+#        show-channel-urls: true
     - name: Install dependencies
-    - uses: conda-incubator/setup-miniconda@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-        environment-file: test_env/test_env.yaml
-
-        channels: conda-forge,defaults
-
-        activate-environment: test
-        auto-update-conda: false
-        auto-activate-base: false
-        show-channel-urls: true
-    - name: Install package
       run: |
         python -m pip install --upgrade pip
+        pip install pymatgen
         pip install --quiet -r requirements.txt -r requirements-ci.txt
+        conda install --quiet -c conda-forge requirements.txt
         pip install -e .
     - name: pytest
       run: |
