@@ -3,7 +3,7 @@ Pymatgen-IO-OpenMM
 
 This repo contains a setup workflow for OpenMM simulations. 
 
-This package is a Pymatgen Addon package. From v2022.0.3, pymatgen supports `namespace packages <http://packaging.python.org/guides/packaging-namespace-packages/>`_.
+This package is a Pymatgen Addon package. From v2022.0.3, _`pymatgen <https://pymatgen.org/>`_ supports `namespace packages <http://packaging.python.org/guides/packaging-namespace-packages/>`_.
 
 Usage
 =====
