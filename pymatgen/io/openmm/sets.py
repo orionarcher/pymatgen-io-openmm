@@ -76,9 +76,7 @@ class OpenMMSet(InputSet):
             integrator_file=integrator_file,
         )
         if Path(source_dir / state_file).is_file():
-            openmm_set.inputs[state_file] = StateInput.from_file(
-                source_dir / state_file
-            )
+            openmm_set.inputs[state_file] = StateInput.from_file(source_dir / state_file)
             openmm_set.state_file = state_file  # should this be a dict-like assignment?
         return openmm_set
 
@@ -102,7 +100,7 @@ class OpenMMSet(InputSet):
 
     def get_simulation(
         self,
-        platform: Optional[Union[str, openmm.Platform]] = None,
+        platform: Optional[Union[str, openmm.openmm.Platform]] = None,
         platformProperties: Optional[Dict[str, str]] = None,
     ) -> Simulation:
         """
@@ -117,9 +115,9 @@ class OpenMMSet(InputSet):
         """
         topology_input = self.inputs[self.topology_file]
         system_input = self.inputs[self.system_file]
-        integrator_input = self.inputs[self.integrator_file]
+        integrator_input = self.ißnputs[self.integrator_file]
         if isinstance(platform, str):
-            platform = openmm.Platform.getPlatformByName(platform)
+            platform = openmm.openmm.Platform.getPlatformByName(platform)
         simulation = Simulation(
             topology_input.get_topology(),  # type: ignore
             system_input.get_system(),  # type: ignore
