@@ -16,14 +16,10 @@ topology_path = resource_filename(__name__, str(input_set_path / "topology.pdb")
 system_path = resource_filename(__name__, str(input_set_path / "system.xml"))
 integrator_path = resource_filename(__name__, str(input_set_path / "integrator.xml"))
 state_path = resource_filename(__name__, str(input_set_path / "state.xml"))
-corrupted_state_path = resource_filename(
-    __name__, str(input_set_path / "corrupted_state.xml")
-)
+corrupted_state_path = resource_filename(__name__, str(input_set_path / "corrupted_state.xml"))
 input_set_dir = resource_filename(__name__, str(input_set_path))
 
-coordinates_path = resource_filename(
-    __name__, str(test_files_path / "water_ethanol_coordinates.npy")
-)
+coordinates_path = resource_filename(__name__, str(test_files_path / "water_ethanol_coordinates.npy"))
 
 CCO_xyz = resource_filename(__name__, str(partial_charges / "CCO.xyz"))
 CCO_charges = resource_filename(__name__, str(partial_charges / "CCO.npy"))
