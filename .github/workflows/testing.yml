@@ -40,7 +40,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install pymatgen
         pip install --quiet -r requirements-ci.txt
-        conda install --quiet -c conda-forge requirements.txt
+        conda install --quiet -c conda-forge --file requirements.txt
         pip install -e .
     - name: pytest
       run: |
