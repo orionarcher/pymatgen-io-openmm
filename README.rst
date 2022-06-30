@@ -8,11 +8,7 @@ This package is a Pymatgen Addon package. From v2022.0.3, pymatgen supports `nam
 Usage
 =====
 
-Afterwards, others will be able to install your package using::
-
-    pip install pymatgen-<namespace>-<addon_name>
-
-and all functionality will be available under::
+You can install this package from source and all functionality will be available under::
 
     from pymatgen.<namespace>.<addon_name> import *
 
