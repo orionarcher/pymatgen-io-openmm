@@ -29,7 +29,7 @@ class TestOpenMMSolutionGen:
     #  TODO: add test for formally charged smile
 
     def test_get_input_set(self):
-        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        generator = OpenMMSolutionGen(packmol_random_seed=1, smile_names={"O": "H2O"})
         input_set = generator.get_input_set({"O": 200, "CCO": 20}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
@@ -38,6 +38,8 @@ class TestOpenMMSolutionGen:
             "integrator.xml",
             "state.xml",
         }
+        assert set(input_set.settings["atom_resnames"]) == {"CCO", "H2O"}
+        assert len(input_set.settings["atom_types"]) == 780
         assert input_set.validate()
 
     def test_get_input_set_big_smile(self):
