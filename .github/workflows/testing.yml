@@ -41,7 +41,7 @@ jobs:
         pip install pymatgen
         pip install --quiet -r requirements-ci.txt
         conda install --quiet -c conda-forge --file requirements.txt
-        conda install --quite -c conda-forge parmed openmm openff-toolkit
+        conda install --quiet -c conda-forge parmed openmm openff-toolkit
         pip install -e .
     - name: pytest
       run: |
