@@ -1,0 +1,21 @@
+name: test
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+    # Base depends
+  - python
+  - pip
+  - openmm
+  - parmed
+  - numpy
+  - pytest
+  - openbabel
+  - rdkit
+  - openff-toolkit
+  - packmol
+  - openmmforcefields
+
+    # Pip-only installs
+  - pip:
+      - pymatgen
