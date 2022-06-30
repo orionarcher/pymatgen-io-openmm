@@ -75,6 +75,18 @@ def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None
 
 
 def xyz_to_molecule(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> pymatgen.core.Molecule:
+    """
+    Convert a XYZ file to a Pymatgen.Molecule.
+
+    Accepts a str or pathlib.Path file that can be parsed for xyz coordinates from OpenBabel and
+    returns a Pymatgen.Molecule. If a Pymatgen.Molecule is passed in, it is returned unchanged.
+
+    Args:
+        mol_geometry:
+
+    Returns:
+
+    """
     if isinstance(mol_geometry, (str, Path)):
         mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
     return mol_geometry
