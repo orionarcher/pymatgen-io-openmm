@@ -1,4 +1,7 @@
 # base python
+import tempfile
+
+import monty
 
 # cheminformatics
 import numpy as np
@@ -16,6 +19,7 @@ from pymatgen.io.openmm.tests.datafiles import (
     PF6_charges,
     Li_charges,
     Li_xyz,
+    input_set_path,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -40,7 +44,16 @@ class TestOpenMMSolutionGen:
         }
         assert set(input_set.settings["atom_resnames"]) == {"CCO", "H2O"}
         assert len(input_set.settings["atom_types"]) == 780
+        monty.serialization.dumpfn(input_set, "./test")
         assert input_set.validate()
+
+    def test_dump_load_input_set(self):
+        input_set = OpenMMSet.from_directory(input_set_path)
+        with tempfile.TemporaryDirectory() as tmpdir:
+
+            monty.serialization.dumpfn(input_set, tmpdir + "/input_set.json")
+            input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
+            assert input_set == input_set2
 
     def test_get_input_set_big_smile(self):
         generator = OpenMMSolutionGen(
