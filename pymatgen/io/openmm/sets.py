@@ -69,15 +69,22 @@ class OpenMMSet(InputSet):
             system_file: system_input,
             integrator_file: integrator_input,
         }
-        openmm_set = OpenMMSet(
-            inputs=inputs,  # type: ignore
-            topology_file=topology_file,
-            system_file=system_file,
-            integrator_file=integrator_file,
-        )
         if Path(source_dir / state_file).is_file():
+            openmm_set = OpenMMSet(
+                inputs=inputs,  # type: ignore
+                topology_file=topology_file,
+                system_file=system_file,
+                integrator_file=integrator_file,
+                state_file=state_file,
+            )
             openmm_set.inputs[state_file] = StateInput.from_file(source_dir / state_file)
-            openmm_set.state_file = state_file  # should this be a dict-like assignment?
+        else:
+            openmm_set = OpenMMSet(
+                inputs=inputs,  # type: ignore
+                topology_file=topology_file,
+                system_file=system_file,
+                integrator_file=integrator_file,
+            )
         return openmm_set
 
     def validate(self) -> bool:
