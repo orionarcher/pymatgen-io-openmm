@@ -53,6 +53,7 @@ class TestOpenMMSolutionGen:
 
             monty.serialization.dumpfn(input_set, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
+            # TODO: currently failing equality test due to bug
             assert input_set == input_set2
 
     def test_get_input_set_big_smile(self):
