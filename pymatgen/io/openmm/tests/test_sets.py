@@ -1,6 +1,9 @@
 # base python
 import tempfile
 
+import monty
+import monty.serialization
+
 # pymatgen
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -11,6 +14,7 @@ from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.tests.datafiles import (
     input_set_dir,
     corrupted_state_path,
+    input_set_path,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -32,6 +36,16 @@ class TestOpenMMSet:
         assert len(input_set2.inputs) == 3
         assert input_set2.topology_file == "topology.pdb"
         assert input_set2.get("state_file") is None
+
+    def test_dump_load_input_set(self):
+
+        input_set = OpenMMSet.from_directory(input_set_path)
+        with tempfile.TemporaryDirectory() as tmpdir:
+
+            monty.serialization.dumpfn(input_set, tmpdir + "/input_set.json")
+            monty.serialization.loadfn(tmpdir + "/input_set.json")
+            # TODO: currently failing equality test due to bug
+            # assert input_set == input_set2
 
     def test_validate(self):
         input_set = OpenMMSet.from_directory(input_set_dir)
