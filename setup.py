@@ -13,18 +13,18 @@ with open(os.path.join(SETUP_PTH, "README.rst")) as f:
 
 
 setup(
-    name="pymatgen-analysis-myaddon",
-    packages=find_namespace_packages(include=["pymatgen.analysis.*"]),
+    name="pymatgen-io-openmm",
+    packages=find_namespace_packages(include=["pymatgen.io.*"]),
     version="0.0.1",
-    install_requires=["pymatgen>=2022.0.3"],
+    install_requires=["pymatgen>=2022.3.22"],
     extras_require={},
     package_data={},
-    author="materials virtual lab",
-    author_email="ongsp@eng.ucsd.edu",
-    maintainer="materials virtual lab",
-    url="https://github.com/materialsproject/pymatgen-addon-template",
+    author="orion cohen",
+    author_email="orion@lbl.gov",
+    maintainer="orion cohen",
+    url="https://github.com/orioncohen/pymatgen-io-openmm",
     license="BSD",
-    description="A template for creating add-ons for pymatgen.",
+    description="A set of tools for setting up OpenMM simulations of battery systems.",
     long_description=desc,
     keywords=["pymatgen"],
     classifiers=[

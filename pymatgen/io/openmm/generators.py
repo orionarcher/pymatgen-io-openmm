@@ -13,10 +13,12 @@ from monty.json import MontyEncoder
 # scipy
 import numpy as np
 
+# openff
+import openff
 
 # openmm
 from openmm.unit import kelvin, picoseconds
-from openmm import (
+from openmm.openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
@@ -36,6 +38,9 @@ from pymatgen.io.openmm.utils import (
     get_coordinates,
     get_openmm_topology,
     parameterize_system,
+    xyz_to_molecule,
+    smiles_to_atom_type_array,
+    smiles_to_resname_array,
 )
 from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction
 
@@ -71,6 +76,7 @@ class OpenMMSolutionGen(InputGenerator):
         partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
         initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
         packmol_random_seed: int = -1,
+        smile_names: Optional[Dict[str, str]] = None,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
@@ -93,6 +99,10 @@ class OpenMMSolutionGen(InputGenerator):
                 geometry and the second element is an array of charges. The geometry can be a
                 pymatgen.Molecule or a path to an xyz file. The geometry and charges must have the
                 same atom ordering.
+            initial_geometries: A dictionary where the keys are smiles and the values are
+                pymatgen.Molecules or a path to a file with xyz information.
+            smile_names: A dictionary of smiles and common names.
+            packmol_random_seed: The random seed for Packmol. If -1, a random seed will be generated.
             topology_file: Location to save the Topology PDB.
             system_file: Location to save the System xml.
             integrator_file: Location to save the Integrator xml.
@@ -103,14 +113,61 @@ class OpenMMSolutionGen(InputGenerator):
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
         self.partial_charge_method = partial_charge_method
-        self.partial_charge_scaling = partial_charge_scaling if partial_charge_scaling else {}
-        self.partial_charges = partial_charges if partial_charges else []
-        self.initial_geometries = initial_geometries if initial_geometries else {}
+        self.partial_charge_scaling = partial_charge_scaling or {}
+        self.partial_charges = partial_charges or []
+        for charge_tuple in self.partial_charges:
+            if len(charge_tuple) != 2:
+                raise ValueError(
+                    "partial_charges must be a list of tuples, where the first element is a "
+                    "pymatgen.Molecule or a path to an xyz file and the second element is an "
+                    "array of charges."
+                )
+        self.partial_charges = list(
+            map(
+                lambda charge_tuple: (
+                    xyz_to_molecule(charge_tuple[0]),
+                    charge_tuple[1],
+                ),
+                self.partial_charges,
+            )
+        )
+        self.initial_geometries = initial_geometries or {}
+        self.initial_geometries = {
+            smile: xyz_to_molecule(geometry) for smile, geometry in self.initial_geometries.items()
+        }
+        self.smile_names = smile_names or {}
         self.packmol_random_seed = packmol_random_seed
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
         self.state_file = state_file
+
+    def _get_input_settings(
+        self,
+        smiles: Dict[str, int],
+        box: List[float],
+        charged_mols: List[openff.toolkit.topology.Molecule],
+    ) -> Dict:
+        atom_types = smiles_to_atom_type_array(smiles)
+        atom_resnames = smiles_to_resname_array(smiles, self.smile_names)
+        initial_geometries = {smile: geo for smile, geo in self.initial_geometries.items() if smile in smiles}
+        partial_charges = {mol.to_smiles(): mol.partial_charges._value for mol in charged_mols}
+        settings_dict = {
+            "smile_counts": smiles,
+            "box": box,
+            "force_field": self.force_field,
+            "temperature": self.temperature,
+            "step_size": self.step_size,
+            "friction_coefficient": self.friction_coefficient,
+            "partial_charge_method": self.partial_charge_method,
+            "partial_charge_scaling": self.partial_charge_scaling,
+            "partial_charges": partial_charges,
+            "initial_geometries": initial_geometries,
+            "smile_names": self.smile_names,
+            "atom_types": atom_types,
+            "atom_resnames": atom_resnames,
+        }
+        return settings_dict
 
     def get_input_set(  # type: ignore
         self,
@@ -134,15 +191,15 @@ class OpenMMSolutionGen(InputGenerator):
         Returns:
             an OpenMM.InputSet
         """
-        smiles = {smile: count for smile, count in smiles.items() if count > 0}
         assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
+        smiles = {smile: count for smile, count in smiles.items() if count > 0}
+        # create dynamic openmm objects with internal methods
+        topology = get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
         coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
-        # create dynamic openmm objects with internal methods
-        topology = get_openmm_topology(smiles)
         smile_strings = list(smiles.keys())
-        system = parameterize_system(
+        system, charged_mols = parameterize_system(
             topology,
             smile_strings,
             box,
@@ -150,6 +207,7 @@ class OpenMMSolutionGen(InputGenerator):
             self.partial_charge_method,
             self.partial_charge_scaling,
             self.partial_charges,
+            return_charged_mols=True,
         )
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
@@ -176,6 +234,7 @@ class OpenMMSolutionGen(InputGenerator):
             integrator_file=self.integrator_file,
             state_file=self.state_file,
         )
+        input_set.settings = self._get_input_settings(smiles, box, charged_mols)
         return input_set
 
 
@@ -191,7 +250,7 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
     def get_input_set(  # type: ignore
         self,
         smiles: Dict[str, int],
-        reaction: AlchemicalReaction = None,
+        reaction: AlchemicalReaction,
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ) -> InputSet:

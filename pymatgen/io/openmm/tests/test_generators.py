@@ -37,7 +37,7 @@ class TestOpenMMSolutionGen:
     #  TODO: add test for formally charged smile
 
     def test_get_input_set(self):
-        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        generator = OpenMMSolutionGen(packmol_random_seed=1, smile_names={"O": "H2O"})
         input_set = generator.get_input_set({"O": 200, "CCO": 20}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
@@ -46,6 +46,8 @@ class TestOpenMMSolutionGen:
             "integrator.xml",
             "state.xml",
         }
+        assert set(input_set.settings["atom_resnames"]) == {"CCO", "H2O"}
+        assert len(input_set.settings["atom_types"]) == 780
         assert input_set.validate()
 
     def test_get_input_set_big_smile(self):
@@ -53,9 +55,7 @@ class TestOpenMMSolutionGen:
             packmol_random_seed=1,
             partial_charge_method="mmff94",
         )
-        big_smile = (
-            "O=C(OC(C)(C)CC/1=O)C1=C(O)/CCCCCCCC/C(NCCN(CCN)CCN)=C2C(OC(C)(C)CC/2=O)=O"
-        )
+        big_smile = "O=C(OC(C)(C)CC/1=O)C1=C(O)/CCCCCCCC/C(NCCN(CCN)CCN)=C2C(OC(C)(C)CC/2=O)=O"
         input_set = generator.get_input_set({"O": 200, big_smile: 1}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
@@ -74,9 +74,7 @@ class TestOpenMMSolutionGen:
             partial_charge_scaling={"Li": 0.9, "PF6": 0.9},
             packmol_random_seed=1,
         )
-        input_set = generator.get_input_set(
-            {"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1
-        )
+        input_set = generator.get_input_set({"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
@@ -95,9 +93,7 @@ class TestOpenMMSolutionGen:
             packmol_random_seed=1,
             force_field={"O": "spce"},
         )
-        input_set = generator.get_input_set(
-            {"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1
-        )
+        input_set = generator.get_input_set({"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
@@ -107,8 +103,11 @@ class TestOpenMMSolutionGen:
         }
         assert input_set.validate()
 
-    def test_formal_charge(self):
+    def test_get_input_set_w_geometries(self):
+        # TODO: add test for initial_geometries kwarg
+        return
 
+    def test_formal_charge(self):
         trimer_smile = (
             "O=C1[C@H]([C@H](OC(O)=C1/C(CCCCCCCC/C(O[H])=C2C(["
             "C@H]([C@H](OC/2=O)C(C)C)C)=O)=[NH+]/CCN(CC/[NH+]=C("
@@ -142,9 +141,7 @@ class TestOpenMMAlchemyGen:
     def test_get_alchemical_input_set(self, acetic_ethanol_condensation):
         generator = OpenMMAlchemyGen(force_field="sage")
         input_set = generator.get_input_set(
-            {"O": 200, "CC(=O)O": 10, "CCO": 10},
-            reaction=acetic_ethanol_condensation,
-            density=1,
+            {"O": 200, "CC(=O)O": 10, "CCO": 10}, reaction=acetic_ethanol_condensation, density=1
         )
         assert input_set
 

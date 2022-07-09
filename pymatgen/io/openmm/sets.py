@@ -11,6 +11,7 @@ from monty.json import MontyDecoder
 
 # openmm
 import openmm
+from openmm.openmm import Platform
 import openff
 from openmm.app import Simulation, PME
 from openmm.app.modeller import Modeller
@@ -57,7 +58,7 @@ class OpenMMSet(InputSet):
     ):
         """
         Instantiates an InputSet from a directory containing a Topology PDB, a
-        System XML, a Integrator XML, and (optionally) a State XML. If no State
+        System XML, an Integrator XML, and (optionally) a State XML. If no State
         is given, system coordinates must be manually assigned.
 
         Args:
@@ -87,9 +88,7 @@ class OpenMMSet(InputSet):
             integrator_file=integrator_file,
         )
         if Path(source_dir / state_file).is_file():
-            openmm_set.inputs[state_file] = StateInput.from_file(
-                source_dir / state_file
-            )
+            openmm_set.inputs[state_file] = StateInput.from_file(source_dir / state_file)
             openmm_set.state_file = state_file  # should this be a dict-like assignment?
         return openmm_set
 
@@ -113,7 +112,7 @@ class OpenMMSet(InputSet):
 
     def get_simulation(
         self,
-        platform: Optional[Union[str, openmm.Platform]] = None,
+        platform: Optional[Union[str, openmm.openmm.Platform]] = None,  # type: ignore
         platformProperties: Optional[Dict[str, str]] = None,
     ) -> Simulation:
         """
@@ -130,7 +129,7 @@ class OpenMMSet(InputSet):
         system_input = self.inputs[self.system_file]
         integrator_input = self.inputs[self.integrator_file]
         if isinstance(platform, str):
-            platform = openmm.Platform.getPlatformByName(platform)
+            platform = openmm.openmm.Platform.getPlatformByName(platform)  # type: ignore
         simulation = Simulation(
             topology_input.get_topology(),  # type: ignore
             system_input.get_system(),  # type: ignore
@@ -151,7 +150,7 @@ class OpenMMAlchemySet(OpenMMSet):
     """
 
     @classmethod
-    def from_directory(cls, directory: Union[str, Path], rxn_atoms_file="reaction_spec.json", **kwargs):
+    def from_directory(cls, directory: Union[str, Path], rxn_atoms_file="reaction_spec.json", **kwargs):  # type: ignore
         input_set = super().from_directory(directory, **kwargs)
         source_dir = Path(directory)
         with open(source_dir / rxn_atoms_file) as file:
@@ -170,7 +169,7 @@ class OpenMMAlchemySet(OpenMMSet):
         steps_per_cycle,
         initial_steps: int = 0,
         cutoff_distance: float = 4,
-        platform: Optional[Union[str, openmm.Platform]] = None,
+        platform: Optional[Union[str, Platform]] = None,
         platformProperties: Optional[Dict[str, str]] = None,
     ):
         """
@@ -187,7 +186,7 @@ class OpenMMAlchemySet(OpenMMSet):
         system = self.inputs[self.system_file].get_system()
         integrator_input = self.inputs[self.integrator_file]
         if isinstance(platform, str):
-            platform = openmm.Platform.getPlatformByName(platform)
+            platform = Platform.getPlatformByName(platform)
         assert hasattr(self, "state_file") and self.state_file, "an AlchemySet must have a state to run"
         state = self.inputs[self.state_file].get_state()
         for i in range(n_cycles):
