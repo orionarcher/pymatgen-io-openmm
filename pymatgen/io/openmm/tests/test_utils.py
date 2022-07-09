@@ -10,6 +10,7 @@ from openff.toolkit.typing.engines import smirnoff
 from openmm.unit import elementary_charge
 from openmm.openmm import NonbondedForce
 
+from pymatgen.io.openmm.inputs import TopologyInput, StateInput
 from pymatgen.io.openmm.utils import (
     get_box,
     smile_to_molecule,
@@ -29,6 +30,8 @@ from pymatgen.io.openmm.utils import (
     smiles_to_atom_type_array,
     smiles_to_resname_array,
     xyz_to_molecule,
+    smiles_in_topology,
+    get_obmol,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -42,6 +45,7 @@ from pymatgen.io.openmm.tests.datafiles import (
     FEC_charges,
     Li_charges,
     PF6_charges,
+    alchemy_input_set_path,
 )
 
 
@@ -206,6 +210,24 @@ def test_get_openmm_topology():
     fec_smile = "O=C1OC[C@H](F)O1"
     topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
     assert topology.getNumAtoms() == 950
+
+
+def test_get_obmol():
+    obmol = get_obmol({"O": 200, "CCO": 20})
+    return obmol
+
+
+def test_smiles_in_topology():
+    topology = get_openmm_topology({"O": 200, "CCO": 20})
+    unique_smiles = smiles_in_topology(topology)
+    assert set(unique_smiles) == {"CCO", "O"}
+    topology2_path = alchemy_input_set_path / "topology.pdb"
+    state_path = alchemy_input_set_path / "state.xml"
+    state = StateInput.from_file(state_path).get_state()
+    positions = state.getPositions(asNumpy=True)._value
+    topology2 = TopologyInput.from_file(topology2_path).get_topology()
+    unique_smiles = smiles_in_topology(topology2, positions)
+    assert set(unique_smiles) == {"CCO", "O", "CC(=O)O"}
 
 
 @pytest.mark.parametrize(

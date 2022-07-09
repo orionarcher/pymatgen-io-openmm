@@ -47,7 +47,7 @@ class TopologyInput(InputFile):
 
     @staticmethod
     def _serialize(topology, positions) -> str:
-        if not positions:
+        if positions is None:
             positions = np.zeros(shape=(topology.getNumAtoms(), 3))
         with io.StringIO() as s:
             PDBFile.writeFile(topology, positions, file=s)

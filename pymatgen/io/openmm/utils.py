@@ -1,13 +1,14 @@
 """
 Utility functions for OpenMM simulation setup.
 """
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Optional
 import pathlib
 from pathlib import Path
 import warnings
 import tempfile
 
 import numpy as np
+import openbabel
 from openbabel import pybel
 import parmed
 import rdkit
@@ -27,8 +28,9 @@ from openmmforcefields.generators import (
 
 import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
-from pymatgen.io.xyz import XYZ
+from pymatgen.io.openmm.inputs import TopologyInput
 from pymatgen.io.packmol import PackmolBoxGen
+from pymatgen.io.xyz import XYZ
 
 
 def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
@@ -335,6 +337,74 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
     return combined_structs.topology
 
 
+"""
+Plan:
+1. pack mol with geometries generated from openbabel
+2. create an appropriate topology file
+3. infer bonding with OpenBabel, THIS SHOULD WORK
+4. test that it works with an array of smiles
+5. test adding bonds and removing bonds
+6. test regenerating PDB
+7. test regenerating unique mols
+8. implement and loop!
+"""
+
+
+def get_obmol(smiles: Dict[str, int]):
+    """
+    temp
+    """
+    mol = pybel.readstring("smi", "O")
+    mol2 = pybel.readstring("smi", "O")
+    mol.addh()
+    mol2.addh()
+
+    mol2_atoms = list(openbabel.OBMolAtomIter(mol2.OBMol))
+    mol2_bonds = list(openbabel.OBMolBondIter(mol2.OBMol))
+    atom = mol2_atoms[0]
+    mol2_bonds[0]
+    for atom in mol2_atoms:
+        mol.OBMol.AddAtom(atom)
+
+    ob_mol = mol.OBMol
+
+    list(smiles.values())
+
+    combined_mol = openbabel.OBMol()
+    for smile, count in smiles.items():
+        mol = pybel.readstring("smi", smile)
+        mol.addh()
+        ob_mol = mol.OBMol
+        combined_mol.AddResidue(ob_mol)
+        for i in range(count):
+            return
+
+    return
+
+
+def smiles_in_topology(topology: openmm.app.Topology, positions: Optional[Union[List, np.ndarray]] = None):
+    """
+    Extracts all the unique SMILEs from a OpenMM topology.
+
+    Args:
+        topology: an OpenMM.Topology
+
+    Returns:
+        list of unique smiles
+
+    """
+    topology_str = TopologyInput(topology, positions).get_string()
+    all_ob_mols = pybel.readstring("pdb", topology_str).OBMol.Separate()
+    smiles = []
+    for ob_mol in all_ob_mols:
+        ob_mol.PerceiveBondOrders()
+        pb_mol = pybel.Molecule(ob_mol)
+        smile = pb_mol.write("smi").strip()
+        smiles.append(smile)
+    unique_smiles = np.unique(smiles)
+    return list(unique_smiles)
+
+
 def add_mol_charges_to_forcefield(
     forcefield: smirnoff.ForceField,
     charged_openff_mol: List[openff.toolkit.topology.Molecule],
@@ -590,3 +660,17 @@ def parameterize_system(
     if return_charged_mols:
         return system, charged_mols
     return system
+
+
+def topology_to_universe(topology: Topology):
+    """
+    probably no longer needed.
+    """
+    return
+
+
+def get_atom_ix_in_universe(universe, select_strings):
+    """
+    given a universe and select strings, this will return the indices of the selected atoms.
+    """
+    return
