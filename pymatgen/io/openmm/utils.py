@@ -394,8 +394,13 @@ def assign_charges_to_mols(
                 break
         if not is_isomorphic:
             # assign partial charges if there was no match
-            openff_mol.assign_partial_charges(partial_charge_method)
-            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+            if openff_mol.n_atoms == 1:
+                # the total_charge should be used, am1bcc will fail on a single atom
+                chg = Quantity(np.array([openff_mol.total_charge._value]), unit=elementary_charge)
+                openff_mol.partial_charges = chg
+            else:
+                openff_mol.assign_partial_charges(partial_charge_method)
+                openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
         # finally, add charged mol to force_field
         charged_mols.append(openff_mol)
         # return a warning if some partial charges were not matched to any mol_xyz
