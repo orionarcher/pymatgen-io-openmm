@@ -49,6 +49,7 @@ class AlchemicalReaction(MSONable):
         self.delete_bonds = delete_bonds if delete_bonds else []
         self.delete_atoms = delete_atoms if delete_atoms else []
 
+    # TODO: make sure things dont break if there are multiple possible reactions
     # TODO: need to make sure that we won't get an error if something reacts with itself
 
     @staticmethod
