@@ -181,7 +181,7 @@ class OpenMMSolutionGen(InputGenerator):
         Args:
             smiles: keys are smiles and values are number of that molecule to pack
             density: the density of the system. density OR box must be given as an argument.
-            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi] with coordinates given in Angstroms. Density OR box must be given as an argument.
 
         Returns:
             an OpenMM.InputSet
