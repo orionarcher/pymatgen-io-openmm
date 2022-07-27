@@ -16,7 +16,7 @@ from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 import openmm
 from openmm.openmm import System
-from openmm.unit import elementary_charge
+from openmm.unit import Quantity, elementary_charge
 from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
 from openmm.app.forcefield import PME
