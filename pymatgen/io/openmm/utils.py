@@ -575,10 +575,11 @@ def parameterize_system(
             template = assign_small_molecule_ff(molecules=[mol], forcefield_name=ff_name)
             forcefield_omm.registerTemplateGenerator(template.generator)
 
+    # OpenMM expects cutoff and box vectors in nm, but box is in Angstrom. Convert.
+    box = np.divide(box, 10)
     box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
     # NOTE: cutoff is in nm, not Angstrom!
-    # box_size is calculated in Angstrom. Convert to nm here
-    nonbondedCutoff = min(1, box_size // 20)
+    nonbondedCutoff = min(1, box_size // 2)
     # TODO: Make insensitive to input units
     periodic_box_vectors = np.array(
         [

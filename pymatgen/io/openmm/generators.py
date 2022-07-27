@@ -210,7 +210,9 @@ class OpenMMSolutionGen(InputGenerator):
             self.step_size * picoseconds,
         )
         context = Context(system, integrator)
-        context.setPositions(coordinates)
+        # context.setPositions needs coordinates in nm, but we have them in 
+        # Angstrom from packmol. Convert.
+        context.setPositions(np.divide(coordinates,10))
         state = context.getState(getPositions=True)
         # instantiate input files and feed to input_set
         topology_input = TopologyInput(topology)
