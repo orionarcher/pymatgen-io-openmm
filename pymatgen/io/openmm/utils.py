@@ -265,6 +265,7 @@ def get_coordinates(
     box: List[float],
     random_seed: int = -1,
     smile_geometries: Dict[str, pymatgen.core.Molecule] = None,
+    packmol_timeout: int = 30,
 ) -> np.ndarray:
     """
     Pack the box with the molecules specified by smiles.
@@ -276,6 +277,8 @@ def get_coordinates(
         smile_geometries: a dictionary of smiles and their respective geometries. The
             geometries can be pymatgen Molecules or any file with geometric information
             that can be parsed by OpenBabel.
+        packmol_timeout: the number of seconds to wait for packmol to finish before
+            raising an Error.
 
     Returns:
         array of coordinates for each atom in the box.
@@ -309,7 +312,7 @@ def get_coordinates(
     with tempfile.TemporaryDirectory() as scratch_dir:
         pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
         pw.write_input(scratch_dir)
-        pw.run(scratch_dir)
+        pw.run(scratch_dir, timeout=packmol_timeout)
         coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
     raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
     return raw_coordinates
@@ -394,8 +397,13 @@ def assign_charges_to_mols(
                 break
         if not is_isomorphic:
             # assign partial charges if there was no match
-            openff_mol.assign_partial_charges(partial_charge_method)
-            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+            if openff_mol.n_atoms == 1:
+                # the total_charge should be used, am1bcc will fail on a single atom
+                chg = np.array([openff_mol.total_charge._value]) * charge_scaling * elementary_charge
+                openff_mol.partial_charges = chg
+            else:
+                openff_mol.assign_partial_charges(partial_charge_method)
+                openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
         # finally, add charged mol to force_field
         charged_mols.append(openff_mol)
         # return a warning if some partial charges were not matched to any mol_xyz
@@ -584,8 +592,11 @@ def parameterize_system(
             template = assign_small_molecule_ff(molecules=[mol], forcefield_name=ff_name)
             forcefield_omm.registerTemplateGenerator(template.generator)
 
+    # OpenMM expects cutoff and box vectors in nm, but box is in Angstrom. Convert.
+    box = np.divide(box, 10)
     box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
-    nonbondedCutoff = min(10, box_size // 2)
+    # NOTE: cutoff is in nm, not Angstrom!
+    nonbondedCutoff = min(1, box_size // 2)
     # TODO: Make insensitive to input units
     periodic_box_vectors = np.array(
         [

@@ -70,8 +70,9 @@ class OpenMMSolutionGen(InputGenerator):
         partial_charge_scaling: Optional[Dict[str, float]] = None,
         partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
         initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
-        packmol_random_seed: int = -1,
         smile_names: Optional[Dict[str, str]] = None,
+        packmol_random_seed: int = -1,
+        packmol_timeout: int = 30,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
@@ -98,6 +99,8 @@ class OpenMMSolutionGen(InputGenerator):
                 pymatgen.Molecules or a path to a file with xyz information.
             smile_names: A dictionary of smiles and common names.
             packmol_random_seed: The random seed for Packmol. If -1, a random seed will be generated.
+            packmol_timeout: the number of seconds to wait for packmol to finish before
+                raising an Error.
             topology_file: Location to save the Topology PDB.
             system_file: Location to save the System xml.
             integrator_file: Location to save the Integrator xml.
@@ -132,6 +135,7 @@ class OpenMMSolutionGen(InputGenerator):
         }
         self.smile_names = smile_names or {}
         self.packmol_random_seed = packmol_random_seed
+        self.packmol_timeout = packmol_timeout
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
@@ -181,7 +185,8 @@ class OpenMMSolutionGen(InputGenerator):
         Args:
             smiles: keys are smiles and values are number of that molecule to pack
             density: the density of the system. density OR box must be given as an argument.
-            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi] with coordinates given in Angstroms.
+                 Density OR box must be given as an argument.
 
         Returns:
             an OpenMM.InputSet
@@ -192,7 +197,9 @@ class OpenMMSolutionGen(InputGenerator):
         topology = get_openmm_topology(smiles)
         if box is None:
             box = get_box(smiles, density)  # type: ignore
-        coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
+        coordinates = get_coordinates(
+            smiles, box, self.packmol_random_seed, self.initial_geometries, self.packmol_timeout
+        )
         smile_strings = list(smiles.keys())
         system, charged_mols = parameterize_system(
             topology,
@@ -210,7 +217,9 @@ class OpenMMSolutionGen(InputGenerator):
             self.step_size * picoseconds,
         )
         context = Context(system, integrator)
-        context.setPositions(coordinates)
+        # context.setPositions needs coordinates in nm, but we have them in
+        # Angstrom from packmol. Convert.
+        context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
         # instantiate input files and feed to input_set
         topology_input = TopologyInput(topology)
