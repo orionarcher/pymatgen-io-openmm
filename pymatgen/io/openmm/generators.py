@@ -181,7 +181,8 @@ class OpenMMSolutionGen(InputGenerator):
         Args:
             smiles: keys are smiles and values are number of that molecule to pack
             density: the density of the system. density OR box must be given as an argument.
-            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi] with coordinates given in Angstroms.
+                 Density OR box must be given as an argument.
 
         Returns:
             an OpenMM.InputSet
@@ -210,7 +211,9 @@ class OpenMMSolutionGen(InputGenerator):
             self.step_size * picoseconds,
         )
         context = Context(system, integrator)
-        context.setPositions(coordinates)
+        # context.setPositions needs coordinates in nm, but we have them in
+        # Angstrom from packmol. Convert.
+        context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
         # instantiate input files and feed to input_set
         topology_input = TopologyInput(topology)
