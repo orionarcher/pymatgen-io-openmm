@@ -49,13 +49,13 @@ class TestOpenMMSolutionGen:
         assert input_set.validate()
 
     def test_dump_load_input_set(self):
-        generator = OpenMMSolutionGen(packmol_random_seed=1, smile_names={"O": "H2O"})
+        generator1 = OpenMMSolutionGen(packmol_random_seed=1, smile_names={"O": "H2O"})
         with tempfile.TemporaryDirectory() as tmpdir:
 
-            monty.serialization.dumpfn(generator, tmpdir + "/generator.json")
-            monty.serialization.loadfn(tmpdir + "/generator.json")
-            # TODO: currently failing equality test due to bug
-            # assert input_set == input_set2
+            monty.serialization.dumpfn(generator1, tmpdir + "/generator.json")
+            generator2 = monty.serialization.loadfn(tmpdir + "/generator.json")
+
+        assert generator1.as_dict() == generator2.as_dict()
 
     def test_get_input_set_big_smile(self):
         generator = OpenMMSolutionGen(
