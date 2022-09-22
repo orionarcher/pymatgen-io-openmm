@@ -244,22 +244,23 @@ def test_assign_charges_to_mols():
     # set up force field
     ethanol_smile = "CCO"
     fec_smile = "O=C1OC[C@H](F)O1"
+    li_smile = "[Li+]"
     openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
     charged_mols = assign_charges_to_mols(
-        [ethanol_smile, fec_smile],
+        [ethanol_smile, fec_smile, li_smile],
         "am1bcc",
         {},
         partial_charges,
     )
     openff_forcefield_scaled = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
     charged_mols_scaled = assign_charges_to_mols(
-        [ethanol_smile, fec_smile],
+        [ethanol_smile, fec_smile, li_smile],
         "am1bcc",
-        {ethanol_smile: 0.9, fec_smile: 0.9},
+        {ethanol_smile: 0.9, fec_smile: 0.9, li_smile: 0.9},
         partial_charges,
     )
     # construct a System to make testing easier
-    topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
+    topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50, li_smile: 1})
     openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
     openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols_scaled)
     system = openff_forcefield.create_openmm_system(
@@ -267,14 +268,14 @@ def test_assign_charges_to_mols():
         charge_from_molecules=charged_mols,
     )
     system_scaled = openff_forcefield_scaled.create_openmm_system(
-        openff_topology_scaled,
-        charge_from_molecules=charged_mols_scaled,
+        openff_topology_scaled, charge_from_molecules=charged_mols_scaled, allow_nonintegral_charges=True
     )
     # ensure that all forces are from our assigned force field
     # this does not ensure correct ordering, as we already test that with
     # other methods
     fec_charges_reordered = fec_charges[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
     full_partial_array = np.append(np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50))
+    full_partial_array = np.append(full_partial_array, np.array([1]))
     for force in system.getForces():
         if type(force) == NonbondedForce:
             charge_array = np.zeros(force.getNumParticles())
