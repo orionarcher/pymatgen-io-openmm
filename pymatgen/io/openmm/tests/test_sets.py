@@ -44,6 +44,8 @@ class TestOpenMMSet:
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
 
+        assert input_set1.as_dict() == input_set2.as_dict()
+
         assert input_set1.keys() == input_set2.keys()
 
         topology1 = input_set1.inputs["topology.pdb"].topology
