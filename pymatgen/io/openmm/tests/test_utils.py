@@ -183,7 +183,7 @@ def test_get_coordinates_added_geometry():
         smile_geometries={"F[P-](F)(F)(F)(F)F": pf6_geometry},
     )
     assert len(coordinates) == 7
-    np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6)
+    np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6, 3)
     with open(trimer_txt) as file:
         trimer_smile = file.read()
     trimer_geometry = xyz_to_molecule(trimer_pdb)
