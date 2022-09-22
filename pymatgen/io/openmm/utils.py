@@ -16,7 +16,7 @@ from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 import openmm
 from openmm.openmm import System
-from openmm.unit import Quantity, elementary_charge
+from openmm.unit import elementary_charge
 from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
 from openmm.app.forcefield import PME
@@ -396,7 +396,7 @@ def assign_charges_to_mols(
             # assign partial charges if there was no match
             if openff_mol.n_atoms == 1:
                 # the total_charge should be used, am1bcc will fail on a single atom
-                chg = Quantity(np.array([openff_mol.total_charge._value]), unit=elementary_charge)
+                chg = np.array([openff_mol.total_charge._value]) * charge_scaling * elementary_charge
                 openff_mol.partial_charges = chg
             else:
                 openff_mol.assign_partial_charges(partial_charge_method)
