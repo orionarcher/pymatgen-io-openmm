@@ -41,14 +41,15 @@ class TestOpenMMSet:
 
         input_set1 = OpenMMSet.from_directory(input_set_path)
         with tempfile.TemporaryDirectory() as tmpdir:
-
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
 
         assert input_set1.keys() == input_set2.keys()
+
         topology1 = input_set1.inputs["topology.pdb"].topology
         topology2 = input_set2.inputs["topology.pdb"].topology
         assert topology1 == topology2
+
         for file in ["state.xml", "integrator.xml", "system.xml"]:
             openmm_object1 = input_set1.inputs[file].openmm_object
             openmm_object2 = input_set2.inputs[file].openmm_object
