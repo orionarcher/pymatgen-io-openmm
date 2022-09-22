@@ -265,6 +265,7 @@ def get_coordinates(
     box: List[float],
     random_seed: int = -1,
     smile_geometries: Dict[str, pymatgen.core.Molecule] = None,
+    packmol_timeout: int = 30,
 ) -> np.ndarray:
     """
     Pack the box with the molecules specified by smiles.
@@ -276,6 +277,8 @@ def get_coordinates(
         smile_geometries: a dictionary of smiles and their respective geometries. The
             geometries can be pymatgen Molecules or any file with geometric information
             that can be parsed by OpenBabel.
+        packmol_timeout: the number of seconds to wait for packmol to finish before
+            raising an Error.
 
     Returns:
         array of coordinates for each atom in the box.
@@ -309,7 +312,7 @@ def get_coordinates(
     with tempfile.TemporaryDirectory() as scratch_dir:
         pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
         pw.write_input(scratch_dir)
-        pw.run(scratch_dir)
+        pw.run(scratch_dir, timeout=packmol_timeout)
         coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
     raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
     return raw_coordinates
