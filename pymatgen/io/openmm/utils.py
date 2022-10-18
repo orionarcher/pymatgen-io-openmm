@@ -241,6 +241,8 @@ def infer_openff_mol(
     Infer an OpenFF molecule from xyz coordinates.
     """
     with tempfile.NamedTemporaryFile() as f:
+        # TODO: allow for Molecule graphs
+        # TODO: build a MoleculeGraph -> OpenFF mol direct converter
         # these next 4 lines are cursed
         pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
         pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
@@ -372,6 +374,7 @@ def assign_charges_to_mols(
     Returns:
        List of charged openff Molecules
     """
+    # TODO: allow for Molecule graphs in partial charges, (or just pass in PC directly?)
     # loop through partial charges to add to force field
     matched_mols = set()
     inferred_mols = set()
