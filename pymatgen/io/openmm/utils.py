@@ -604,3 +604,13 @@ def parameterize_system(
     if return_charged_mols:
         return system, charged_mols
     return system
+
+
+def molgraph_to_openff_mol():
+    # TODO: write molgraph_to_openff_mol function
+    return
+
+
+def openff_mol_to_molgraph():
+    # TODO: write openff_mol_to_molgraph function
+    return
