@@ -7,6 +7,7 @@ from pathlib import Path
 import warnings
 import tempfile
 
+import networkx as nx
 import numpy as np
 from openbabel import pybel
 import parmed
@@ -606,11 +607,25 @@ def parameterize_system(
     return system
 
 
-def molgraph_to_openff_mol():
+def molgraph_to_openff_mol(molgraph):
+    openff_mol = openff.toolkit.topology.Molecule()
+    for atom in molgraph.graph.nodes:
+        charge = atom.get("charge") or 0
+        number = atom.get("specie") or 0
+        return charge, number
+    for i, j, data in molgraph.graph.edges(data=True):
+        bond_order = data.get("weight", 1)
+        openff_mol = openff.toolkit.topology.Molecule()
+        return bond_order, openff_mol
+    return openff_mol
+
     # TODO: write molgraph_to_openff_mol function
     return
 
 
 def openff_mol_to_molgraph():
+    # store charges in node attributes
+
+    nx.set_node_attributes()
     # TODO: write openff_mol_to_molgraph function
     return
