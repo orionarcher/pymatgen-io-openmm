@@ -619,50 +619,70 @@ def molgraph_to_openff_mol(molgraph):
     Returns:
 
     """
+    # create empty openff_mol and prepa
     p_table = {str(el): el.Z for el in Element}
     openff_mol = openff.toolkit.topology.Molecule()
-    formal_charge = molgraph.molecule.charge
+    # TODO: assert all charged or all not charged?
+
+    # set atom properties
     partial_charges = []
-    # TODO: assert all charged or not?
     for i, site in enumerate(molgraph.molecule):
-        # atom_data = molgraph.graph.nodes[i]
         # put formal charge on first atom if there is none present
-        formal_charge = site.properties.get("formal_charge") or (i == 0) * formal_charge
+        formal_charge = site.properties.get("formal_charge") or (i == 0) * molgraph.molecule.charge
         # get specie from molecule
         atomic_number = p_table[site.specie.symbol]
         # assume not aromatic if no info present
         is_aromatic = site.properties.get("is_aromatic") or False
         partial_charges.append(site.properties.get("partial_charge") or 0.0)
         openff_mol.add_atom(atomic_number, formal_charge, is_aromatic=is_aromatic)
-    for i, j, bond_data in molgraph.graph.edges(data=True):
-        # default to single bond
-        bond_order = bond_data.get("weight", 1) or 1
-        # assume not aromatic if no info present
-        is_aromatic = bond_data.get("is_aromatic") or False
-        openff_mol.add_bond(i, j, bond_order, is_aromatic=is_aromatic)
-    partial_charge_array = np.array(partial_charges)
+
     # write formal charge to first partial charge if no partial charges present
+    partial_charge_array = np.array(partial_charges)
     if np.all(partial_charge_array == 0.0):
         partial_charge_array[0] = formal_charge
     openff_mol.partial_charges = partial_charge_array * elementary_charge
+
+    # set edge properties, default to single bond and assume not aromatic
+    for i, j, bond_data in molgraph.graph.edges(data=True):
+        bond_order = bond_data.get("weight", 1) or 1
+        is_aromatic = bond_data.get("is_aromatic") or False
+        openff_mol.add_bond(i, j, bond_order, is_aromatic=is_aromatic)
+
     openff_mol.add_conformer(molgraph.molecule.cart_coords * angstrom)
     return openff_mol
 
 
 def openff_mol_to_molgraph(openff_mol):
+    """
+    # TODO: document this!
+
+    Args:
+        openff_mol:
+
+    Returns:
+
+    """
+    # set up coords and species
     p_table = {el.Z: str(el) for el in Element}
     if openff_mol.n_conformers > 0:
         coords = openff_mol.conformers[0]._value
     else:
         coords = np.zeros((openff_mol.n_atoms, 3))
     species = [p_table[atom.atomic_number] for atom in openff_mol.atoms]
+
+    # create initial molecule
     mol = Molecule(species=species, coords=coords)
+
+    # set site properties based on openff molecule
     for i, atom in enumerate(openff_mol.atoms):
         mol[i].properties["formal_charge"] = atom.formal_charge
         mol[i].properties["is_aromatic"] = atom.is_aromatic
         mol[i].properties["partial_charge"] = atom.partial_charge
+
+    # create molgraph and set graph attributes
     molgraph = MoleculeGraph.with_empty_graph(molecule=mol, name=openff_mol.name)
     molgraph.set_node_attributes()
+
     # store charges in node attributes
     for bond in openff_mol.bonds:
         molgraph.graph.add_edge(
