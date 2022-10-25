@@ -7,7 +7,6 @@ from pathlib import Path
 import warnings
 import tempfile
 
-import networkx as nx
 import numpy as np
 from openbabel import pybel
 import parmed
@@ -665,16 +664,11 @@ def openff_mol_to_molgraph(openff_mol):
     molgraph = MoleculeGraph.with_empty_graph(molecule=mol, name=openff_mol.name)
     molgraph.set_node_attributes()
     # store charges in node attributes
-    for i, bond in enumerate(openff_mol.bonds):
+    for bond in openff_mol.bonds:
         molgraph.graph.add_edge(
             bond.atom1_index,
             bond.atom2_index,
             weight=bond.bond_order,
             edge_properties={"is_aromatic": bond.is_aromatic},
         )
-        return
-    for bond in openff_mol.bonds:
-        bond
-    nx.set_node_attributes()
-    # TODO: write openff_mol_to_molgraph function
-    return
+    return molgraph
