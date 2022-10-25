@@ -31,6 +31,8 @@ from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
 from pymatgen.core.periodic_table import Element
+from pymatgen.analysis.graphs import MoleculeGraph
+from pymatgen.core.structure import Molecule
 
 
 def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
@@ -623,15 +625,15 @@ def molgraph_to_openff_mol(molgraph):
     formal_charge = molgraph.molecule.charge
     partial_charges = []
     # TODO: assert all charged or not?
-    for i in molgraph.graph.nodes:
-        atom_data = molgraph.graph.nodes[i]
+    for i, site in enumerate(molgraph.molecule):
+        # atom_data = molgraph.graph.nodes[i]
         # put formal charge on first atom if there is none present
-        formal_charge = atom_data.get("formal_charge") or (i == 0) * formal_charge
+        formal_charge = site.properties.get("formal_charge") or (i == 0) * formal_charge
         # get specie from molecule
-        atomic_number = p_table[atom_data.get("specie")]
+        atomic_number = p_table[site.specie.symbol]
         # assume not aromatic if no info present
-        is_aromatic = atom_data.get("is_aromatic") or False
-        partial_charges.append(atom_data.get("partial_charge") or 0.0)
+        is_aromatic = site.properties.get("is_aromatic") or False
+        partial_charges.append(site.properties.get("partial_charge") or 0.0)
         openff_mol.add_atom(atomic_number, formal_charge, is_aromatic=is_aromatic)
     for i, j, bond_data in molgraph.graph.edges(data=True):
         # default to single bond
@@ -648,9 +650,31 @@ def molgraph_to_openff_mol(molgraph):
     return openff_mol
 
 
-def openff_mol_to_molgraph():
+def openff_mol_to_molgraph(openff_mol):
+    p_table = {el.Z: str(el) for el in Element}
+    if openff_mol.n_conformers > 0:
+        coords = openff_mol.conformers[0]._value
+    else:
+        coords = np.zeros((openff_mol.n_atoms, 3))
+    species = [p_table[atom.atomic_number] for atom in openff_mol.atoms]
+    mol = Molecule(species=species, coords=coords)
+    for i, atom in enumerate(openff_mol.atoms):
+        mol[i].properties["formal_charge"] = atom.formal_charge
+        mol[i].properties["is_aromatic"] = atom.is_aromatic
+        mol[i].properties["partial_charge"] = atom.partial_charge
+    molgraph = MoleculeGraph.with_empty_graph(molecule=mol, name=openff_mol.name)
+    molgraph.set_node_attributes()
     # store charges in node attributes
-
+    for i, bond in enumerate(openff_mol.bonds):
+        molgraph.graph.add_edge(
+            bond.atom1_index,
+            bond.atom2_index,
+            weight=bond.bond_order,
+            edge_properties={"is_aromatic": bond.is_aromatic},
+        )
+        return
+    for bond in openff_mol.bonds:
+        bond
     nx.set_node_attributes()
     # TODO: write openff_mol_to_molgraph function
     return
