@@ -381,6 +381,7 @@ def test_water_models(modela, modelb):
 def test_molgraph_to_openff_mol():
     """transform a water MoleculeGraph to a OpenFF water molecule"""
     pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
+    pf6_mol.set_charge_and_spin(charge=-1)
     pf6_graph = MoleculeGraph.with_edges(
         pf6_mol,
         {
@@ -392,7 +393,10 @@ def test_molgraph_to_openff_mol():
             (0, 6): {"weight": 1},
         },
     )
-    molgraph_to_openff_mol(pf6_graph)
+    pf6_openff = molgraph_to_openff_mol(pf6_graph)
+    pf6_graph2 = openff_mol_to_molgraph(pf6_openff)
+    pf6_openff2 = molgraph_to_openff_mol(pf6_graph2)
+    assert pf6_openff == pf6_openff2
     # TODO: add real test
     return
 
@@ -400,7 +404,14 @@ def test_molgraph_to_openff_mol():
 def test_openff_mol_to_molgraph():
     """transform a water MoleculeGraph to a OpenFF water molecule"""
     pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
-    openff_mol_to_molgraph(pf6_openff)
+    pf6_charges = np.load(PF6_charges)[[1, 0, 2, 3, 4, 5, 6]]
+    pf6_openff.partial_charges = pf6_charges * elementary_charge
+    pf6_graph = openff_mol_to_molgraph(pf6_openff)
+    assert len(pf6_graph.molecule) == 7
+    assert pf6_graph.molecule.charge == -1
 
+    pf6_openff2 = molgraph_to_openff_mol(pf6_graph)
+    assert pf6_openff.to_smiles() == pf6_openff2.to_smiles()
+    assert pf6_openff == pf6_openff2
     # TODO: add real test
     return
