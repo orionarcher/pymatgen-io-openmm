@@ -651,7 +651,6 @@ def molgraph_to_openff_mol(molgraph):
     partial_charge_array = np.array(partial_charges)
     if np.all(partial_charge_array == 0.0):
         partial_charge_array[0] = molgraph.molecule.charge
-    openff_mol.partial_charges = partial_charge_array * elementary_charge
 
     # set edge properties, default to single bond and assume not aromatic
     for i, j, bond_data in molgraph.graph.edges(data=True):
@@ -660,6 +659,7 @@ def molgraph_to_openff_mol(molgraph):
         openff_mol.add_bond(i, j, bond_order, is_aromatic=is_aromatic)
 
     openff_mol.add_conformer(molgraph.molecule.cart_coords * angstrom)
+    openff_mol.partial_charges = partial_charge_array * elementary_charge
     return openff_mol
 
 
