@@ -31,6 +31,7 @@ from pymatgen.io.openmm.utils import (
     smiles_to_resname_array,
     xyz_to_molecule,
     molgraph_to_openff_mol,
+    openff_mol_to_molgraph,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -379,9 +380,9 @@ def test_water_models(modela, modelb):
 
 def test_molgraph_to_openff_mol():
     """transform a water MoleculeGraph to a OpenFF water molecule"""
-    pf6 = pymatgen.core.Molecule.from_file(PF6_xyz)
+    pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
     pf6_graph = MoleculeGraph.with_edges(
-        pf6,
+        pf6_mol,
         {
             (0, 1): {"weight": 1},
             (0, 2): {"weight": 1},
@@ -392,4 +393,14 @@ def test_molgraph_to_openff_mol():
         },
     )
     molgraph_to_openff_mol(pf6_graph)
+    # TODO: add real test
+    return
+
+
+def test_openff_mol_to_molgraph():
+    """transform a water MoleculeGraph to a OpenFF water molecule"""
+    pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+    openff_mol_to_molgraph(pf6_openff)
+
+    # TODO: add real test
     return
