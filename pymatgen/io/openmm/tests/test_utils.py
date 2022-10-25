@@ -402,16 +402,19 @@ def test_molgraph_to_openff_mol():
 
 
 def test_openff_mol_to_molgraph():
-    """transform a water MoleculeGraph to a OpenFF water molecule"""
+    import networkx as nx
+    import networkx.algorithms.isomorphism as iso
+
     pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
     pf6_charges = np.load(PF6_charges)[[1, 0, 2, 3, 4, 5, 6]]
     pf6_openff.partial_charges = pf6_charges * elementary_charge
     pf6_graph = openff_mol_to_molgraph(pf6_openff)
     assert len(pf6_graph.molecule) == 7
     assert pf6_graph.molecule.charge == -1
-
+    em = iso.categorical_edge_match("weight", 1)
+    nm = iso.numerical_node_match(["formal_charge", "partial_charge"], [0, 0])
     pf6_openff2 = molgraph_to_openff_mol(pf6_graph)
-    assert pf6_openff.to_smiles() == pf6_openff2.to_smiles()
+    pf6_graph2 = openff_mol_to_molgraph(pf6_openff2)
+    assert nx.is_isomorphic(pf6_graph.graph, pf6_graph2.graph, edge_match=em, node_match=nm)
+    assert pf6_graph.molecule == pf6_graph2.molecule
     assert pf6_openff == pf6_openff2
-    # TODO: add real test
-    return
