@@ -609,15 +609,20 @@ def parameterize_system(
     return system
 
 
-def molgraph_to_openff_mol(molgraph):
+def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> openff.toolkit.topology.Molecule:
     """
-    TODO: document this!
+    Convert a Pymatgen MoleculeGraph to an OpenFF Molecule.
+
+    If partial charges, formal charges, and aromaticity are present in site properties
+    they will be mapped onto atoms.
+    If bond order and bond aromaticity are present in edge weights and edge properties
+    they will be mapped onto bonds.
 
     Args:
-        molgraph:
+        openff_mol: OpenFF Molecule
 
     Returns:
-
+        MoleculeGraph
     """
     # create empty openff_mol and prepa
     p_table = {str(el): el.Z for el in Element}
@@ -663,15 +668,18 @@ def molgraph_to_openff_mol(molgraph):
     return openff_mol
 
 
-def openff_mol_to_molgraph(openff_mol):
+def openff_mol_to_molgraph(openff_mol: openff.toolkit.topology.Molecule) -> MoleculeGraph:
     """
-    # TODO: document this!
+    Convert an OpenFF Molecule to a Pymatgen MoleculeGraph.
+
+    Preserves partial charges, formal charges, and aromaticity in site properties.
+    Preserves bond order in edge weights and bond aromaticity in edge properties.
 
     Args:
-        openff_mol:
+        openff_mol: OpenFF Molecule
 
     Returns:
-
+        MoleculeGraph
     """
     # set up coords and species
     p_table = {el.Z: str(el) for el in Element}
@@ -697,11 +705,6 @@ def openff_mol_to_molgraph(openff_mol):
             mol[i].properties["partial_charge"] /= elementary_charge
 
         mol[i].properties["is_aromatic"] = atom.is_aromatic
-
-        mol[i].properties["partial_charge"] = atom.partial_charge
-        if isinstance(atom.partial_charge, openmm.unit.Quantity):
-            mol[i].properties["partial_charge"] /= elementary_charge
-        # TODO: quantity?
 
     # create molgraph and set graph attributes
     molgraph = MoleculeGraph.with_empty_graph(
