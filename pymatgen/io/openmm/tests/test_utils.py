@@ -3,6 +3,7 @@ import parmed
 import pytest
 import openff.toolkit.topology
 import pymatgen
+from pymatgen.analysis.graphs import MoleculeGraph
 import openmm
 from openff.toolkit.typing.engines import smirnoff
 
@@ -29,6 +30,7 @@ from pymatgen.io.openmm.utils import (
     smiles_to_atom_type_array,
     smiles_to_resname_array,
     xyz_to_molecule,
+    molgraph_to_openff_mol,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -373,3 +375,21 @@ def test_water_models(modela, modelb):
     force_b = system_b.getForces()[0].getBondParameters(0)
     # assert rOH is different for two different water models
     assert force_a[2] != force_b[2]
+
+
+def test_molgraph_to_openff_mol():
+    """transform a water MoleculeGraph to a OpenFF water molecule"""
+    pf6 = pymatgen.core.Molecule.from_file(PF6_xyz)
+    pf6_graph = MoleculeGraph.with_edges(
+        pf6,
+        {
+            (0, 1): {"weight": 1},
+            (0, 2): {"weight": 1},
+            (0, 3): {"weight": 1},
+            (0, 4): {"weight": 1},
+            (0, 5): {"weight": 1},
+            (0, 6): {"weight": 1},
+        },
+    )
+    molgraph_to_openff_mol(pf6_graph)
+    return
