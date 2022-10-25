@@ -17,7 +17,7 @@ from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 import openmm
 from openmm.openmm import System
-from openmm.unit import elementary_charge
+from openmm.unit import elementary_charge, angstrom
 from openmm.app import Topology
 from openmm.app import ForceField as omm_ForceField
 from openmm.app.forcefield import PME
@@ -30,6 +30,7 @@ import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
+from pymatgen.core.periodic_table import Element
 
 
 def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
@@ -608,19 +609,24 @@ def parameterize_system(
 
 
 def molgraph_to_openff_mol(molgraph):
+    p_table = {str(el): el.Z for el in Element}
     openff_mol = openff.toolkit.topology.Molecule()
-    for atom in molgraph.graph.nodes:
-        charge = atom.get("charge") or 0
-        number = atom.get("specie") or 0
-        return charge, number
-    for i, j, data in molgraph.graph.edges(data=True):
-        bond_order = data.get("weight", 1)
-        openff_mol = openff.toolkit.topology.Molecule()
-        return bond_order, openff_mol
-    return openff_mol
-
+    charge = molgraph.molecule.charge
+    # TODO: assert all charged or not?
+    for i in molgraph.graph.nodes:
+        atom_data = molgraph.graph.nodes[i]
+        # put formal charge on first atom if there is none present
+        formal_charge = atom_data.get("formal_charge") or (i == 0) * charge
+        atomic_number = p_table[atom_data.get("specie")]
+        is_aromatic = atom_data.get("is_aromatic") or False
+        openff_mol.add_atom(atomic_number, formal_charge, is_aromatic=is_aromatic)
+    for i, j, bond_data in molgraph.graph.edges(data=True):
+        bond_order = bond_data.get("weight", 1) or 1
+        is_aromatic = bond_data.get("is_aromatic") or False
+        openff_mol.add_bond(i, j, bond_order, is_aromatic=is_aromatic)
+    openff_mol.add_conformer(molgraph.molecule.cart_coords * angstrom)
     # TODO: write molgraph_to_openff_mol function
-    return
+    return openff_mol
 
 
 def openff_mol_to_molgraph():
