@@ -397,8 +397,6 @@ def test_molgraph_to_openff_mol():
     pf6_graph2 = openff_mol_to_molgraph(pf6_openff)
     pf6_openff2 = molgraph_to_openff_mol(pf6_graph2)
     assert pf6_openff == pf6_openff2
-    # TODO: add real test
-    return
 
 
 def test_openff_mol_to_molgraph():
