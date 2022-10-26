@@ -627,7 +627,6 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> openff.toolkit.topology.M
     # create empty openff_mol and prepa
     p_table = {str(el): el.Z for el in Element}
     openff_mol = openff.toolkit.topology.Molecule()
-    # TODO: assert all charged or all not charged?
 
     # set atom properties
     partial_charges = []
