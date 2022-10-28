@@ -1,6 +1,9 @@
 # base python
 import tempfile
 
+import monty
+import monty.serialization
+
 # pymatgen
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -11,6 +14,7 @@ from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.tests.datafiles import (
     input_set_dir,
     corrupted_state_path,
+    input_set_path,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -32,6 +36,26 @@ class TestOpenMMSet:
         assert len(input_set2.inputs) == 3
         assert input_set2.topology_file == "topology.pdb"
         assert input_set2.get("state_file") is None
+
+    def test_dump_load_input_set(self):
+
+        input_set1 = OpenMMSet.from_directory(input_set_path)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
+            input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
+
+        assert input_set1.as_dict() == input_set2.as_dict()
+
+        assert input_set1.keys() == input_set2.keys()
+
+        topology1 = input_set1.inputs["topology.pdb"].topology
+        topology2 = input_set2.inputs["topology.pdb"].topology
+        assert topology1 == topology2
+
+        for file in ["state.xml", "integrator.xml", "system.xml"]:
+            openmm_object1 = input_set1.inputs[file].openmm_object
+            openmm_object2 = input_set2.inputs[file].openmm_object
+            assert openmm_object1 == openmm_object2
 
     def test_validate(self):
         input_set = OpenMMSet.from_directory(input_set_dir)
