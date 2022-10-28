@@ -243,6 +243,7 @@ def infer_openff_mol(
     """
     Infer an OpenFF molecule from xyz coordinates.
     """
+    # TODO: we can just have Molecule Graph be the only internal representation
     with tempfile.NamedTemporaryFile() as f:
         # TODO: allow for Molecule graphs
         # TODO: build a MoleculeGraph -> OpenFF mol direct converter
@@ -360,7 +361,7 @@ def assign_charges_to_mols(
     partial_charge_method: str,
     partial_charge_scaling: Dict[str, float],
     partial_charges: List[Tuple[pymatgen.core.Molecule, np.ndarray]],
-):
+) -> List[openff.toolkit.topology.Molecule]:
     """
 
     This will modify the original force field, not make a copy.
@@ -504,6 +505,11 @@ def assign_biopolymer_and_water_ff(openmm_forcefield: openmm.app.forcefield, for
     return openmm_forcefield
 
 
+def parameterize_system_2(topology, box, mol_dict):
+    # TODO: implement this
+    return
+
+
 def parameterize_system(
     topology: Topology,
     smile_strings: List[str],
@@ -578,7 +584,7 @@ def parameterize_system(
         for smile, charged_mol in zip(smile_strings, charged_mols):
             if smile in force_field.keys():
                 ff_name = force_field[smile]
-                if ff_name.lower() in all_small_ffs or ff_name.lower() in basic_small_ffs:
+                if ff_name.lower() in all_small_ffs + basic_small_ffs:
                     small_molecules[charged_mol] = ff_name
                 else:
                     biopolymer_or_water.append(ff_name)
@@ -637,12 +643,12 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> openff.toolkit.topology.M
             partial_charge = (i == 0) * molgraph.molecule.charge
         if isinstance(partial_charge, openmm.unit.Quantity):
             partial_charge = partial_charge / elementary_charge
+        partial_charges.append(partial_charge)
 
         # put formal charge on first atom if there is none present
         formal_charge = site.properties.get("formal_charge")
         if formal_charge is None:
             formal_charge = (i == 0) * molgraph.molecule.charge
-        partial_charges.append(partial_charge)
         if isinstance(formal_charge, openmm.unit.Quantity):
             formal_charge = formal_charge / elementary_charge
         formal_charge = round(formal_charge)

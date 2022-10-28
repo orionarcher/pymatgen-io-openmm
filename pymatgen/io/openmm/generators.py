@@ -171,6 +171,7 @@ class OpenMMSolutionGen(InputGenerator):
     def get_input_set(  # type: ignore
         self,
         smiles: Dict[str, int],
+        mol_dict: Dict[str, Union[str, int, float, tuple]] = None,  # TODO: some shit
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ) -> InputSet:
@@ -201,6 +202,9 @@ class OpenMMSolutionGen(InputGenerator):
             smiles, box, self.packmol_random_seed, self.initial_geometries, self.packmol_timeout
         )
         smile_strings = list(smiles.keys())
+        # TODO implement processing
+        # process input molecules into processed molecules and openff molecules
+        # parameterize system with just topology, box, and charged_mols ff dict
         system, charged_mols = parameterize_system(
             topology,
             smile_strings,
