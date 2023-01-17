@@ -281,8 +281,7 @@ def get_coordinates(
         box: list of [xlo, ylo, zlo, xhi, yhi, zhi]
         random_seed: the random seed used by packmol
         smile_geometries: a dictionary of smiles and their respective geometries. The
-            geometries can be pymatgen Molecules or any file with geometric information
-            that can be parsed by OpenBabel.
+            geometries must be pymatgen Molecules.
         packmol_timeout: the number of seconds to wait for packmol to finish before
             raising an Error.
 
