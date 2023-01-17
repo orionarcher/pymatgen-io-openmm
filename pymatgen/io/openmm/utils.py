@@ -699,20 +699,30 @@ def openff_mol_to_molgraph(openff_mol: openff.toolkit.topology.Molecule) -> Mole
         MoleculeGraph
     """
     # set up coords and species
-    p_table = {el.Z: str(el) for el in Element}
     if openff_mol.n_conformers > 0:
         coords = openff_mol.conformers[0] / angstrom
     else:
         coords = np.zeros((openff_mol.n_atoms, 3))
-    species = [p_table[atom.atomic_number] for atom in openff_mol.atoms]
+
+    molgraph = molgraph_from_atoms_bonds(openff_mol.atoms, openff_mol.bonds, coords=coords, name=openff_mol.name)
+    return molgraph
+
+
+def molgraph_from_atoms_bonds(atoms, bonds, coords=None, name="none"):
+    p_table = {el.Z: str(el) for el in Element}
+    atoms_list = [atom for atom in atoms]
+    if coords is None:
+        coords = np.zeros((len(atoms_list), 3))
+
+    species = [p_table[atom.atomic_number] for atom in atoms_list]
 
     # create initial molecule
     mol = Molecule(species=species, coords=coords)
-    formal_charge = sum(atom.formal_charge / elementary_charge for atom in openff_mol.atoms)
+    formal_charge = sum(atom.formal_charge / elementary_charge for atom in atoms_list)
     mol.set_charge_and_spin(charge=formal_charge)
 
     # set site properties based on openff molecule
-    for i, atom in enumerate(openff_mol.atoms):
+    for i, atom in enumerate(atoms_list):
         mol[i].properties["formal_charge"] = atom.formal_charge
         if isinstance(atom.formal_charge, openmm.unit.Quantity):
             mol[i].properties["formal_charge"] /= elementary_charge
@@ -724,13 +734,11 @@ def openff_mol_to_molgraph(openff_mol: openff.toolkit.topology.Molecule) -> Mole
         mol[i].properties["is_aromatic"] = atom.is_aromatic
 
     # create molgraph and set graph attributes
-    molgraph = MoleculeGraph.with_empty_graph(
-        molecule=mol, name=openff_mol.name, edge_weight_name="weight", edge_weight_units=""
-    )
+    molgraph = MoleculeGraph.with_empty_graph(molecule=mol, name=name, edge_weight_name="weight", edge_weight_units="")
     molgraph.set_node_attributes()
 
     # store charges in node attributes
-    for bond in openff_mol.bonds:
+    for bond in bonds:
         molgraph.graph.add_edge(
             bond.atom1_index,
             bond.atom2_index,
