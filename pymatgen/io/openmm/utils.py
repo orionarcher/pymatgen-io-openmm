@@ -345,6 +345,15 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
 
 
 def get_openff_topology(smiles: Dict[str, int]) -> openff.toolkit.topology.Topology:
+    """
+    Returns an openff topology with the given SMILEs at the given counts.
+
+    Parameters:
+        smiles: keys are smiles and values are number of that molecule to pack
+
+    Returns:
+        an openmm.app.Topology
+    """
     molecules = []
     for smile, count in smiles.items():
         mol = tk.topology.Molecule.from_smiles(smile)
