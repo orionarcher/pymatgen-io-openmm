@@ -12,6 +12,7 @@ from openbabel import pybel
 import parmed
 import rdkit
 import openff
+import openff.toolkit as tk
 from openff.toolkit.typing.engines import smirnoff
 from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
 import openmm
@@ -341,6 +342,14 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
     for struct, count in zip(structures, counts):
         combined_structs += struct * count
     return combined_structs.topology
+
+
+def get_openff_topology(smiles: Dict[str, int]) -> openff.toolkit.topology.Topology:
+    molecules = []
+    for smile, count in smiles.items():
+        mol = tk.topology.Molecule.from_smiles(smile)
+        molecules += [mol] * count
+    return tk.topology.Topology.from_molecules(molecules)
 
 
 def add_mol_charges_to_forcefield(

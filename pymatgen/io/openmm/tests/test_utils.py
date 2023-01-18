@@ -24,6 +24,7 @@ from pymatgen.io.openmm.utils import (
     order_molecule_like_smile,
     get_coordinates,
     get_openmm_topology,
+    get_openff_topology,
     add_mol_charges_to_forcefield,
     assign_charges_to_mols,
     parameterize_system,
@@ -209,6 +210,13 @@ def test_get_openmm_topology():
     fec_smile = "O=C1OC[C@H](F)O1"
     topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
     assert topology.getNumAtoms() == 950
+
+
+def test_get_openff_topology():
+    topology = get_openff_topology({"O": 200, "CCO": 20})
+    assert topology.n_atoms == 780
+    assert topology.n_molecules == 220
+    assert topology.n_bonds == 560
 
 
 @pytest.mark.parametrize(
