@@ -46,15 +46,22 @@ def test_xyz_to_molecule():
 
 
 def test_smiles_to_atom_type_array():
-    smiles = {"O": 5, "CCO": 2}
-    atom_type_array = smiles_to_atom_type_array(smiles)
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    mols = {O: 5, CCO: 2}
+    atom_type_array = smiles_to_atom_type_array(mols)
     assert atom_type_array[0] == 0
     assert atom_type_array[15] == 3
 
 
 def test_smiles_to_resname_array():
-    smiles = {"O": 5, "CCO": 2}
-    resname_array = smiles_to_resname_array(smiles)
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    mol_specs = [
+        {"openff_mol": O, "count": 5, "name": "O"},
+        {"openff_mol": CCO, "count": 5, "name": "CCO"},
+    ]
+    resname_array = smiles_to_resname_array(mol_specs)
     assert resname_array[0] == "O"
     assert resname_array[15] == "CCO"
 
