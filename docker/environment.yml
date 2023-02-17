@@ -1,0 +1,16 @@
+name: md
+channels:
+  - conda-forge
+dependencies:
+  - python=3.9
+  - pymatgen>=2022.3.22
+  - openmm
+  - parmed
+  - numpy
+  - pytest
+  - openbabel
+  - rdkit
+  - openff-toolkit>=0.12.0
+  - packmol
+  - openmmforcefields
+  - gcc
