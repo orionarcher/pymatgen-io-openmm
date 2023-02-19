@@ -33,9 +33,13 @@ class TestOpenMMSolutionGen:
     #  TODO: add test for formally charged smile
 
     def test_get_input_set(self):
-        generator = OpenMMSolutionGen(packmol_random_seed=1, smile_names={"O": "H2O"})
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
         # TODO: figure out why tests are failing if density is 1
-        input_set = generator.get_input_set({"O": 200, "CCO": 20}, density=0.8)
+        input_mol_dicts = [
+            {"smile": "O", "count": 200, "name": "H2O"},
+            {"smile": "CCO", "count": 20},
+        ]
+        input_set = generator.get_input_set(input_mol_dicts, density=0.8)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
@@ -49,7 +53,7 @@ class TestOpenMMSolutionGen:
         assert input_set.validate()
 
     def test_dump_load_input_set(self):
-        generator1 = OpenMMSolutionGen(packmol_random_seed=1, smile_names={"O": "H2O"})
+        generator1 = OpenMMSolutionGen(packmol_random_seed=1)
         with tempfile.TemporaryDirectory() as tmpdir:
 
             monty.serialization.dumpfn(generator1, tmpdir + "/generator.json")
@@ -62,8 +66,14 @@ class TestOpenMMSolutionGen:
             packmol_random_seed=1,
             partial_charge_method="mmff94",
         )
-        big_smile = "O=C(OC(C)(C)CC/1=O)C1=C(O)/CCCCCCCC/C(NCCN(CCN)CCN)=C2C(OC(C)(C)CC/2=O)=O"
-        input_set = generator.get_input_set({"O": 200, big_smile: 1}, density=0.8)
+        big_smile = (
+            "O=C(OC(C)(C)CC/1=O)C1=C(O)/CCCCCCCC/C(NCCN(CCN)CCN)=C2C(OC(C)(C)CC/2=O)=O"
+        )
+        input_mol_dicts = [
+            {"smile": "O", "count": 200},
+            {"smile": big_smile, "count": 1},
+        ]
+        input_set = generator.get_input_set(input_mol_dicts, density=0.8)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
@@ -76,12 +86,26 @@ class TestOpenMMSolutionGen:
     def test_get_input_set_w_charges(self):
         pf6_charge_array = np.load(PF6_charges)
         li_charge_array = np.load(Li_charges)
-        generator = OpenMMSolutionGen(
-            partial_charges=[(PF6_xyz, pf6_charge_array), (Li_xyz, li_charge_array)],
-            partial_charge_scaling={"[Li+]": 0.9, "F[P-](F)(F)(F)(F)F": 0.9},
-            packmol_random_seed=1,
-        )
-        input_set = generator.get_input_set({"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1)
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        input_mol_dicts = [
+            {"smile": "O", "count": 200, "name": "H2O"},
+            {"smile": "CCO", "count": 20},
+            {
+                "smile": "[Li+]",
+                "count": 10,
+                "charge_scaling": 0.9,
+                "geometries": Li_xyz,
+                "partial_charges": li_charge_array,
+            },
+            {
+                "smile": "F[P-](F)(F)(F)(F)F",
+                "count": 10,
+                "charge_scaling": 0.9,
+                "geometries": PF6_xyz,
+                "partial_charges": pf6_charge_array,
+            },
+        ]
+        input_set = generator.get_input_set(input_mol_dicts, density=1)
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
@@ -100,7 +124,9 @@ class TestOpenMMSolutionGen:
             packmol_random_seed=1,
             force_field={"O": "spce"},
         )
-        input_set = generator.get_input_set({"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1)
+        input_set = generator.get_input_set(
+            {"O": 200, "CCO": 20, "F[P-](F)(F)(F)(F)F": 10, "[Li+]": 10}, density=1
+        )
         assert isinstance(input_set, OpenMMSet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
