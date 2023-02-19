@@ -18,7 +18,6 @@ from pymatgen.io.openmm.utils import (
     get_coordinates,
     smiles_to_atom_type_array,
     smiles_to_resname_array,
-    xyz_to_molecule,
     molgraph_to_openff_mol,
     openff_mol_to_molgraph,
     molgraph_from_openff_topology,
@@ -39,6 +38,7 @@ from pymatgen.io.openmm.tests.datafiles import (
     # Li_charges,
     PF6_charges,
 )
+from openff.units import unit
 
 
 def test_xyz_to_molecule():
@@ -113,8 +113,6 @@ def test_infer_openff_mol(xyz_path, n_atoms, n_bonds):
 
 
 def test_get_coordinates():
-    from openff.units import unit
-
     O = tk.Molecule.from_smiles("O")
     CCO = tk.Molecule.from_smiles("CCO")
     O.generate_conformers()
@@ -133,25 +131,32 @@ def test_get_coordinates():
 
 
 def test_get_coordinates_added_geometry():
-    pf6_geometry = xyz_to_molecule(PF6_xyz)
+    pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
+    pf6 = infer_openff_mol(pf6_mol)
+    pf6_geometry = pymatgen.core.Molecule.from_file(PF6_xyz).cart_coords * unit.angstrom
+    # pf6 = tk.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+    pf6.add_conformer(pf6_geometry)
     coordinates = get_coordinates(
-        {"F[P-](F)(F)(F)(F)F": 1},
+        {pf6: 3},
         [0, 0, 0, 3, 3, 3],
         1,
-        smile_geometries={"F[P-](F)(F)(F)(F)F": pf6_geometry},
     )
-    assert len(coordinates) == 7
+    assert len(coordinates) == 21
     np.testing.assert_almost_equal(
-        np.linalg.norm(coordinates[1] - coordinates[4]), 1.6, 3
+        np.linalg.norm(coordinates[0] - coordinates[4]), 1.6, 3
     )
     with open(trimer_txt) as file:
         trimer_smile = file.read()
-    trimer_geometry = xyz_to_molecule(trimer_pdb)
+    trimer_geometry = (
+        pymatgen.core.Molecule.from_file(trimer_pdb).cart_coords * unit.angstrom
+    )
+    trimer = tk.Molecule.from_smiles(trimer_smile)
+    trimer.add_conformer(trimer_geometry)
+
     coordinates = get_coordinates(
-        {trimer_smile: 1},
+        {trimer: 1},
         [0, 0, 0, 20, 20, 20],
         1,
-        smile_geometries={trimer_smile: trimer_geometry},
     )
     assert len(coordinates) == 217
 
