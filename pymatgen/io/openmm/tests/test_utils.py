@@ -24,6 +24,7 @@ from pymatgen.io.openmm.utils import (
     molgraph_from_openff_topology,
     get_openff_topology,
     infer_openff_mol,
+    parameterize_w_interchange,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -112,7 +113,18 @@ def test_infer_openff_mol(xyz_path, n_atoms, n_bonds):
 
 
 def test_get_coordinates():
-    coordinates = get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
+    from openff.units import unit
+
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    O.generate_conformers()
+    coords = pymatgen.core.Molecule.from_file(CCO_xyz).cart_coords * unit.angstrom
+    CCO.add_conformer(coords)
+    CCO.add_conformer(coords)
+    CCO.add_conformer(coords)
+    coordinates = get_coordinates(
+        {O: 200, CCO: 20}, box=[0, 0, 0, 19.59, 19.59, 19.59], random_seed=1
+    )
     assert isinstance(coordinates, np.ndarray)
     assert len(coordinates) == 780
     assert np.min(coordinates) > -0.2
@@ -129,7 +141,9 @@ def test_get_coordinates_added_geometry():
         smile_geometries={"F[P-](F)(F)(F)(F)F": pf6_geometry},
     )
     assert len(coordinates) == 7
-    np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6, 3)
+    np.testing.assert_almost_equal(
+        np.linalg.norm(coordinates[1] - coordinates[4]), 1.6, 3
+    )
     with open(trimer_txt) as file:
         trimer_smile = file.read()
     trimer_geometry = xyz_to_molecule(trimer_pdb)
@@ -143,7 +157,9 @@ def test_get_coordinates_added_geometry():
 
 
 def test_get_openff_topology():
-    topology = get_openff_topology({"O": 200, "CCO": 20})
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    topology = get_openff_topology({O: 200, CCO: 20})
     assert topology.n_atoms == 780
     assert topology.n_molecules == 220
     assert topology.n_bonds == 560
@@ -259,6 +275,20 @@ def test_get_openff_topology():
 #     assert force_a[2] != force_b[2]
 
 
+def test_parameterize_w_interchange():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    O.assign_partial_charges("am1bcc")
+    CCO.assign_partial_charges("am1bcc")
+    mol_specs = [
+        {"openff_mol": O},
+        {"openff_mol": CCO},
+    ]
+    topology = get_openff_topology({O: 200, CCO: 20})
+    box = np.array([0, 0, 0, 19.59, 19.59, 19.59])
+    parameterize_w_interchange(topology, mol_specs, box)
+
+
 def test_molgraph_to_openff_mol():
     """transform a water MoleculeGraph to a OpenFF water molecule"""
     pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
@@ -294,7 +324,9 @@ def test_openff_mol_to_molgraph():
     nm = iso.numerical_node_match(["formal_charge", "partial_charge"], [0, 0])
     pf6_openff2 = molgraph_to_openff_mol(pf6_graph)
     pf6_graph2 = openff_mol_to_molgraph(pf6_openff2)
-    assert nx.is_isomorphic(pf6_graph.graph, pf6_graph2.graph, edge_match=em, node_match=nm)
+    assert nx.is_isomorphic(
+        pf6_graph.graph, pf6_graph2.graph, edge_match=em, node_match=nm
+    )
     assert pf6_graph.molecule == pf6_graph2.molecule
     assert pf6_openff == pf6_openff2
 
