@@ -14,7 +14,7 @@ import openff
 import openff.toolkit as tk
 
 # openmm
-from openmm.unit import kelvin, picoseconds, angstrom
+from openmm.unit import kelvin, picoseconds, angstrom, elementary_charge
 from openmm.openmm import (
     Context,
     LangevinMiddleIntegrator,
@@ -197,8 +197,9 @@ class OpenMMSolutionGen(InputGenerator):
                 )
 
             # assign partial charges
-            if partial_charges := mol_dict.get("partial_charges"):
-                openff_mol.partial_charges = partial_charges[list(atom_map.values())]  # type: ignore
+            if mol_dict.get("partial_charges") is not None:
+                partial_charges = mol_dict.get("partial_charges")
+                openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
             else:
                 openff_mol.assign_partial_charges(self.partial_charge_method)
             charge_scaling = mol_dict.get("charge_scaling") or 1
