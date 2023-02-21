@@ -1,37 +1,28 @@
 """
 Utility functions for OpenMM simulation setup.
 """
-from typing import Dict, List, Tuple, Union
+from typing import Dict, Iterable, List, Tuple, Union
 import pathlib
 from pathlib import Path
-import warnings
 import tempfile
 
 import numpy as np
-from openbabel import pybel
-import parmed
 import rdkit
 import openff
-from openff.toolkit.typing.engines import smirnoff
-from openff.toolkit.typing.engines.smirnoff.parameters import LibraryChargeHandler
-import openmm
-from openmm.openmm import System
+import openff.toolkit as tk
 from openmm.unit import elementary_charge, angstrom
-from openmm.app import Topology
-from openmm.app import ForceField as omm_ForceField
-from openmm.app.forcefield import PME
-from openmmforcefields.generators import (
-    GAFFTemplateGenerator,
-    SMIRNOFFTemplateGenerator,
-)
+from pymatgen.analysis.graphs import MoleculeGraph
+from pymatgen.core import Element, Molecule
 
 import pymatgen
 from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
 
+from pint import Quantity
 
-def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
+
+def smiles_to_atom_type_array(openff_counts: Dict[tk.Molecule, int]) -> np.ndarray:
     """
     Convert a SMILE to an array of atom types.
 
@@ -43,16 +34,17 @@ def smiles_to_atom_type_array(smiles: Dict[str, int]) -> np.ndarray:
     """
     offset = 0
     all_types_list = []
-    for smile, count in smiles.items():
-        mol = smile_to_molecule(smile)
-        types = np.arange(offset, offset + len(mol))
+    for mol, count in openff_counts.items():
+        types = np.arange(offset, offset + mol.n_atoms)
         types_array = np.hstack([types for _ in range(count)])
         all_types_list.append(types_array)
-        offset += len(mol)
+        offset += mol.n_atoms
     return np.concatenate(all_types_list)
 
 
-def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None) -> np.ndarray:
+def smiles_to_resname_array(
+    mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]]
+) -> np.ndarray:
     """
     Convert a list of SMILEs to an array of residue names.
 
@@ -65,16 +57,18 @@ def smiles_to_resname_array(smiles: Dict[str, int], names: Dict[str, str] = None
     Returns:
         resname_array: array of residue names.
     """
-    names = names or {}
     resnames = []
-    for smile in smiles.keys():
-        smile_size = len(smile_to_molecule(smile))
-        name = names.get(smile) or smile
-        resnames.extend([name] * smiles[smile] * smile_size)
+    for mol_spec in mol_specs:
+        name = mol_spec["name"]
+        count = mol_spec["count"]
+        smile_size = mol_spec["openff_mol"].n_atoms  # type: ignore
+        resnames.extend([name] * count * smile_size)  # type: ignore
     return np.array(resnames)
 
 
-def xyz_to_molecule(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> pymatgen.core.Molecule:
+def xyz_to_molecule(
+    mol_geometry: Union[pymatgen.core.Molecule, str, Path]
+) -> pymatgen.core.Molecule:
     """
     Convert a XYZ file to a Pymatgen.Molecule.
 
@@ -92,32 +86,7 @@ def xyz_to_molecule(mol_geometry: Union[pymatgen.core.Molecule, str, Path]) -> p
     return mol_geometry
 
 
-def smile_to_parmed_structure(smile: str) -> parmed.Structure:
-    """
-    Convert a SMILE to a Parmed.Structure.
-    """
-    mol = pybel.readstring("smi", smile)
-    mol.addh()
-    mol.make3D()
-    with tempfile.NamedTemporaryFile() as f:
-        mol.write(format="mol", filename=f.name, overwrite=True)
-        # load_file is returning a list for some reason
-        structure = parmed.load_file(f.name)[0]
-    return structure
-
-
-def smile_to_molecule(smile: str) -> pymatgen.core.Molecule:
-    """
-    Convert a SMILE to a Pymatgen.Molecule.
-    """
-    mol = pybel.readstring("smi", smile)
-    mol.addh()
-    mol.make3D()
-    adaptor = BabelMolAdaptor(mol.OBMol)
-    return adaptor.pymatgen_mol
-
-
-def get_box(smiles: Dict[str, int], density: float) -> List[float]:
+def get_box(openff_counts: Dict[tk.Molecule, int], density: float) -> List[float]:
     """
     Calculates the dimensions of a cube necessary to contain the given molecules with
     given density. The corner of the cube is at the origin. Units are angstrom.
@@ -131,78 +100,16 @@ def get_box(smiles: Dict[str, int], density: float) -> List[float]:
     """
     cm3_to_A3 = 1e24
     NA = 6.02214e23
-    mols = [smile_to_molecule(smile) for smile in smiles.keys()]
-    mol_mw = np.array([mol.composition.weight for mol in mols])
-    counts = np.array(list(smiles.values()))
+
+    def get_mass(mol):
+        return sum(atom.mass.magnitude for atom in mol.atoms)
+
+    mol_mw = np.array([get_mass(mol) for mol in openff_counts.keys()])
+    counts = np.array(list(openff_counts.values()))
     total_weight = sum(mol_mw * counts)
     box_volume = total_weight * cm3_to_A3 / (NA * density)
     side_length = round(box_volume ** (1 / 3), 2)
     return [0, 0, 0, side_length, side_length, side_length]
-
-
-def n_mols_from_mass_ratio(n_mol: int, smiles: List[str], mass_ratio: List[float]) -> np.ndarray:
-    """
-    Calculates the number of mols needed to yield a given mass ratio.
-
-    Args:
-        n_mol: total number of mols. returned array will sum to n_mol. e.g. sum(n_mols) = n_mol.
-        smiles: a list of smiles. e.g. ["O", "CCO"]
-        mass_ratio: mass ratio of smiles. e.g. [9, 1]
-
-    Returns:
-        n_mols: number of each smile needed for mass ratio.
-    """
-    mols = [smile_to_molecule(smile) for smile in smiles]
-    mws = np.array([mol.composition.weight for mol in mols])
-    mol_ratio = np.array(mass_ratio) / mws
-    mol_ratio /= sum(mol_ratio)
-    return np.round(mol_ratio * n_mol)
-
-
-def n_mols_from_volume_ratio(
-    n_mol: int, smiles: List[str], volume_ratio: List[float], densities: List[float]
-) -> np.ndarray:
-    """
-    Calculates the number of mols needed to yield a given volume ratio.
-
-    Args:
-        n_mol: total number of mols. returned array will sum to n_mol. e.g. sum(n_mols) = n_mol.
-        smiles: a list of smiles. e.g. ["O", "CCO"]
-        volume_ratio: volume ratio of smiles. e.g. [9, 1]
-        densities: density of each smile. e.g. [1, 0.79]
-
-    Returns:
-        n_mols: number of each smile needed for volume ratio.
-
-    """
-    mass_ratio = np.array(volume_ratio) * np.array(densities)
-    return n_mols_from_mass_ratio(n_mol, smiles, mass_ratio)
-
-
-def n_solute_from_molarity(molarity: float, volume: float) -> int:
-    """
-    Calculates the number of solute molecules needed for a given molarity.
-
-    Args:
-        molarity: molarity of solute desired.
-        volume: volume of box in liters.
-
-    Returns:
-        n_solute: number of solute molecules
-
-    """
-    NA = 6.02214e23
-    n_solute = volume * NA * molarity
-    return round(n_solute)
-
-
-def calculate_molarity(volume, n_solute):
-    """
-    Calculate the molarity of a number of solutes in a volume.
-    """
-    NA = 6.02214e23
-    molarity = n_solute / (volume * NA)
-    return molarity
 
 
 def get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
@@ -214,115 +121,395 @@ def get_atom_map(inferred_mol, openff_mol) -> Tuple[bool, Dict[int, int]]:
         return_atom_map=True,
         formal_charge_matching=False,
     )
-    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+        openff_mol, inferred_mol, **kwargs
+    )
     if isomorphic:
         return True, atom_map
     # relax stereochemistry restrictions
     kwargs["atom_stereochemistry_matching"] = False
     kwargs["bond_stereochemistry_matching"] = False
-    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+        openff_mol, inferred_mol, **kwargs
+    )
     if isomorphic:
-        print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        print(
+            f"stereochemistry ignored when matching inferred"
+            f"mol: {openff_mol} to {inferred_mol}"
+        )
         return True, atom_map
     # relax bond order restrictions
     kwargs["bond_order_matching"] = False
-    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(openff_mol, inferred_mol, **kwargs)
+    isomorphic, atom_map = openff.toolkit.topology.Molecule.are_isomorphic(
+        openff_mol, inferred_mol, **kwargs
+    )
     if isomorphic:
-        print(f"stereochemistry ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
-        print(f"bond_order restrictions ignored when matching inferred" f"mol: {openff_mol} to {inferred_mol}")
+        print(
+            f"stereochemistry ignored when matching inferred"
+            f"mol: {openff_mol} to {inferred_mol}"
+        )
+        print(
+            f"bond_order restrictions ignored when matching inferred"
+            f"mol: {openff_mol} to {inferred_mol}"
+        )
         return True, atom_map
     return False, {}
 
 
-def infer_openff_mol(
-    mol_geometry: pymatgen.core.Molecule,
-) -> openff.toolkit.topology.Molecule:
-    """
-    Infer an OpenFF molecule from xyz coordinates.
-    """
-    with tempfile.NamedTemporaryFile() as f:
-        # these next 4 lines are cursed
-        pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
-        pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
-        rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
-    inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(rdmol, hydrogens_are_explicit=True)  # OpenFF Molecule
-    return inferred_mol
-
-
-def order_molecule_like_smile(smile: str, geometry: pymatgen.core.Molecule):
-    """
-    Order sites in a pymatgen Molecule to match the canonical ordering generated by rdkit.
-    """
-    inferred_mol = infer_openff_mol(geometry)
-    openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-    is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-    new_molecule = pymatgen.core.Molecule.from_sites([geometry.sites[i] for i in atom_map.values()])
-    return new_molecule
-
-
 def get_coordinates(
-    smiles: Dict[str, int],
+    openff_counts: Dict[tk.Molecule, int],
     box: List[float],
     random_seed: int = -1,
-    smile_geometries: Dict[str, pymatgen.core.Molecule] = None,
     packmol_timeout: int = 30,
 ) -> np.ndarray:
     """
     Pack the box with the molecules specified by smiles.
 
     Args:
-        smiles: keys are smiles and values are number of that molecule to pack
+        openff_counts: keys are openff molecules and values are number of that molecule to pack.
+            The molecules must already have conformations.
         box: list of [xlo, ylo, zlo, xhi, yhi, zhi]
         random_seed: the random seed used by packmol
         smile_geometries: a dictionary of smiles and their respective geometries. The
-            geometries can be pymatgen Molecules or any file with geometric information
-            that can be parsed by OpenBabel.
+            geometries must be pymatgen Molecules.
         packmol_timeout: the number of seconds to wait for packmol to finish before
             raising an Error.
 
     Returns:
         array of coordinates for each atom in the box.
     """
-    smile_geometries = smile_geometries if smile_geometries else {}
-    molecule_geometries = {}
-    for smile in smiles.keys():
-        if smile in smile_geometries:
-            geometry = smile_geometries[smile]
-            molecule_geometries[smile] = order_molecule_like_smile(smile, geometry)
-            assert len(geometry) > 0, (
-                f"It appears Pymatgen was unable to establish "
-                f"an isomorphism between the included geometry "
-                f"for {smile} and the molecular graph generated "
-                f"by the input file itself. Please ensure you "
-                f"included a matching smile and geometry."
-            )
-        else:
-            molecule_geometries[smile] = smile_to_molecule(smile)
+    from pymatgen.core import Site
 
     packmol_molecules = []
-    for i, smile_count_tuple in enumerate(smiles.items()):
-        smile, count = smile_count_tuple
-        packmol_molecules.append(
-            {
-                "name": str(i),
-                "number": count,
-                "coords": molecule_geometries[smile],
-            }
-        )
+    for i, mol_count in enumerate(openff_counts.items()):
+        mol, count = mol_count
+        n_conformers = len(mol.conformers)
+        atomic_numbers = [atom.atomic_number for atom in mol.atoms]
+        for j, conformer in enumerate(mol.conformers):
+            sites = [
+                Site(atomic_numbers[j], conformer.magnitude[j, :])
+                for j in range(mol.n_atoms)
+            ]
+            coords = Molecule.from_sites(sites)
+            # TODO: test the units here
+            packmol_molecules.append(
+                {
+                    "name": f"mol_{i}_conformer_{j}",
+                    "number": count // n_conformers + int(count % n_conformers > j),
+                    "coords": coords,
+                }
+            )
     with tempfile.TemporaryDirectory() as scratch_dir:
-        pw = PackmolBoxGen(seed=random_seed).get_input_set(molecules=packmol_molecules, box=box)
+        pw = PackmolBoxGen(seed=random_seed).get_input_set(
+            molecules=packmol_molecules, box=box
+        )
         pw.write_input(scratch_dir)
         pw.run(scratch_dir, timeout=packmol_timeout)
-        coordinates = XYZ.from_file(pathlib.Path(scratch_dir, "packmol_out.xyz")).as_dataframe()
+        coordinates = XYZ.from_file(
+            pathlib.Path(scratch_dir, "packmol_out.xyz")
+        ).as_dataframe()
     raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
     return raw_coordinates
 
 
-def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
-    """
-    Returns an openmm topology with the given SMILEs at the given counts.
+def parameterize_w_interchange(openff_topology, mol_specs, box, force_field="sage"):
+    assert force_field == "sage", "currently only the sage force field is supported"
 
-    The topology does not contain coordinates.
+    from openff.interchange import Interchange
+    from openff.toolkit import ForceField
+    import numpy as np
+
+    box_arr = np.array(box)
+    box_matrix = np.diag(box_arr[3:6] - box_arr[0:3]) * angstrom
+    sage = ForceField("openff_unconstrained-2.0.0.offxml")
+    interchange = Interchange.from_smirnoff(
+        force_field=sage,
+        topology=openff_topology,
+        charge_from_molecules=[spec["openff_mol"] for spec in mol_specs],
+        box=box_matrix,
+        allow_nonintegral_charges=True,
+    )
+    return interchange.to_openmm()
+
+
+def molgraph_from_atoms_bonds(
+    atoms: Iterable[openff.toolkit.topology.Atom],
+    bonds: Iterable[openff.toolkit.topology.Bond],
+    coords: Union[None, np.ndarray] = None,
+    name: str = "none",
+):
+    """
+    This is designed to closely mirror the graph structure generated by tk.Molecule.to_networkx
+    """
+    molgraph = MoleculeGraph.with_empty_graph(
+        Molecule([], []),
+        name=name,
+    )
+    p_table = {el.Z: str(el) for el in Element}
+    formal_charge = 0
+    for i, atom in enumerate(atoms):
+        molgraph.insert_node(
+            i,
+            p_table[atom.atomic_number],
+            coords[i, :] if coords is not None else np.array([0, 0, 0]),
+        )
+        molgraph.graph.nodes[i]["atomic_number"] = atom.atomic_number
+        molgraph.graph.nodes[i]["is_aromatic"] = atom.is_aromatic
+        molgraph.graph.nodes[i]["stereochemistry"] = atom.stereochemistry
+        molgraph.graph.nodes[i]["formal_charge"] = atom.formal_charge
+        molgraph.graph.nodes[i]["partial_charge"] = atom.partial_charge
+        formal_charge += atom.formal_charge.magnitude
+
+    molgraph.molecule.set_charge_and_spin(charge=formal_charge)
+
+    for bond in bonds:
+        molgraph.graph.add_edge(
+            bond.atom1_index,
+            bond.atom2_index,
+            bond_order=bond.bond_order,
+            is_aromatic=bond.is_aromatic,
+            stereochemistry=bond.stereochemistry,
+        )
+
+    return molgraph
+
+
+def openmm_topology_from_molgraph(molgraph):
+    return
+
+
+# def openff_topology_from_molgraph(molgraph, unique_molecules=None):
+#     """
+#     Construct an OpenFF Topology object from an OpenMM Topology object.
+#
+#     Parameters
+#     ----------
+#     openmm_topology : simtk.openmm.app.Topology
+#         An OpenMM Topology object
+#     unique_molecules : iterable of objects that can be used to construct unique Molecule objects
+#         All unique molecules must be provided, in any order, though multiple copies of each molecule are allowed.
+#         The atomic elements and bond connectivity will be used to match the reference molecules
+#         to molecule graphs appearing in the OpenMM ``Topology``. If bond orders are present in the
+#         OpenMM ``Topology``, these will be used in matching as well.
+#
+#     Returns
+#     -------
+#     topology : openff.toolkit.topology.Topology
+#         An OpenFF Topology object
+#     """
+#     # credit to source code from openff.toolkit.topology.topology
+#     import networkx as nx
+#
+#     from openff.toolkit.topology.molecule import Molecule
+#
+#     # Check to see if the openMM system has defined bond orders, by looping over all Bonds in the Topology.
+#     omm_has_bond_orders = True
+#     for omm_bond in openmm_topology.bonds():
+#         if omm_bond.order is None:
+#             omm_has_bond_orders = False
+#
+#     if unique_molecules is None:
+#         raise MissingUniqueMoleculesError(
+#             "Topology.from_openmm requires a list of Molecule objects "
+#             "passed as unique_molecules, but None was passed."
+#         )
+#
+#     # Convert all unique mols to graphs
+#     topology = cls()
+#     graph_to_unq_mol = {}
+#     for unq_mol in unique_molecules:
+#         unq_mol_graph = unq_mol.to_networkx()
+#         for existing_graph in graph_to_unq_mol.keys():
+#             if Molecule.are_isomorphic(
+#                     existing_graph,
+#                     unq_mol_graph,
+#                     return_atom_map=False,
+#                     aromatic_matching=False,
+#                     formal_charge_matching=False,
+#                     bond_order_matching=omm_has_bond_orders,
+#                     atom_stereochemistry_matching=False,
+#                     bond_stereochemistry_matching=False,
+#             )[0]:
+#                 msg = (
+#                     "Error: Two unique molecules have indistinguishable "
+#                     "graphs: {} and {}".format(
+#                         unq_mol, graph_to_unq_mol[existing_graph]
+#                     )
+#                 )
+#                 raise DuplicateUniqueMoleculeError(msg)
+#         graph_to_unq_mol[unq_mol_graph] = unq_mol
+#
+#     # Convert all openMM mols to graphs
+#     omm_topology_G = nx.Graph()
+#     for atom in openmm_topology.atoms():
+#         omm_topology_G.add_node(atom.index, atomic_number=atom.element.atomic_number)
+#     for bond in openmm_topology.bonds():
+#         omm_topology_G.add_edge(
+#             bond.atom1.index, bond.atom2.index, bond_order=bond.order
+#         )
+#
+#     # For each connected subgraph (molecule) in the topology, find its match in unique_molecules
+#     topology_molecules_to_add = list()
+#     for omm_mol_G in (
+#             omm_topology_G.subgraph(c).copy()
+#             for c in nx.connected_components(omm_topology_G)
+#     ):
+#         match_found = False
+#         for unq_mol_G in graph_to_unq_mol.keys():
+#             isomorphic, mapping = Molecule.are_isomorphic(
+#                 omm_mol_G,
+#                 unq_mol_G,
+#                 return_atom_map=True,
+#                 aromatic_matching=False,
+#                 formal_charge_matching=False,
+#                 bond_order_matching=omm_has_bond_orders,
+#                 atom_stereochemistry_matching=False,
+#                 bond_stereochemistry_matching=False,
+#             )
+#             if isomorphic:
+#                 # Take the first valid atom indexing map
+#                 first_topology_atom_index = min(mapping.keys())
+#                 topology_molecules_to_add.append(
+#                     (first_topology_atom_index, unq_mol_G, mapping.items())
+#                 )
+#                 match_found = True
+#                 break
+#         if match_found is False:
+#             hill_formula = Molecule.to_hill_formula(omm_mol_G)
+#             msg = f"No match found for molecule {hill_formula}. "
+#             probably_missing_conect = [
+#                 "C",
+#                 "H",
+#                 "O",
+#                 "N",
+#                 "P",
+#                 "S",
+#                 "F",
+#                 "Cl",
+#                 "Br",
+#             ]
+#             if hill_formula in probably_missing_conect:
+#                 msg += (
+#                     "This would be a very unusual molecule to try and parameterize, "
+#                     "and it is likely that the data source it was read from does not "
+#                     "contain connectivity information. If this molecule is coming from "
+#                     "PDB, please ensure that the file contains CONECT records. The PDB "
+#                     "format documentation (https://www.wwpdb.org/documentation/"
+#                     'file-format-content/format33/sect10.html) states "CONECT records '
+#                     "are mandatory for HET groups (excluding water) and for other bonds "
+#                     'not specified in the standard residue connectivity table."'
+#                 )
+#             raise ValueError(msg)
+#
+#     # The connected_component_subgraph function above may have scrambled the molecule order, so sort molecules
+#     # by their first atom's topology index
+#     topology_molecules_to_add.sort(key=lambda x: x[0])
+#     for first_index, unq_mol_G, top_to_ref_index in topology_molecules_to_add:
+#         local_top_to_ref_index = {
+#             top_index - first_index: ref_index
+#             for top_index, ref_index in top_to_ref_index
+#         }
+#         topology.add_molecule(
+#             graph_to_unq_mol[unq_mol_G],
+#             local_topology_to_reference_index=local_top_to_ref_index,
+#         )
+#
+#     topology.box_vectors = openmm_topology.getPeriodicBoxVectors()
+#     # TODO: How can we preserve metadata from the openMM topology when creating the OFF topology?
+#     return topology
+
+
+def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
+    """
+    Convert a Pymatgen MoleculeGraph to an OpenFF Molecule.
+
+    If partial charges, formal charges, and aromaticity are present in site properties
+    they will be mapped onto atoms.
+    If bond order and bond aromaticity are present in edge weights and edge properties
+    they will be mapped onto bonds.
+
+    Args:
+        openff_mol: OpenFF Molecule
+
+    Returns:
+        MoleculeGraph
+    """
+    # create empty openff_mol and prepare a periodic table
+    p_table = {str(el): el.Z for el in Element}
+    openff_mol = openff.toolkit.topology.Molecule()
+
+    # set atom properties
+    partial_charges = []
+    for i_node in molgraph.graph.nodes:
+        node = molgraph.graph.nodes[i_node]
+        atomic_number = (
+            node.get("atomic_number")
+            or p_table[molgraph.molecule[i_node].species_string]
+        )
+
+        # put formal charge on first atom if there is none present
+        formal_charge = node.get("formal_charge")
+        if formal_charge is None:
+            formal_charge = (i_node == 0) * molgraph.molecule.charge * elementary_charge
+
+        # assume not aromatic if no info present
+        is_aromatic = node.get("is_aromatic") or False
+
+        openff_mol.add_atom(atomic_number, formal_charge, is_aromatic=is_aromatic)
+
+        # add to partial charge array
+        partial_charge = node.get("partial_charge")
+        if isinstance(partial_charge, Quantity):
+            partial_charge = partial_charge.magnitude
+        partial_charges.append(partial_charge)
+
+    charge_array = np.array(partial_charges)
+    if np.not_equal(charge_array, None).all():
+        openff_mol.partial_charges = charge_array * elementary_charge
+
+    # set edge properties, default to single bond and assume not aromatic
+    for i_node, j, bond_data in molgraph.graph.edges(data=True):
+        bond_order = bond_data.get("weight", 1) or 1
+        is_aromatic = bond_data.get("is_aromatic") or False
+        openff_mol.add_bond(i_node, j, bond_order, is_aromatic=is_aromatic)
+
+    openff_mol.add_conformer(molgraph.molecule.cart_coords * angstrom)
+    return openff_mol
+
+
+def molgraph_from_openff_mol(openff_mol: tk.Molecule) -> MoleculeGraph:
+    """
+    Convert an OpenFF Molecule to a Pymatgen MoleculeGraph.
+
+    Preserves partial charges, formal charges, and aromaticity in site properties.
+    Preserves bond order in edge weights and bond aromaticity in edge properties.
+
+    Args:
+        openff_mol: OpenFF Molecule
+
+    Returns:
+        MoleculeGraph
+    """
+    # set up coords and species
+    if openff_mol.n_conformers > 0:
+        coords = openff_mol.conformers[0] / angstrom
+    else:
+        coords = np.zeros((openff_mol.n_atoms, 3))
+
+    molgraph = molgraph_from_atoms_bonds(
+        openff_mol.atoms, openff_mol.bonds, coords=coords, name=openff_mol.name
+    )
+    return molgraph
+
+
+def molgraph_from_openff_topology(topology: tk.Topology):
+    molgraph = molgraph_from_atoms_bonds(topology.atoms, topology.bonds)
+    return molgraph
+
+
+def get_openff_topology(openff_counts: Dict[tk.Molecule, int]) -> tk.Topology:
+    """
+    Returns an openff topology with the given SMILEs at the given counts.
 
     Parameters:
         smiles: keys are smiles and values are number of that molecule to pack
@@ -330,287 +517,27 @@ def get_openmm_topology(smiles: Dict[str, int]) -> openmm.app.Topology:
     Returns:
         an openmm.app.Topology
     """
-    structures = [smile_to_parmed_structure(smile) for smile in smiles.keys()]
-    counts = list(smiles.values())
-    combined_structs = parmed.Structure()
-    for struct, count in zip(structures, counts):
-        combined_structs += struct * count
-    return combined_structs.topology
+    mols = []
+    for mol, count in openff_counts.items():
+        mols += [mol] * count
+    return tk.topology.Topology.from_molecules(mols)
 
 
-def add_mol_charges_to_forcefield(
-    forcefield: smirnoff.ForceField,
-    charged_openff_mol: List[openff.toolkit.topology.Molecule],
-) -> smirnoff.ForceField:
+def infer_openff_mol(
+    mol_geometry: pymatgen.core.Molecule,
+) -> tk.Molecule:
     """
-    This is currently depreciated. It may be used in the future.
+    Infer an OpenFF molecule from xyz coordinates.
     """
-    charge_type = LibraryChargeHandler.LibraryChargeType.from_molecule(charged_openff_mol)
-    forcefield["LibraryCharges"].add_parameter(parameter=charge_type)
-    return forcefield
-
-
-def assign_charges_to_mols(
-    smile_strings: List[str],
-    partial_charge_method: str,
-    partial_charge_scaling: Dict[str, float],
-    partial_charges: List[Tuple[pymatgen.core.Molecule, np.ndarray]],
-):
-    """
-
-    This will modify the original force field, not make a copy.
-
-    Args:
-        smile_strings: A list of SMILEs strings
-        partial_charge_scaling: A dictionary of partial charge scaling for particular species. Keys
-        are SMILEs and values are the scaling factor.
-        partial_charges: A list of tuples, where the first element of each tuple is a molecular
-            geometry and the second element is an array of charges. The geometry can be a
-            pymatgen.Molecule or a path to an xyz file. The geometry and charges must have the
-            same atom ordering.
-
-    Returns:
-       List of charged openff Molecules
-    """
-    # loop through partial charges to add to force field
-    matched_mols = set()
-    inferred_mols = set()
-    charged_mols = []
-    for smile in smile_strings:
-        # detect charge scaling, set scaling parameter
-        if smile in partial_charge_scaling.keys():
-            charge_scaling = partial_charge_scaling[smile]
-        else:
-            charge_scaling = 1
-        openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-        # assign charges from isomorphic charges, if they exist
-        is_isomorphic = False
-        for mol_xyz, charges in partial_charges:
-            inferred_mol = infer_openff_mol(mol_xyz)
-            inferred_mols.add(inferred_mol)
-            is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-            # if is_isomorphic to a mol_xyz in the system, add to openff_mol else, warn user
-            if is_isomorphic:
-                reordered_charges = np.array([charges[atom_map[i]] for i, _ in enumerate(charges)])
-                openff_mol.partial_charges = reordered_charges * charge_scaling * elementary_charge
-                matched_mols.add(inferred_mol)
-                break
-        if not is_isomorphic:
-            # assign partial charges if there was no match
-            if openff_mol.n_atoms == 1:
-                # the total_charge should be used, am1bcc will fail on a single atom
-                chg = np.array([openff_mol.total_charge._value]) * charge_scaling * elementary_charge
-                openff_mol.partial_charges = chg
-            else:
-                openff_mol.assign_partial_charges(partial_charge_method)
-                openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
-        # finally, add charged mol to force_field
-        charged_mols.append(openff_mol)
-        # return a warning if some partial charges were not matched to any mol_xyz
-    for unmatched_mol in inferred_mols - matched_mols:
-        warnings.warn(f"{unmatched_mol} in partial_charges is not isomorphic to any SMILE in the system.")
-    return charged_mols
-
-
-def assign_small_molecule_ff(molecules: List[openff.toolkit.topology.Molecule], forcefield_name: str):
-    """
-    Args:
-    molecules: List of openff Molecule objects
-    forcefield_name: Name of forcefield to apply to the Molecules, can be
-                    the absolute path recognized by OpenMM,
-                    e.g. "openff-2.0.0" or the generic name, e.g. "sage"
-
-    Returns:
-    OpenMM Template
-    """
-    smirnoff_ff_names = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS
-    gaff_ff_names = GAFFTemplateGenerator.INSTALLED_FORCEFIELDS
-    template = None
-    if forcefield_name == "sage" or forcefield_name in smirnoff_ff_names:
-        ff_name = "openff-2.0.0" if forcefield_name == "sage" else forcefield_name
-        template = SMIRNOFFTemplateGenerator(molecules=molecules, forcefield=ff_name)
-
-    elif forcefield_name == "gaff" or forcefield_name in gaff_ff_names:
-        ff_name = "gaff-2.11" if forcefield_name == "gaff" else forcefield_name
-        template = GAFFTemplateGenerator(molecules=molecules, forcefield=ff_name)
-    else:
-        raise NotImplementedError(
-            f"{forcefield_name} is not supported."
-            f"currently only these force fields are supported:"
-            f" {' '.join(smirnoff_ff_names + gaff_ff_names)}.\n"
-            f"Please select one of the supported force fields."
-        )
-    return template
-
-
-def assign_biopolymer_and_water_ff(openmm_forcefield: openmm.app.forcefield, forcefield_assignment: List[str]):
-    """
-
-    Args:
-    openmm_forcefield: OpenMM forcefield to be updated with forcefield choices
-    forcefield_assignment: List of forcefield names to be added to the OpenMM
-                        forcefield. Supports casual naming, e.g. "tip3p" or
-                        "spce" instead of specigying the full path in OpenMM
-
-    Returns:
-    OpenMM Forcefield populated with chosen forcefields
-    """
-    water_assignment = {
-        "amber": {"spce": "amber14/spce.xml", "tip3p": "amber14/tip3p.xml"},
-        "charmm": {"spce": "charmm36/spce.xml", "tip3p": "charmm36/water.xml"},
-        "no_biomolecule": {"spce": "spce.xml", "tip3p": "tip3p.xml"},
-    }
-    basic_water_ffs = ["tip3p", "spce"]
-    biopolymer_ff_category = None
-    for ff in forcefield_assignment:
-        temp_ff_string = None
-        if "amber" in ff.lower():
-            temp_ff_string = "amber"
-        elif "charmm" in ff.lower():
-            temp_ff_string = "charmm"
-        if temp_ff_string:
-            if biopolymer_ff_category is None:
-                biopolymer_ff_category = temp_ff_string
-            else:
-                if biopolymer_ff_category != temp_ff_string:
-                    warnings.warn(
-                        f"Did you mean to mix {temp_ff_string} and " f"{biopolymer_ff_category} force fields?"
-                    )
-
-    ff_to_load = None
-    for ff in forcefield_assignment:
-        if ff in basic_water_ffs:
-            # Ensure the water model matches the large molecule model
-            if biopolymer_ff_category:
-                if ff in water_assignment[biopolymer_ff_category].keys():
-                    ff_to_load = water_assignment[biopolymer_ff_category][ff]
-                else:
-                    warnings.warn(f"Did you mean to use {ff} with the " f"{biopolymer_ff_category} force field?")
-            # If there isn't a large molecule forcefield required,
-            # assume amber14
-            else:
-                ff_to_load = water_assignment["no_biomolecule"][ff]
-        # TODO: Add lookup to ensure the ff is allowable
-        # This allows custom ff strings
-        else:
-            ff_to_load = ff
-        openmm_forcefield.loadFile(ff_to_load)
-    return openmm_forcefield
-
-
-def parameterize_system(
-    topology: Topology,
-    smile_strings: List[str],
-    box: List[float],
-    force_field: Union[str, Dict[str, str]] = "sage",
-    partial_charge_method: str = "am1bcc",
-    partial_charge_scaling: Dict[str, float] = None,
-    partial_charges: List[Tuple[pymatgen.core.Molecule, np.ndarray]] = [],
-    return_charged_mols: bool = False,
-) -> Union[System, Tuple[System, List[openff.toolkit.topology.Molecule]]]:
-    """
-    Parameterize an OpenMM system.
-
-    Args:
-        topology: an OpenMM topology.
-        smile_strings: a list of SMILEs representing each molecule in the system.
-        box: list of [xlo, ylo, zlo, xhi, yhi, zhi] in nanometers.
-        force_field: Name of the force field or dict of forcefields for each
-                    small molecule, e.g. {"O": "spce"}. Small molecule
-                    forcefields and water models can either be provided
-                    informally, i.e. "gaff" or "sage" for small molecules,
-                    or "spce" pr "tip3p" for water, or can be
-                    formally defined with OpenMM filenames,
-                    e.g. "charmm36/water.xml". Large molecule forcefields
-                    must be specified with the full path,
-                    e.g. "amber14/protein.ff14SB.xml". 4 or more point water
-                    models are currently not supported!
-        partial_charge_method: Method for OpenFF partial charge assignment
-                                for small molecules without charges provided
-                                in partial_charges
-        partial_charge_scaling: Scaling for partial charges, as a dict
-                                of {str: float, . . .}, e.g. {"[Li+]": 0.8}
-        partial_charges: List of tuples of (molecule, charges).
-                        The Molecule can be a Pymatgen Molecule or the
-                        path to a structure file that can be parsed by
-                        Pymatgen. Charges is a numpy array with length equal
-                         to the number of sites in the molecule.
-
-    Returns:
-        an OpenMM.system
-    """
-    partial_charge_scaling = partial_charge_scaling or {}
-    partial_charges = partial_charges or []
-    basic_small_ffs = ["gaff", "sage"]
-
-    charged_mols = assign_charges_to_mols(
-        smile_strings=smile_strings,
-        partial_charges=partial_charges,
-        partial_charge_scaling=partial_charge_scaling,
-        partial_charge_method=partial_charge_method,
-    )
-
-    if isinstance(force_field, str):
-        if force_field.lower() == "sage":
-            openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-            openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
-            box_vectors = list(np.array(box[3:6]) - np.array(box[0:3])) * angstrom
-            openff_topology.box_vectors = box_vectors
-            system = openff_forcefield.create_openmm_system(
-                openff_topology,
-                charge_from_molecules=charged_mols,
-                allow_nonintegral_charges=True,
-            )
-            if return_charged_mols:
-                return system, charged_mols
-            return system
-
-    all_small_ffs = SMIRNOFFTemplateGenerator.INSTALLED_FORCEFIELDS + GAFFTemplateGenerator.INSTALLED_FORCEFIELDS
-
-    forcefield_omm = omm_ForceField()
-    if isinstance(force_field, str):
-        ff_name = force_field.lower()
-        template = assign_small_molecule_ff(molecules=charged_mols, forcefield_name=ff_name)
-        forcefield_omm.registerTemplateGenerator(template.generator)
-    else:
-        small_molecules = {}
-        biopolymer_or_water = []
-        # iterate through each smile, if no forcefielded provided use Sage
-        # iterate through each molecule and forcefield input as list
-        # Add charges to the molecule if provided
-        for smile, charged_mol in zip(smile_strings, charged_mols):
-            if smile in force_field.keys():
-                ff_name = force_field[smile]
-                if ff_name.lower() in all_small_ffs or ff_name.lower() in basic_small_ffs:
-                    small_molecules[charged_mol] = ff_name
-                else:
-                    biopolymer_or_water.append(ff_name)
-            else:
-                small_molecules[charged_mol] = "sage"
-        forcefield_omm = assign_biopolymer_and_water_ff(forcefield_omm, biopolymer_or_water)
-        for mol, ff_name in small_molecules.items():
-            template = assign_small_molecule_ff(molecules=[mol], forcefield_name=ff_name)
-            forcefield_omm.registerTemplateGenerator(template.generator)
-
-    # OpenMM expects cutoff and box vectors in nm, but box is in Angstrom. Convert.
-    box = np.divide(box, 10)
-    box_size = min(box[3] - box[0], box[4] - box[1], box[5] - box[2])
-    # NOTE: cutoff is in nm, not Angstrom!
-    nonbondedCutoff = min(1, box_size // 2)
-    # TODO: Make insensitive to input units
-    periodic_box_vectors = np.array(
-        [
-            [box[3] - box[0], 0, 0],
-            [0, box[4] - box[1], 0],
-            [0, 0, box[5] - box[2]],
-        ]
-    )
-    topology.setPeriodicBoxVectors(vectors=periodic_box_vectors)
-    system = forcefield_omm.createSystem(
-        topology=topology,
-        nonbondedMethod=PME,
-        nonbondedCutoff=nonbondedCutoff,
-    )
-    if return_charged_mols:
-        return system, charged_mols
-    return system
+    # TODO: we can just have Molecule Graph be the only internal representation
+    with tempfile.NamedTemporaryFile() as f:
+        # TODO: allow for Molecule graphs
+        # TODO: build a MoleculeGraph -> OpenFF mol direct converter
+        # these next 4 lines are cursed
+        pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
+        pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
+        rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
+    inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(
+        rdmol, hydrogens_are_explicit=True
+    )  # OpenFF Molecule
+    return inferred_mol

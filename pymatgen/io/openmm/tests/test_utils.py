@@ -1,34 +1,29 @@
 import numpy as np
-import parmed
 import pytest
 import openff.toolkit.topology
 import pymatgen
-import openmm
-from openff.toolkit.typing.engines import smirnoff
+from pymatgen.analysis.graphs import MoleculeGraph
+
+# from openff.toolkit.typing.engines import smirnoff
+import openff.toolkit as tk
 
 # openmm
-from openmm.unit import elementary_charge
-from openmm.openmm import NonbondedForce
+
+# from openmm.openmm import NonbondedForce
 
 from pymatgen.io.openmm.utils import (
     get_box,
-    smile_to_molecule,
-    smile_to_parmed_structure,
-    n_mols_from_mass_ratio,
-    n_mols_from_volume_ratio,
-    n_solute_from_molarity,
-    calculate_molarity,
     get_atom_map,
-    infer_openff_mol,
-    order_molecule_like_smile,
     get_coordinates,
-    get_openmm_topology,
-    add_mol_charges_to_forcefield,
-    assign_charges_to_mols,
-    parameterize_system,
     smiles_to_atom_type_array,
     smiles_to_resname_array,
-    xyz_to_molecule,
+    molgraph_to_openff_mol,
+    molgraph_from_openff_mol,
+    molgraph_from_openff_topology,
+    molgraph_from_atoms_bonds,
+    get_openff_topology,
+    infer_openff_mol,
+    parameterize_w_interchange,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -37,12 +32,16 @@ from pymatgen.io.openmm.tests.datafiles import (
     trimer_txt,
     trimer_pdb,
     CCO_xyz,
-    CCO_charges,
+    # CCO_charges,
     FEC_s_xyz,
-    FEC_charges,
-    Li_charges,
-    PF6_charges,
+    # FEC_charges,
+    # Li_charges,
+    # PF6_charges,
 )
+from openff.units import unit
+
+import networkx as nx
+import networkx.algorithms.isomorphism as iso
 
 
 def test_xyz_to_molecule():
@@ -51,70 +50,34 @@ def test_xyz_to_molecule():
 
 
 def test_smiles_to_atom_type_array():
-    smiles = {"O": 5, "CCO": 2}
-    atom_type_array = smiles_to_atom_type_array(smiles)
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    mols = {O: 5, CCO: 2}
+    atom_type_array = smiles_to_atom_type_array(mols)
     assert atom_type_array[0] == 0
     assert atom_type_array[15] == 3
 
 
 def test_smiles_to_resname_array():
-    smiles = {"O": 5, "CCO": 2}
-    resname_array = smiles_to_resname_array(smiles)
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    mol_specs = [
+        {"openff_mol": O, "count": 5, "name": "O"},
+        {"openff_mol": CCO, "count": 5, "name": "CCO"},
+    ]
+    resname_array = smiles_to_resname_array(mol_specs)
     assert resname_array[0] == "O"
     assert resname_array[15] == "CCO"
 
 
 def test_get_box():
-    box = get_box({"O": 200, "CCO": 20}, 1)
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    box = get_box({O: 200, CCO: 20}, 1)
     assert isinstance(box, list)
     assert len(box) == 6
     np.testing.assert_almost_equal(box[0:3], 0, 2)
     np.testing.assert_almost_equal(box[3:6], 19.59, 2)
-
-
-def test_smile_to_parmed_structure():
-    struct1 = smile_to_parmed_structure("CCO")
-    assert isinstance(struct1, parmed.Structure)
-    assert len(struct1.atoms) == 9
-    assert len(struct1.residues) == 1
-    assert len(struct1.bonds) == 8
-    struct2 = smile_to_parmed_structure("O")
-    assert len(struct2.atoms) == 3
-    assert len(struct2.residues) == 1
-    assert len(struct2.bonds) == 2
-    struct3 = smile_to_parmed_structure("O=C1OC[C@H](F)O1")
-    assert len(struct3.atoms) == 10
-    assert len(struct3.residues) == 1
-    assert len(struct3.bonds) == 10
-
-
-def test_smile_to_molecule():
-    mol = smile_to_molecule("CCO")
-    assert isinstance(mol, pymatgen.core.structure.Molecule)
-    assert len(mol.sites) == 9
-
-
-def test_counts_from_mass_ratio():
-    n_mols = n_mols_from_mass_ratio(600, ["O", "CCO"], [10, 1])
-    np.testing.assert_allclose(n_mols, [577, 23])
-
-
-def test_n_mols_from_volume_ratio():
-    n_mols = n_mols_from_volume_ratio(600, ["O", "CCO"], [10, 1], [1, 0.79])
-    np.testing.assert_allclose(n_mols, [582, 18])
-
-
-def test_n_solute_from_molarity():
-    nm3_to_L = 1e-24
-    n_solute = n_solute_from_molarity(1, 2**3 * nm3_to_L)
-    np.testing.assert_allclose(n_solute, 5)
-    n_solute = n_solute_from_molarity(1, 4**3 * nm3_to_L)
-    np.testing.assert_allclose(n_solute, 39)
-
-
-def test_calculate_molarity():
-    nm3_to_L = 1e-24
-    np.testing.assert_almost_equal(calculate_molarity(4**3 * nm3_to_L, 39), 1, decimal=1)
 
 
 @pytest.mark.parametrize(
@@ -152,21 +115,17 @@ def test_infer_openff_mol(xyz_path, n_atoms, n_bonds):
     assert openff_mol.n_bonds == n_bonds
 
 
-@pytest.mark.parametrize(
-    "xyz_path, smile, atomic_numbers",
-    [
-        (CCO_xyz, "CCO", (6, 6, 8, 1, 1, 1, 1, 1, 1)),
-        (PF6_xyz, "F[P-](F)(F)(F)(F)F", (9, 15, 9, 9, 9, 9, 9)),
-    ],
-)
-def test_order_molecule_like_smile(xyz_path, smile, atomic_numbers):
-    mol = pymatgen.core.Molecule.from_file(xyz_path)
-    ordered_mol = order_molecule_like_smile(smile, mol)
-    np.testing.assert_almost_equal(ordered_mol.atomic_numbers, atomic_numbers)
-
-
 def test_get_coordinates():
-    coordinates = get_coordinates({"O": 200, "CCO": 20}, [0, 0, 0, 19.59, 19.59, 19.59], 1, {})
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    O.generate_conformers()
+    coords = pymatgen.core.Molecule.from_file(CCO_xyz).cart_coords * unit.angstrom
+    CCO.add_conformer(coords)
+    CCO.add_conformer(coords)
+    CCO.add_conformer(coords)
+    coordinates = get_coordinates(
+        {O: 200, CCO: 20}, box=[0, 0, 0, 19.59, 19.59, 19.59], random_seed=1
+    )
     assert isinstance(coordinates, np.ndarray)
     assert len(coordinates) == 780
     assert np.min(coordinates) > -0.2
@@ -175,201 +134,247 @@ def test_get_coordinates():
 
 
 def test_get_coordinates_added_geometry():
-    pf6_geometry = xyz_to_molecule(PF6_xyz)
+    pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
+    pf6 = infer_openff_mol(pf6_mol)
+    pf6_geometry = pymatgen.core.Molecule.from_file(PF6_xyz).cart_coords * unit.angstrom
+    # pf6 = tk.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+    pf6.add_conformer(pf6_geometry)
     coordinates = get_coordinates(
-        {"F[P-](F)(F)(F)(F)F": 1},
+        {pf6: 3},
         [0, 0, 0, 3, 3, 3],
         1,
-        smile_geometries={"F[P-](F)(F)(F)(F)F": pf6_geometry},
     )
-    assert len(coordinates) == 7
-    np.testing.assert_almost_equal(np.linalg.norm(coordinates[1] - coordinates[4]), 1.6, 3)
+    assert len(coordinates) == 21
+    np.testing.assert_almost_equal(
+        np.linalg.norm(coordinates[0] - coordinates[4]), 1.6, 3
+    )
     with open(trimer_txt) as file:
         trimer_smile = file.read()
-    trimer_geometry = xyz_to_molecule(trimer_pdb)
+    trimer_geometry = (
+        pymatgen.core.Molecule.from_file(trimer_pdb).cart_coords * unit.angstrom
+    )
+    trimer = tk.Molecule.from_smiles(trimer_smile)
+    trimer.add_conformer(trimer_geometry)
+
     coordinates = get_coordinates(
-        {trimer_smile: 1},
+        {trimer: 1},
         [0, 0, 0, 20, 20, 20],
         1,
-        smile_geometries={trimer_smile: trimer_geometry},
     )
     assert len(coordinates) == 217
 
 
-def test_get_openmm_topology():
-    topology = get_openmm_topology({"O": 200, "CCO": 20})
-    assert isinstance(topology, openmm.app.Topology)
-    assert topology.getNumAtoms() == 780
-    assert topology.getNumResidues() == 220
-    assert topology.getNumBonds() == 560
-    ethanol_smile = "CCO"
-    fec_smile = "O=C1OC[C@H](F)O1"
-    topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50})
-    assert topology.getNumAtoms() == 950
+def test_get_openff_topology():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    topology = get_openff_topology({O: 200, CCO: 20})
+    assert topology.n_atoms == 780
+    assert topology.n_molecules == 220
+    assert topology.n_bonds == 560
 
 
-@pytest.mark.parametrize(
-    "charges_path, smile, atom_values",
-    [
-        (Li_charges, "[Li+]", [0]),
-        (CCO_charges, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
-        (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 8, 9, 5]),
-        (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 8, 9, 5]),
-        (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
-    ],
-)
-def test_add_mol_charges_to_forcefield(charges_path, smile, atom_values):
-    charges = np.load(charges_path)
-    openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
-    atom_map = {i: j for i, j in enumerate(atom_values)}  # this saves some space
-    mapped_charges = np.array([charges[atom_map[i]] for i in range(len(charges))])
-    openff_mol.partial_charges = mapped_charges * elementary_charge
-    forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-    add_mol_charges_to_forcefield(forcefield, openff_mol)
-    topology = openff_mol.to_topology()
-    system = forcefield.create_openmm_system(topology)
-    for force in system.getForces():
-        if type(force) == NonbondedForce:
-            expected = np.array([force.getParticleParameters(i)[0]._value for i in range(force.getNumParticles())])
-            np.testing.assert_allclose(expected, mapped_charges, atol=0.01)
-
-
-def test_assign_charges_to_mols():
-    # set up partial charges
-    ethanol_mol = pymatgen.core.Molecule.from_file(CCO_xyz)
-    fec_mol = pymatgen.core.Molecule.from_file(FEC_s_xyz)
-    ethanol_charges = np.load(CCO_charges)
-    fec_charges = np.load(FEC_charges)
-    partial_charges = [(ethanol_mol, ethanol_charges), (fec_mol, fec_charges)]
-    # set up force field
-    ethanol_smile = "CCO"
-    fec_smile = "O=C1OC[C@H](F)O1"
-    li_smile = "[Li+]"
-    openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-    charged_mols = assign_charges_to_mols(
-        [ethanol_smile, fec_smile, li_smile],
-        "am1bcc",
-        {},
-        partial_charges,
-    )
-    openff_forcefield_scaled = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
-    charged_mols_scaled = assign_charges_to_mols(
-        [ethanol_smile, fec_smile, li_smile],
-        "am1bcc",
-        {ethanol_smile: 0.9, fec_smile: 0.9, li_smile: 0.9},
-        partial_charges,
-    )
-    # construct a System to make testing easier
-    topology = get_openmm_topology({ethanol_smile: 50, fec_smile: 50, li_smile: 1})
-    openff_topology = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols)
-    openff_topology_scaled = openff.toolkit.topology.Topology.from_openmm(topology, charged_mols_scaled)
-    system = openff_forcefield.create_openmm_system(
-        openff_topology,
-        charge_from_molecules=charged_mols,
-    )
-    system_scaled = openff_forcefield_scaled.create_openmm_system(
-        openff_topology_scaled, charge_from_molecules=charged_mols_scaled, allow_nonintegral_charges=True
-    )
-    # ensure that all forces are from our assigned force field
-    # this does not ensure correct ordering, as we already test that with
-    # other methods
-    fec_charges_reordered = fec_charges[[0, 1, 2, 3, 4, 6, 7, 8, 9, 5]]
-    full_partial_array = np.append(np.tile(ethanol_charges, 50), np.tile(fec_charges_reordered, 50))
-    full_partial_array = np.append(full_partial_array, np.array([1]))
-    for force in system.getForces():
-        if type(force) == NonbondedForce:
-            charge_array = np.zeros(force.getNumParticles())
-            for i in range(len(charge_array)):
-                charge_array[i] = force.getParticleParameters(i)[0]._value
-    np.testing.assert_allclose(full_partial_array, charge_array, atol=0.0001)
-    for force in system_scaled.getForces():
-        if type(force) == NonbondedForce:
-            charge_array = np.zeros(force.getNumParticles())
-            for i in range(len(charge_array)):
-                charge_array[i] = force.getParticleParameters(i)[0]._value
-    np.testing.assert_allclose(full_partial_array * 0.9, charge_array, atol=0.0001)
-
-
-def test_parameterize_system():
-    # TODO: add test here to see if I am adding charges?
-    topology = get_openmm_topology({"O": 200, "CCO": 20})
-    smile_strings = ["O", "CCO"]
-    box = [0, 0, 0, 19.59, 19.59, 19.59]
-    force_field = "Sage"
-    partial_charge_method = "am1bcc"
-    system = parameterize_system(
-        topology,
-        smile_strings,
-        box,
-        force_field=force_field,
-        partial_charge_method=partial_charge_method,
-        partial_charge_scaling={},
-        partial_charges=[],
-    )
-    assert system.getNumParticles() == 780
-    assert system.usesPeriodicBoundaryConditions()
-
-
+# # TODO: refactor to test new parameterize system
 # @pytest.mark.parametrize(
-#
+#     "charges_path, smile, atom_values",
+#     [
+#         (Li_charges, "[Li+]", [0]),
+#         (CCO_charges, "CCO", [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+#         (FEC_charges, "O=C1OC[C@@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 8, 9, 5]),
+#         (FEC_charges, "O=C1OC[C@H](F)O1", [0, 1, 2, 3, 4, 6, 7, 8, 9, 5]),
+#         (PF6_charges, "F[P-](F)(F)(F)(F)F", [1, 0, 2, 3, 4, 5, 6]),
+#     ],
 # )
+# def test_add_mol_charges_to_forcefield(charges_path, smile, atom_values):
+#     charges = np.load(charges_path)
+#     openff_mol = openff.toolkit.topology.Molecule.from_smiles(smile)
+#     atom_map = {i: j for i, j in enumerate(atom_values)}  # this saves some space
+#     mapped_charges = np.array([charges[atom_map[i]] for i in range(len(charges))])
+#     openff_mol.partial_charges = mapped_charges * elementary_charge
+#     forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
+#     add_mol_charges_to_forcefield(forcefield, openff_mol)
+#     topology = openff_mol.to_topology()
+#     system = forcefield.create_openmm_system(topology)
+#     for force in system.getForces():
+#         if type(force) == NonbondedForce:
+#             expected = np.array([force.getParticleParameters(i)[0]._value for i in range(force.getNumParticles())])
+#             np.testing.assert_allclose(expected, mapped_charges, atol=0.01)
 
 
-@pytest.mark.parametrize("w_ff, sm_ff", [("spce", "gaff"), ("spce", "sage"), ("tip3p", "gaff")])
-def test_parameterize_mixed_forcefield_system(w_ff, sm_ff):
-    # TODO: test with charges
-    # TODO: periodic boundaries assertion
-    # TODO: assert forcefields assigned correctly
-    topology = get_openmm_topology({"O": 200, "CCO": 20})
-    smile_strings = ["O", "CCO"]
-    box = [0, 0, 0, 19.59, 19.59, 19.59]
-    force_field = {"O": w_ff, "CCO": sm_ff}
-    partial_charge_method = "am1bcc"
-    system = parameterize_system(
-        topology,
-        smile_strings,
-        box,
-        force_field=force_field,
-        partial_charge_method=partial_charge_method,
-        partial_charge_scaling={},
-        partial_charges=[],
+# # TODO refactor to test new parameterize system
+# def test_parameterize_system():
+#     # TODO: add test here to see if I am adding charges?
+#     topology = get_openmm_topology({"O": 200, "CCO": 20})
+#     smile_strings = ["O", "CCO"]
+#     box = [0, 0, 0, 19.59, 19.59, 19.59]
+#     force_field = "Sage"
+#     partial_charge_method = "am1bcc"
+#     system = parameterize_system(
+#         topology,
+#         smile_strings,
+#         box,
+#         force_field=force_field,
+#         partial_charge_method=partial_charge_method,
+#         partial_charge_scaling={},
+#         partial_charges=[],
+#     )
+#     assert system.getNumParticles() == 780
+#     assert system.usesPeriodicBoundaryConditions()
+#
+#
+# # TODO: refactor to test new parameterize system
+# @pytest.mark.parametrize("w_ff, sm_ff", [("spce", "gaff"), ("spce", "sage"), ("tip3p", "gaff")])
+# def test_parameterize_mixed_forcefield_system(w_ff, sm_ff):
+#     # TODO: test with charges
+#     # TODO: periodic boundaries assertion
+#     # TODO: assert forcefields assigned correctly
+#     topology = get_openmm_topology({"O": 200, "CCO": 20})
+#     smile_strings = ["O", "CCO"]
+#     box = [0, 0, 0, 19.59, 19.59, 19.59]
+#     force_field = {"O": w_ff, "CCO": sm_ff}
+#     partial_charge_method = "am1bcc"
+#     system = parameterize_system(
+#         topology,
+#         smile_strings,
+#         box,
+#         force_field=force_field,
+#         partial_charge_method=partial_charge_method,
+#         partial_charge_scaling={},
+#         partial_charges=[],
+#     )
+#     assert len(system.getForces()) > 0
+#     wforce = system.getForces()[0].getBondParameters(0)
+#     notwforce = system.getForces()[0].getBondParameters(401)
+#     assert wforce != notwforce
+#     assert system.getNumParticles() == 780
+#     assert system.usesPeriodicBoundaryConditions()
+#
+#
+# # TODO refactor, perhaps disable for now
+# @pytest.mark.parametrize("modela, modelb", [("spce", "tip3p"), ("amber14/tip3p.xml", "amber14/tip3pfb.xml")])
+# def test_water_models(modela, modelb):
+#     topology = get_openmm_topology({"O": 200})
+#     smile_strings = ["O"]
+#     box = [0, 0, 0, 19.59, 19.59, 19.59]
+#     force_field_a = {"O": modela}
+#     partial_charge_method = "am1bcc"
+#     system_a = parameterize_system(
+#         topology,
+#         smile_strings,
+#         box,
+#         force_field=force_field_a,
+#         partial_charge_method=partial_charge_method,
+#         partial_charge_scaling={},
+#         partial_charges=[],
+#     )
+#     force_field_b = {"O": modelb}
+#     partial_charge_method = "am1bcc"
+#     system_b = parameterize_system(
+#         topology,
+#         smile_strings,
+#         box,
+#         force_field=force_field_b,
+#         partial_charge_method=partial_charge_method,
+#         partial_charge_scaling={},
+#         partial_charges=[],
+#     )
+#     force_a = system_a.getForces()[0].getBondParameters(0)
+#     force_b = system_b.getForces()[0].getBondParameters(0)
+#     # assert rOH is different for two different water models
+#     assert force_a[2] != force_b[2]
+
+
+def test_parameterize_w_interchange():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    O.assign_partial_charges("am1bcc")
+    CCO.assign_partial_charges("am1bcc")
+    mol_specs = [
+        {"openff_mol": O},
+        {"openff_mol": CCO},
+    ]
+    topology = get_openff_topology({O: 200, CCO: 20})
+    box = np.array([0, 0, 0, 19.59, 19.59, 19.59])
+    parameterize_w_interchange(topology, mol_specs, box)
+
+
+def test_molgraph_from_atom_bonds():
+    import networkx as nx
+    import networkx.algorithms.isomorphism as iso
+
+    pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+
+    atoms, bonds = pf6_openff.atoms, pf6_openff.bonds
+    pf6_graph = molgraph_from_atoms_bonds(atoms, bonds)
+
+    assert len(pf6_graph.molecule) == 7
+    assert pf6_graph.molecule.charge == -1
+
+    em = iso.categorical_edge_match("weight", 1)
+
+    pf6_openff2 = molgraph_to_openff_mol(pf6_graph)
+    pf6_graph2 = molgraph_from_openff_mol(pf6_openff2)
+    assert nx.is_isomorphic(pf6_graph.graph, pf6_graph2.graph, edge_match=em)
+
+
+def test_molgraph_from_openff_mol():
+    from pymatgen.analysis.local_env import OpenBabelNN
+
+    cco_openff = openff.toolkit.topology.Molecule.from_smiles("CCO")
+    cco_openff.assign_partial_charges("mmff94")
+
+    cco_molgraph_1 = molgraph_from_openff_mol(cco_openff)
+
+    assert len(cco_molgraph_1.molecule) == 9
+    assert cco_molgraph_1.molecule.charge == 0
+    assert len(cco_molgraph_1.graph.edges) == 8
+
+    cco_pmg = pymatgen.core.Molecule.from_file(CCO_xyz)
+    cco_molgraph_2 = MoleculeGraph.with_local_env_strategy(cco_pmg, OpenBabelNN())
+
+    em = iso.categorical_edge_match("weight", 1)
+
+    assert nx.is_isomorphic(cco_molgraph_1.graph, cco_molgraph_2.graph, edge_match=em)
+
+
+def test_molgraph_to_openff_pf6():
+    """transform a water MoleculeGraph to a OpenFF water molecule"""
+    pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
+    pf6_mol.set_charge_and_spin(charge=-1)
+    pf6_molgraph = MoleculeGraph.with_edges(
+        pf6_mol,
+        {
+            (0, 1): {"weight": 1},
+            (0, 2): {"weight": 1},
+            (0, 3): {"weight": 1},
+            (0, 4): {"weight": 1},
+            (0, 5): {"weight": 1},
+            (0, 6): {"weight": 1},
+        },
     )
-    assert len(system.getForces()) > 0
-    wforce = system.getForces()[0].getBondParameters(0)
-    notwforce = system.getForces()[0].getBondParameters(401)
-    assert wforce != notwforce
-    assert system.getNumParticles() == 780
-    assert system.usesPeriodicBoundaryConditions()
+
+    pf6_openff_1 = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+
+    pf6_openff_2 = molgraph_to_openff_mol(pf6_molgraph)
+    assert pf6_openff_1 == pf6_openff_2
 
 
-@pytest.mark.parametrize("modela, modelb", [("spce", "tip3p"), ("amber14/tip3p.xml", "amber14/tip3pfb.xml")])
-def test_water_models(modela, modelb):
-    topology = get_openmm_topology({"O": 200})
-    smile_strings = ["O"]
-    box = [0, 0, 0, 19.59, 19.59, 19.59]
-    force_field_a = {"O": modela}
-    partial_charge_method = "am1bcc"
-    system_a = parameterize_system(
-        topology,
-        smile_strings,
-        box,
-        force_field=force_field_a,
-        partial_charge_method=partial_charge_method,
-        partial_charge_scaling={},
-        partial_charges=[],
-    )
-    force_field_b = {"O": modelb}
-    partial_charge_method = "am1bcc"
-    system_b = parameterize_system(
-        topology,
-        smile_strings,
-        box,
-        force_field=force_field_b,
-        partial_charge_method=partial_charge_method,
-        partial_charge_scaling={},
-        partial_charges=[],
-    )
-    force_a = system_a.getForces()[0].getBondParameters(0)
-    force_b = system_b.getForces()[0].getBondParameters(0)
-    # assert rOH is different for two different water models
-    assert force_a[2] != force_b[2]
+def test_molgraph_to_openff_cco():
+    from pymatgen.analysis.local_env import OpenBabelNN
+
+    cco_pmg = pymatgen.core.Molecule.from_file(CCO_xyz)
+    cco_molgraph = MoleculeGraph.with_local_env_strategy(cco_pmg, OpenBabelNN())
+
+    cco_openff_1 = molgraph_to_openff_mol(cco_molgraph)
+
+    cco_openff_2 = openff.toolkit.topology.Molecule.from_smiles("CCO")
+    cco_openff_2.assign_partial_charges("mmff94")
+
+    assert cco_openff_1 == cco_openff_2
+
+
+def test_molgraph_from_openff_topology():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+
+    topology = get_openff_topology({O: 200, CCO: 20})
+    molgraph_from_openff_topology(topology)
