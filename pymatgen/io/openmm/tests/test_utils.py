@@ -8,7 +8,6 @@ from pymatgen.analysis.graphs import MoleculeGraph
 import openff.toolkit as tk
 
 # openmm
-from openmm.unit import elementary_charge
 
 # from openmm.openmm import NonbondedForce
 
@@ -19,8 +18,9 @@ from pymatgen.io.openmm.utils import (
     smiles_to_atom_type_array,
     smiles_to_resname_array,
     molgraph_to_openff_mol,
-    openff_mol_to_molgraph,
+    molgraph_from_openff_mol,
     molgraph_from_openff_topology,
+    molgraph_from_atoms_bonds,
     get_openff_topology,
     infer_openff_mol,
     parameterize_w_interchange,
@@ -36,9 +36,12 @@ from pymatgen.io.openmm.tests.datafiles import (
     FEC_s_xyz,
     # FEC_charges,
     # Li_charges,
-    PF6_charges,
+    # PF6_charges,
 )
 from openff.units import unit
+
+import networkx as nx
+import networkx.algorithms.isomorphism as iso
 
 
 def test_xyz_to_molecule():
@@ -294,11 +297,50 @@ def test_parameterize_w_interchange():
     parameterize_w_interchange(topology, mol_specs, box)
 
 
-def test_molgraph_to_openff_mol():
+def test_molgraph_from_atom_bonds():
+    import networkx as nx
+    import networkx.algorithms.isomorphism as iso
+
+    pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+
+    atoms, bonds = pf6_openff.atoms, pf6_openff.bonds
+    pf6_graph = molgraph_from_atoms_bonds(atoms, bonds)
+
+    assert len(pf6_graph.molecule) == 7
+    assert pf6_graph.molecule.charge == -1
+
+    em = iso.categorical_edge_match("weight", 1)
+
+    pf6_openff2 = molgraph_to_openff_mol(pf6_graph)
+    pf6_graph2 = molgraph_from_openff_mol(pf6_openff2)
+    assert nx.is_isomorphic(pf6_graph.graph, pf6_graph2.graph, edge_match=em)
+
+
+def test_molgraph_from_openff_mol():
+    from pymatgen.analysis.local_env import OpenBabelNN
+
+    cco_openff = openff.toolkit.topology.Molecule.from_smiles("CCO")
+    cco_openff.assign_partial_charges("mmff94")
+
+    cco_molgraph_1 = molgraph_from_openff_mol(cco_openff)
+
+    assert len(cco_molgraph_1.molecule) == 9
+    assert cco_molgraph_1.molecule.charge == 0
+    assert len(cco_molgraph_1.graph.edges) == 8
+
+    cco_pmg = pymatgen.core.Molecule.from_file(CCO_xyz)
+    cco_molgraph_2 = MoleculeGraph.with_local_env_strategy(cco_pmg, OpenBabelNN())
+
+    em = iso.categorical_edge_match("weight", 1)
+
+    assert nx.is_isomorphic(cco_molgraph_1.graph, cco_molgraph_2.graph, edge_match=em)
+
+
+def test_molgraph_to_openff_pf6():
     """transform a water MoleculeGraph to a OpenFF water molecule"""
     pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
     pf6_mol.set_charge_and_spin(charge=-1)
-    pf6_graph = MoleculeGraph.with_edges(
+    pf6_molgraph = MoleculeGraph.with_edges(
         pf6_mol,
         {
             (0, 1): {"weight": 1},
@@ -309,33 +351,30 @@ def test_molgraph_to_openff_mol():
             (0, 6): {"weight": 1},
         },
     )
-    pf6_openff = molgraph_to_openff_mol(pf6_graph)
-    pf6_graph2 = openff_mol_to_molgraph(pf6_openff)
-    pf6_openff2 = molgraph_to_openff_mol(pf6_graph2)
-    assert pf6_openff == pf6_openff2
+
+    pf6_openff_1 = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
+
+    pf6_openff_2 = molgraph_to_openff_mol(pf6_molgraph)
+    assert pf6_openff_1 == pf6_openff_2
 
 
-def test_openff_mol_to_molgraph():
-    import networkx as nx
-    import networkx.algorithms.isomorphism as iso
+def test_molgraph_to_openff_cco():
+    from pymatgen.analysis.local_env import OpenBabelNN
 
-    pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
-    pf6_charges = np.load(PF6_charges)[[1, 0, 2, 3, 4, 5, 6]]
-    pf6_openff.partial_charges = pf6_charges * elementary_charge
-    pf6_graph = openff_mol_to_molgraph(pf6_openff)
-    assert len(pf6_graph.molecule) == 7
-    assert pf6_graph.molecule.charge == -1
-    em = iso.categorical_edge_match("weight", 1)
-    nm = iso.numerical_node_match(["formal_charge", "partial_charge"], [0, 0])
-    pf6_openff2 = molgraph_to_openff_mol(pf6_graph)
-    pf6_graph2 = openff_mol_to_molgraph(pf6_openff2)
-    assert nx.is_isomorphic(
-        pf6_graph.graph, pf6_graph2.graph, edge_match=em, node_match=nm
-    )
-    assert pf6_graph.molecule == pf6_graph2.molecule
-    assert pf6_openff == pf6_openff2
+    cco_pmg = pymatgen.core.Molecule.from_file(CCO_xyz)
+    cco_molgraph = MoleculeGraph.with_local_env_strategy(cco_pmg, OpenBabelNN())
+
+    cco_openff_1 = molgraph_to_openff_mol(cco_molgraph)
+
+    cco_openff_2 = openff.toolkit.topology.Molecule.from_smiles("CCO")
+    cco_openff_2.assign_partial_charges("mmff94")
+
+    assert cco_openff_1 == cco_openff_2
 
 
 def test_molgraph_from_openff_topology():
-    topology = get_openff_topology({"O": 200, "CCO": 20})
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+
+    topology = get_openff_topology({O: 200, CCO: 20})
     molgraph_from_openff_topology(topology)
