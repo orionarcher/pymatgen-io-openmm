@@ -49,7 +49,6 @@ class TestOpenMMSolutionGen:
         }
         assert set(input_set.settings["atom_resnames"]) == {"CCO", "H2O"}
         assert len(input_set.settings["atom_types"]) == 780
-        monty.serialization.dumpfn(input_set, "./test")
         assert input_set.validate()
 
     def test_dump_load_input_set(self):
