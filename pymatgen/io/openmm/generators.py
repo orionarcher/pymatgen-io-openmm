@@ -218,36 +218,6 @@ class OpenMMSolutionGen(InputGenerator):
             )
             mol_specs.append(mol_spec)
 
-        # for i, mol_dict in enumerate(input_mol_dicts):
-        #     # could wrap this logic into a function
-        #     # make_mol_spec(input_mol_dicts) -> mol_spec, openff_mol
-        #     name = mol_dict.get('name') or f'molecule_{i}'
-        #     force_field = mol_dict.get('force_field') or self.force_field
-        #     init_geometry = mol_dict.get('init_geometry') or smile_to_molecule(mol_dict['smile']).cart_coords
-        #     partial_charges, formal_charge = get_partial_charges(
-        #         mol_dict.get('smile'),
-        #         mol_dict.get('geometry'),
-        #         mol_dict.get('partial_charges'),
-        #         mol_dict.get('charge_scaling')
-        #     )
-        #     openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict['smile'])
-        #     # add conformer
-        #     # assign init_geometry
-        #     # assign_partial_charges
-        #     mol_spec = dict(
-        #         name=name,
-        #         molecule_graph=openff_mol_to_molgraph(openff_mol),
-        #         forcefield=str.lower(force_field),
-        #         smile=mol_dict['smile'],
-        #         count=mol_dict['count'],
-        #         init_geometry=init_geometry,
-        #         partial_charges=partial_charges,
-        #         formal_charge=formal_charge,
-        #     )
-        #     mol_specs.append(mol_spec)
-        #     openff_counts.append(openff_mol)
-        #     # or add a mol_spec
-
         openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
 
         assert (density is None) ^ (
