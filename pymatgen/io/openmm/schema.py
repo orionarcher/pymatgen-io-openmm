@@ -32,7 +32,7 @@ class InputMoleculeSpec(BaseModel):
     smile: str
     count: int
     name: Optional[str] = None
-    charge_scaling: confloat(ge=0.1, le=10) = 1.0  # type: ignore
+    charge_scaling: Optional[confloat(ge=0.1, le=10)] = 1.0  # type: ignore
     force_field: Optional[constr(to_lower=True)] = None  # type: ignore
     geometries: Optional[List[Geometry]] = None
     partial_charges: Optional[List[float]] = None
@@ -56,24 +56,37 @@ class InputMoleculeSpec(BaseModel):
         """check that force_field is valid"""
         return force_field.lower()
 
-    @validator("name")
-    def assign_name(cls, name, values):
+    @validator("name", always=True)
+    def set_name(cls, name, values):
         """assign name if not provided"""
         if name is None:
             return values["smile"]
         return name
 
     @validator("geometries", pre=True)
-    def convert_xyz_to_geometry(cls, geometries):
+    def convert_xyz_to_geometry(cls, geometries, values):
         """convert xyz to Geometry"""
         if geometries is not None:
-            return [Geometry(xyz=xyz) for xyz in geometries]
+            geometries = [Geometry(xyz=xyz) for xyz in geometries]
+            # assert xyz lengths are the same
+            n_atoms = tk.Molecule.from_smiles(values["smile"]).n_atoms
+            if not all([len(geometry.xyz) == n_atoms for geometry in geometries]):
+                raise ValueError(
+                    "All geometries must have the same number of atoms as the molecule"
+                    " defined in the SMILES string."
+                )
+            return geometries
         return geometries
 
     @validator("partial_charges", pre=True)
     def check_geometry_is_set(cls, partial_charges, values):
         """check that geometries is set if partial_charges is set"""
         if partial_charges is not None:
-            if values.get("geometries") is None:
+            geometries = values.get("geometries")
+            if geometries is None:
                 raise ValueError("geometries must be set if partial_charges is set")
+            if not len(partial_charges) == len(geometries[0].xyz):
+                raise ValueError(
+                    "partial_charges must be the same length as all geometries"
+                )
         return list(partial_charges)
