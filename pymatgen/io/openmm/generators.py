@@ -29,11 +29,11 @@ from pymatgen.io.openmm.inputs import (
     IntegratorInput,
     StateInput,
 )
+from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
-    xyz_to_molecule,
     smiles_to_atom_type_array,
     smiles_to_resname_array,
     get_atom_map,
@@ -162,55 +162,55 @@ class OpenMMSolutionGen(InputGenerator):
 
     def get_input_set(
         self,
-        input_mol_dicts: List[Dict[str, Union[str, int, float, np.array]]],
+        input_mol_dicts: InputMoleculeSpec,
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ):
         # TODO: should check uniqueness of input_mol_dicts
+        input_mol_dicts = [
+            InputMoleculeSpec(**mol_dict) for mol_dict in input_mol_dicts
+        ]
         mol_specs = []
         for i, mol_dict in enumerate(input_mol_dicts):
             # TODO: put this in a function
-            openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict["smile"])
+            openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
 
             # add conformer
-            if geometries := mol_dict.get("geometries"):
-                if not isinstance(geometries, list):
-                    geometries = [geometries]
+            if geometries := mol_dict.geometries:
                 for geometry in geometries:
-                    mol = xyz_to_molecule(geometry)
-                    inferred_mol = infer_openff_mol(mol)
+                    inferred_mol = infer_openff_mol(geometry.xyz)
                     is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
                     if not is_isomorphic:
                         raise ValueError(
-                            f"An isomorphism cannot be found between smile {mol_dict['smile']} "
-                            f"and the provided geometry {geometry}."
+                            f"An isomorphism cannot be found between smile {mol_dict.smile} "
+                            f"and the provided geometry {geometry.xyz}."
                         )
                     new_mol = pymatgen.core.Molecule.from_sites(
-                        [mol.sites[i] for i in atom_map.values()]
+                        [geometry.xyz.sites[i] for i in atom_map.values()]
                     )
                     openff_mol.add_conformer(new_mol.cart_coords * angstrom)
             else:
                 atom_map = {i: i for i in range(openff_mol.n_atoms)}
                 # TODO document this
                 openff_mol.generate_conformers(
-                    n_conformers=mol_dict.get("max_conformers") or 1
+                    n_conformers=mol_dict.max_conformers or 1
                 )
 
             # assign partial charges
-            if mol_dict.get("partial_charges") is not None:
-                partial_charges = mol_dict.get("partial_charges")
+            if mol_dict.partial_charges is not None:
+                partial_charges = np.array(mol_dict.partial_charges)
                 openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
             else:
                 openff_mol.assign_partial_charges(self.partial_charge_method)
-            charge_scaling = mol_dict.get("charge_scaling") or 1
+            charge_scaling = mol_dict.charge_scaling or 1
             openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
 
             # create mol_spec
             mol_spec = dict(
-                name=mol_dict.get("name") or mol_dict["smile"],
-                forcefield=str.lower(mol_dict.get("force_field") or self.force_field),  # type: ignore
-                smile=mol_dict["smile"],
-                count=mol_dict["count"],
+                name=mol_dict.name,
+                count=mol_dict.count,
+                smile=mol_dict.smile,
+                forcefield=mol_dict.force_field or self.force_field,  # type: ignore
                 formal_charge=int(
                     np.sum(openff_mol.partial_charges.magnitude) / charge_scaling
                 ),
@@ -234,7 +234,7 @@ class OpenMMSolutionGen(InputGenerator):
         openff_topology = get_openff_topology(openff_counts)
         openmm_topology = openff_topology.to_openmm()
 
-        ffs = np.array([mol_spec.get("forcefield") for mol_spec in mol_specs])
+        ffs = np.array([mol_spec["forcefield"] for mol_spec in mol_specs])
         if np.all(ffs == ffs[0]) and ffs[0] in ["sage", "opls"]:
             system = parameterize_w_interchange(
                 openff_topology, mol_specs, box, force_field=ffs[0]
