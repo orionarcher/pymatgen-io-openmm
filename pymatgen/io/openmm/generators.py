@@ -162,13 +162,13 @@ class OpenMMSolutionGen(InputGenerator):
 
     def get_input_set(
         self,
-        input_mol_dicts: InputMoleculeSpec,
+        input_molecule_dicts: List[Dict],
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ):
         # TODO: should check uniqueness of input_mol_dicts
         input_mol_dicts = [
-            InputMoleculeSpec(**mol_dict) for mol_dict in input_mol_dicts
+            InputMoleculeSpec(**mol_dict) for mol_dict in input_molecule_dicts
         ]
         mol_specs = []
         for i, mol_dict in enumerate(input_mol_dicts):
