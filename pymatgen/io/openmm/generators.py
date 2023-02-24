@@ -162,16 +162,25 @@ class OpenMMSolutionGen(InputGenerator):
 
     def get_input_set(
         self,
-        input_molecule_dicts: List[Dict],
+        input_mol_dicts: List[Union[Dict, InputMoleculeSpec]],
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ):
-        # TODO: should check uniqueness of input_mol_dicts
-        input_mol_dicts = [
-            InputMoleculeSpec(**mol_dict) for mol_dict in input_molecule_dicts
-        ]
+        # coerce all input_mol_dicts to InputMoleculeSpec
+        input_mol_specs = []
+        for mol_dict in input_mol_dicts:
+            if isinstance(mol_dict, dict):
+                input_mol_specs.append(InputMoleculeSpec(**mol_dict))
+            else:
+                input_mol_specs.append(mol_dict)
+
+        # assert uniqueness of smiles in mol_specs
+        smiles = [mol_spec.smile for mol_spec in input_mol_specs]
+        if len(smiles) != len(set(smiles)):
+            raise ValueError("Smiles in input mol dicts must be unique.")
+
         mol_specs = []
-        for i, mol_dict in enumerate(input_mol_dicts):
+        for i, mol_dict in enumerate(input_mol_specs):
             # TODO: put this in a function
             openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
 
