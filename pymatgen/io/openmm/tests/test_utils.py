@@ -288,13 +288,27 @@ def test_parameterize_w_interchange():
     CCO = tk.Molecule.from_smiles("CCO")
     O.assign_partial_charges("am1bcc")
     CCO.assign_partial_charges("am1bcc")
-    mol_specs = [
-        {"openff_mol": O},
-        {"openff_mol": CCO},
-    ]
+
+    o_spec = dict(
+        smile="O",
+        count=200,
+        name="O",
+        forcefield="sage",
+        formal_charge=0,
+        openff_mol=O,
+    )
+    cco_spec = dict(
+        smile="CCO",
+        count=200,
+        name="CCO",
+        forcefield="sage",
+        formal_charge=0,
+        openff_mol=CCO,
+    )
+
     topology = get_openff_topology({O: 200, CCO: 20})
     box = np.array([0, 0, 0, 19.59, 19.59, 19.59])
-    parameterize_w_interchange(topology, mol_specs, box)
+    parameterize_w_interchange(topology, [o_spec, cco_spec], box)
 
 
 def test_molgraph_from_atom_bonds():

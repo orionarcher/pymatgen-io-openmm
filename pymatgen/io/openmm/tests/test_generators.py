@@ -7,6 +7,8 @@ import monty.serialization
 # cheminformatics
 import numpy as np
 
+from pymatgen.io.openmm.schema import InputMoleculeSpec
+
 # openff
 
 # openmm
@@ -27,6 +29,8 @@ __version__ = "1.0"
 __maintainer__ = "Orion Cohen"
 __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
+
+from pymatgen.io.openmm.utils import xyz_to_molecule
 
 
 class TestOpenMMSolutionGen:
@@ -82,9 +86,34 @@ class TestOpenMMSolutionGen:
         }
         assert input_set.validate()
 
+    def test_validation(self):
+        pf6_charge_array = np.load(PF6_charges)
+        li_charge_array = np.load(Li_charges)
+        input_mol_dicts = [
+            {"smile": "O", "count": 200, "name": "H2O"},
+            {"smile": "CCO", "count": 20},
+            {
+                "smile": "[Li+]",
+                "count": 10,
+                "charge_scaling": 0.9,
+                "geometries": [Li_xyz],
+                "partial_charges": list(li_charge_array),
+            },
+            {
+                "smile": "F[P-](F)(F)(F)(F)F",
+                "count": 10,
+                "charge_scaling": 0.9,
+                "geometries": [PF6_xyz],
+                "partial_charges": pf6_charge_array,
+            },
+        ]
+        for mol_dict in input_mol_dicts:
+            InputMoleculeSpec(**mol_dict)
+
     def test_get_input_set_w_charges(self):
         pf6_charge_array = np.load(PF6_charges)
         li_charge_array = np.load(Li_charges)
+        mol = xyz_to_molecule(Li_xyz)
         generator = OpenMMSolutionGen(packmol_random_seed=1)
         input_mol_dicts = [
             {"smile": "O", "count": 200, "name": "H2O"},
@@ -93,14 +122,15 @@ class TestOpenMMSolutionGen:
                 "smile": "[Li+]",
                 "count": 10,
                 "charge_scaling": 0.9,
-                "geometries": Li_xyz,
+                "forcefield": "Sage",
+                "geometries": [mol],
                 "partial_charges": li_charge_array,
             },
             {
                 "smile": "F[P-](F)(F)(F)(F)F",
                 "count": 10,
                 "charge_scaling": 0.9,
-                "geometries": PF6_xyz,
+                "geometries": [PF6_xyz],
                 "partial_charges": pf6_charge_array,
             },
         ]
