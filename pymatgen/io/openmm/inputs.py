@@ -33,7 +33,11 @@ class TopologyInput(InputFile):
     Input handler for OpenMM topologies. Stores and parses PDB files.
     """
 
-    def __init__(self, topology: Union[Topology, str], positions: Optional[Union[List, np.ndarray]] = None):
+    def __init__(
+        self,
+        topology: Union[Topology, str],
+        positions: Optional[Union[List, np.ndarray]] = None,
+    ):
         """
         Instatiates a TopologyInput from an OpenMM.Topology. Positions can be supplied as
         a n x 3 numpy array. If they are not given, positions will be set to 0.
