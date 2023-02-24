@@ -8,3 +8,4 @@ rdkit
 openff-toolkit>=0.12.0
 packmol
 openmmforcefields
+pydantic
