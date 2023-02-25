@@ -30,8 +30,6 @@ __maintainer__ = "Orion Cohen"
 __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
-from pymatgen.io.openmm.utils import xyz_to_molecule
-
 
 class TestOpenMMSolutionGen:
     #  TODO: add test for formally charged smile
@@ -67,7 +65,7 @@ class TestOpenMMSolutionGen:
     def test_get_input_set_big_smile(self):
         generator = OpenMMSolutionGen(
             packmol_random_seed=1,
-            partial_charge_method="mmff94",
+            default_charge_method="mmff94",
         )
         big_smile = (
             "O=C(OC(C)(C)CC/1=O)C1=C(O)/CCCCCCCC/C(NCCN(CCN)CCN)=C2C(OC(C)(C)CC/2=O)=O"
@@ -112,8 +110,6 @@ class TestOpenMMSolutionGen:
 
     def test_get_input_set_w_charges(self):
         pf6_charge_array = np.load(PF6_charges)
-        li_charge_array = np.load(Li_charges)
-        mol = xyz_to_molecule(Li_xyz)
         generator = OpenMMSolutionGen(packmol_random_seed=1)
         input_mol_dicts = [
             {"smile": "O", "count": 200, "name": "H2O"},
@@ -123,8 +119,6 @@ class TestOpenMMSolutionGen:
                 "count": 10,
                 "charge_scaling": 0.9,
                 "forcefield": "Sage",
-                "geometries": [mol],
-                "partial_charges": li_charge_array,
             },
             {
                 "smile": "F[P-](F)(F)(F)(F)F",
@@ -143,7 +137,3 @@ class TestOpenMMSolutionGen:
             "state.xml",
         }
         assert input_set.validate()
-
-    def test_get_input_set_w_geometries(self):
-        # TODO: add test for initial_geometries kwarg
-        return
