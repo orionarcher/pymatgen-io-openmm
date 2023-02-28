@@ -20,10 +20,11 @@ from pymatgen.io.openmm.utils import (
     molgraph_to_openff_mol,
     molgraph_from_openff_mol,
     molgraph_from_openff_topology,
-    molgraph_from_atoms_bonds,
     get_openff_topology,
     infer_openff_mol,
     parameterize_w_interchange,
+    get_unique_subgraphs,
+    molgraph_from_molecules,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -311,14 +312,46 @@ def test_parameterize_w_interchange():
     parameterize_w_interchange(topology, [o_spec, cco_spec], box)
 
 
+def test_get_unique_subgraphs_basic():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    tk.Molecule.from_smiles("CO")
+
+    o_graph = molgraph_from_openff_mol(O)
+    cco_graph = molgraph_from_openff_mol(CCO)
+
+    unique_subgraphs = get_unique_subgraphs([o_graph, cco_graph, cco_graph, cco_graph])
+
+    assert len(unique_subgraphs) == 2
+
+
+def test_get_unique_subgraphs_from_topology():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+    CO = tk.Molecule.from_smiles("CO")
+    topology = get_openff_topology({O: 200, CCO: 20, CO: 20})
+
+    molgraph = molgraph_from_openff_topology(topology)
+    subgraphs = molgraph.get_disconnected_fragments()
+    unique_subgraphs = get_unique_subgraphs(subgraphs)
+
+    assert len(unique_subgraphs) == 3
+
+    o_graph = molgraph_from_openff_mol(O)
+    cco_graph = molgraph_from_openff_mol(CCO)
+
+    unique_subgraphs = get_unique_subgraphs([o_graph, cco_graph, cco_graph, cco_graph])
+
+    assert len(unique_subgraphs) == 2
+
+
 def test_molgraph_from_atom_bonds():
     import networkx as nx
     import networkx.algorithms.isomorphism as iso
 
     pf6_openff = openff.toolkit.topology.Molecule.from_smiles("F[P-](F)(F)(F)(F)F")
 
-    atoms, bonds = pf6_openff.atoms, pf6_openff.bonds
-    pf6_graph = molgraph_from_atoms_bonds(atoms, bonds)
+    pf6_graph = molgraph_from_molecules([pf6_openff])
 
     assert len(pf6_graph.molecule) == 7
     assert pf6_graph.molecule.charge == -1
@@ -391,4 +424,14 @@ def test_molgraph_from_openff_topology():
     CCO = tk.Molecule.from_smiles("CCO")
 
     topology = get_openff_topology({O: 200, CCO: 20})
-    molgraph_from_openff_topology(topology)
+    molgraph = molgraph_from_openff_topology(topology)
+
+    subgraphs = molgraph.get_disconnected_fragments()
+
+    # assert each molecule lengths in molgraph are the same as molecule lengths in topology
+    mol_lengths = [len(mol.atoms) for mol in topology.molecules]
+    molgraph_lengths = [len(subgraph.molecule) for subgraph in subgraphs]
+    np.testing.assert_almost_equal(mol_lengths, molgraph_lengths)
+
+    subgraphs = molgraph.get_disconnected_fragments()
+    return
