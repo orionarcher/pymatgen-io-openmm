@@ -218,7 +218,6 @@ class OpenMMSolutionGen(InputGenerator):
         if box is None:
             box = get_box(openff_counts, density)  # type: ignore
 
-        # note that these variables are all lists of dictionaries
         # TODO: create molgraphs later
         coordinates = get_coordinates(
             openff_counts, box, self.packmol_random_seed, self.packmol_timeout
