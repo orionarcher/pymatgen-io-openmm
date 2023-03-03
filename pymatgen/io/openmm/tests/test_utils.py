@@ -25,6 +25,7 @@ from pymatgen.io.openmm.utils import (
     parameterize_w_interchange,
     get_unique_subgraphs,
     molgraph_from_molecules,
+    molgraph_to_openff_topology,
 )
 
 from pymatgen.io.openmm.tests.datafiles import (
@@ -435,3 +436,15 @@ def test_molgraph_from_openff_topology():
 
     subgraphs = molgraph.get_disconnected_fragments()
     return
+
+
+def test_molgraph_to_openff_topology():
+    O = tk.Molecule.from_smiles("O")
+    CCO = tk.Molecule.from_smiles("CCO")
+
+    topology = get_openff_topology({O: 200, CCO: 20})
+    molgraph = molgraph_from_openff_topology(topology)
+
+    topology_2 = molgraph_to_openff_topology(molgraph)
+
+    assert topology == topology_2
