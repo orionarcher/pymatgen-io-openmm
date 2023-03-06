@@ -303,7 +303,6 @@ def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGra
 
 
 def molgraph_to_openff_topology(molgraph):
-
     # dependent on pmg addition
     subgraphs, new_to_old_index = molgraph.get_disconnected_fragments(
         return_index_map=True
