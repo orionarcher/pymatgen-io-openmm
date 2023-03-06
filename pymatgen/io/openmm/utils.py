@@ -242,7 +242,7 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
     )
     p_table = {el.Z: str(el) for el in Element}
     formal_charge = 0
-    cumulative_atoms = 0
+    cum_atoms = 0
     for molecule in molecules:
         if molecule.conformers is not None:
             coords = molecule.conformers[0].magnitude
@@ -250,34 +250,28 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
             coords = np.zeros((molecule.n_atoms, 3))
         for j, atom in enumerate(molecule.atoms):
             molgraph.insert_node(
-                cumulative_atoms + j,
+                cum_atoms + j,
                 p_table[atom.atomic_number],
                 coords[j, :],
             )
-            molgraph.graph.nodes[cumulative_atoms + j][
-                "atomic_number"
-            ] = atom.atomic_number
-            molgraph.graph.nodes[cumulative_atoms + j]["is_aromatic"] = atom.is_aromatic
-            molgraph.graph.nodes[cumulative_atoms + j][
+            molgraph.graph.nodes[cum_atoms + j]["atomic_number"] = atom.atomic_number
+            molgraph.graph.nodes[cum_atoms + j]["is_aromatic"] = atom.is_aromatic
+            molgraph.graph.nodes[cum_atoms + j][
                 "stereochemistry"
             ] = atom.stereochemistry
-            molgraph.graph.nodes[cumulative_atoms + j][
-                "formal_charge"
-            ] = atom.formal_charge
-            molgraph.graph.nodes[cumulative_atoms + j][
-                "partial_charge"
-            ] = atom.partial_charge
+            molgraph.graph.nodes[cum_atoms + j]["formal_charge"] = atom.formal_charge
+            molgraph.graph.nodes[cum_atoms + j]["partial_charge"] = atom.partial_charge
             formal_charge += atom.formal_charge.magnitude
         for bond in molecule.bonds:
             molgraph.graph.add_edge(
-                cumulative_atoms + bond.atom1_index,
-                cumulative_atoms + bond.atom2_index,
+                cum_atoms + bond.atom1_index,
+                cum_atoms + bond.atom2_index,
                 bond_order=bond.bond_order,
                 is_aromatic=bond.is_aromatic,
                 stereochemistry=bond.stereochemistry,
             )
         # formal_charge += molecule.total_charge
-        cumulative_atoms += molecule.n_atoms
+        cum_atoms += molecule.n_atoms
     molgraph.molecule.set_charge_and_spin(charge=formal_charge)
     return molgraph
 
@@ -309,140 +303,14 @@ def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGra
 
 
 def molgraph_to_openff_topology(molgraph):
-    """
-    Construct an OpenFF Topology object from an OpenMM Topology object.
 
-    Parameters
-    ----------
-    openmm_topology : simtk.openmm.app.Topology
-        An OpenMM Topology object
-    unique_molecules : iterable of objects that can be used to construct unique Molecule objects
-        All unique molecules must be provided, in any order, though multiple copies of each molecule are allowed.
-        The atomic elements and bond connectivity will be used to match the reference molecules
-        to molecule graphs appearing in the OpenMM ``Topology``. If bond orders are present in the
-        OpenMM ``Topology``, these will be used in matching as well.
-
-    Returns
-    -------
-    topology : openff.toolkit.topology.Topology
-        An OpenFF Topology object
-    """
-    # credit to source code from openff.toolkit.topology.topology
-    import networkx as nx
-
-    from openff.toolkit.topology.molecule import Molecule
-
-    # get unique molecule graphs
-    subgraphs = molgraph.get_disconnected_fragments()
-    unique_graphs = get_unique_subgraphs(subgraphs)
-    graph_to_unq_mol = {
-        molgraph.graph: molgraph_to_openff_mol(molgraph) for molgraph in unique_graphs
-    }
-
-    # # Convert all unique mols to graphs
-    # topology = tk.Topology()
-    # graph_to_unq_mol = {}
-    # for unq_mol in unique_molecules:
-    #     unq_mol_graph = unq_mol.to_networkx()
-    #     for existing_graph in graph_to_unq_mol.keys():
-    #         if Molecule.are_isomorphic(
-    #             existing_graph,
-    #             unq_mol_graph,
-    #             return_atom_map=False,
-    #             aromatic_matching=False,
-    #             formal_charge_matching=False,
-    #             bond_order_matching=omm_has_bond_orders,
-    #             atom_stereochemistry_matching=False,
-    #             bond_stereochemistry_matching=False,
-    #         )[0]:
-    #             msg = (
-    #                 "Error: Two unique molecules have indistinguishable "
-    #                 "graphs: {} and {}".format(
-    #                     unq_mol, graph_to_unq_mol[existing_graph]
-    #                 )
-    #             )
-    #             raise DuplicateUniqueMoleculeError(msg)
-    #     graph_to_unq_mol[unq_mol_graph] = unq_mol
-
-    # # Convert all openMM mols to graphs
-    # omm_topology_G = nx.Graph()
-    # for atom in openmm_topology.atoms():
-    #     omm_topology_G.add_node(atom.index, atomic_number=atom.element.atomic_number)
-    # for bond in openmm_topology.bonds():
-    #     omm_topology_G.add_edge(
-    #         bond.atom1.index, bond.atom2.index, bond_order=bond.order
-    #     )
-
-    # For each connected subgraph (molecule) in the topology, find its match in unique_molecules
-    topology_molecules_to_add = list()
-    for omm_mol_G in (
-        molgraph.graph.subgraph(c).copy()
-        for c in nx.weakly_connected_components(molgraph.graph)
-    ):
-        match_found = False
-        for unq_mol_G in graph_to_unq_mol.keys():
-            isomorphic, mapping = Molecule.are_isomorphic(
-                omm_mol_G,
-                unq_mol_G,
-                return_atom_map=True,
-                aromatic_matching=False,
-                formal_charge_matching=False,
-                bond_order_matching=False,
-                atom_stereochemistry_matching=False,
-                bond_stereochemistry_matching=False,
-            )
-            if isomorphic:
-                # Take the first valid atom indexing map
-                first_topology_atom_index = min(mapping.keys())
-                topology_molecules_to_add.append(
-                    (first_topology_atom_index, unq_mol_G, mapping.items())
-                )
-                match_found = True
-                break
-        if match_found is False:
-            hill_formula = Molecule.to_hill_formula(omm_mol_G)
-            msg = f"No match found for molecule {hill_formula}. "
-            probably_missing_conect = [
-                "C",
-                "H",
-                "O",
-                "N",
-                "P",
-                "S",
-                "F",
-                "Cl",
-                "Br",
-            ]
-            if hill_formula in probably_missing_conect:
-                msg += (
-                    "This would be a very unusual molecule to try and parameterize, "
-                    "and it is likely that the data source it was read from does not "
-                    "contain connectivity information. If this molecule is coming from "
-                    "PDB, please ensure that the file contains CONECT records. The PDB "
-                    "format documentation (https://www.wwpdb.org/documentation/"
-                    'file-format-content/format33/sect10.html) states "CONECT records '
-                    "are mandatory for HET groups (excluding water) and for other bonds "
-                    'not specified in the standard residue connectivity table."'
-                )
-            raise ValueError(msg)
-
-    #
-    # # The connected_component_subgraph function above may have scrambled the molecule order, so sort molecules
-    # # by their first atom's topology index
-    # topology_molecules_to_add.sort(key=lambda x: x[0])
-    # for first_index, unq_mol_G, top_to_ref_index in topology_molecules_to_add:
-    #     local_top_to_ref_index = {
-    #         top_index - first_index: ref_index
-    #         for top_index, ref_index in top_to_ref_index
-    #     }
-    #     topology.add_molecule(
-    #         graph_to_unq_mol[unq_mol_G],
-    #         local_topology_to_reference_index=local_top_to_ref_index,
-    #     )
-    #
-    # topology.box_vectors = openmm_topology.getPeriodicBoxVectors()
-    # # TODO: How can we preserve metadata from the openMM topology when creating the OFF topology?
-    # return topology
+    # dependent on pmg addition
+    subgraphs, new_to_old_index = molgraph.get_disconnected_fragments(
+        return_index_map=True
+    )
+    molecules = [molgraph_to_openff_mol(subgraph) for subgraph in subgraphs]
+    openff_topology = tk.Topology.from_molecules(molecules)
+    return openff_topology, new_to_old_index
 
 
 def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
@@ -466,7 +334,9 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
 
     # set atom properties
     partial_charges = []
-    for i_node in molgraph.graph.nodes:
+    # TODO: this doens't seem to maintain ordering of atoms, must fix, breaking downstream
+    # maybe fixed?
+    for i_node in range(len(molgraph.graph.nodes)):
         node = molgraph.graph.nodes[i_node]
         atomic_number = (
             node.get("atomic_number")
