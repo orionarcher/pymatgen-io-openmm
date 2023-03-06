@@ -7,7 +7,6 @@ from pathlib import Path
 import tempfile
 
 import numpy as np
-import rdkit
 import openff
 import openff.toolkit as tk
 from openmm.unit import elementary_charge, angstrom
@@ -15,7 +14,6 @@ from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.core import Element, Molecule
 
 import pymatgen
-from pymatgen.io.babel import BabelMolAdaptor
 from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
 
@@ -303,6 +301,23 @@ def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGra
 
 
 def molgraph_to_openff_topology(molgraph):
+    """
+    Convert a Pymatgen MoleculeGraph to an OpenFF Topology.
+
+    The atom ordering in the OpenFF topology may differ from the atom ordering
+    in the Pymatgen MoleculeGraph. The new_to_old_index dictionary maps the
+    new atom ordering to the old atom ordering.
+
+    There is no guarantee that atom positions will be preserved.
+
+    Args:
+        molgraph: A Pymatgen MoleculeGraph
+
+    Returns:
+        OpenFF Topology, new_to_old_index
+
+
+    """
     # dependent on pmg addition
     subgraphs, new_to_old_index = molgraph.get_disconnected_fragments(
         return_index_map=True
@@ -317,15 +332,14 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
     Convert a Pymatgen MoleculeGraph to an OpenFF Molecule.
 
     If partial charges, formal charges, and aromaticity are present in site properties
-    they will be mapped onto atoms.
-    If bond order and bond aromaticity are present in edge weights and edge properties
-    they will be mapped onto bonds.
+    they will be mapped onto atoms. If bond order and bond aromaticity are present in
+    edge weights and edge properties they will be mapped onto bonds.
 
     Args:
-        openff_mol: OpenFF Molecule
+        molgraph: PyMatGen MoleculeGraph
 
     Returns:
-        MoleculeGraph
+        openff_mol: OpenFF Molecule
     """
     # create empty openff_mol and prepare a periodic table
     p_table = {str(el): el.Z for el in Element}
@@ -385,15 +399,6 @@ def molgraph_from_openff_mol(openff_mol: tk.Molecule) -> MoleculeGraph:
     Returns:
         MoleculeGraph
     """
-    # set up coords and species
-    # if openff_mol.n_conformers > 0:
-    #     coords = openff_mol.conformers[0] / angstrom
-    # else:
-    #     coords = np.zeros((openff_mol.n_atoms, 3))
-    #
-    # molgraph = molgraph_from_molecules(
-    #     openff_mol.atoms, openff_mol.bonds, coords=coords, name=openff_mol.name
-    # )
     return molgraph_from_molecules([openff_mol])
 
 
@@ -403,13 +408,13 @@ def molgraph_from_openff_topology(topology: tk.Topology):
 
 def get_openff_topology(openff_counts: Dict[tk.Molecule, int]) -> tk.Topology:
     """
-    Returns an openff topology with the given SMILEs at the given counts.
+    Returns an openff topology with the given openff molecules at the given counts.
 
     Parameters:
-        smiles: keys are smiles and values are number of that molecule to pack
+        smiles: a dictionary of openff molecules and their counts
 
     Returns:
-        an openmm.app.Topology
+        an openff Topology
     """
     mols = []
     for mol, count in openff_counts.items():
@@ -421,17 +426,17 @@ def infer_openff_mol(
     mol_geometry: pymatgen.core.Molecule,
 ) -> tk.Molecule:
     """
-    Infer an OpenFF molecule from xyz coordinates.
+    Infer an OpenFF molecule from a pymatgen Molecule.
+
+    Args:
+        mol_geometry:
+
+    Returns:
+
     """
-    # TODO: we can just have Molecule Graph be the only internal representation
-    with tempfile.NamedTemporaryFile() as f:
-        # TODO: allow for Molecule graphs
-        # TODO: build a MoleculeGraph -> OpenFF mol direct converter
-        # these next 4 lines are cursed
-        pybel_mol = BabelMolAdaptor(mol_geometry).pybel_mol  # pymatgen Molecule
-        pybel_mol.write("mol2", filename=f.name, overwrite=True)  # pybel Molecule
-        rdmol = rdkit.Chem.MolFromMol2File(f.name, removeHs=False)  # rdkit Molecule
-    inferred_mol = openff.toolkit.topology.Molecule.from_rdkit(
-        rdmol, hydrogens_are_explicit=True
-    )  # OpenFF Molecule
+    from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
+
+    molgraph = MoleculeGraph.with_local_env_strategy(mol_geometry, OpenBabelNN())
+    molgraph = metal_edge_extender(molgraph)
+    inferred_mol = molgraph_to_openff_mol(molgraph)
     return inferred_mol
