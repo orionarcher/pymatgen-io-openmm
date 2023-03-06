@@ -12,6 +12,7 @@ import openff.toolkit as tk
 from openmm.unit import elementary_charge, angstrom
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.core import Element, Molecule
+from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
 
 import pymatgen
 from pymatgen.io.xyz import XYZ
@@ -434,8 +435,6 @@ def infer_openff_mol(
     Returns:
 
     """
-    from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
-
     molgraph = MoleculeGraph.with_local_env_strategy(mol_geometry, OpenBabelNN())
     molgraph = metal_edge_extender(molgraph)
     inferred_mol = molgraph_to_openff_mol(molgraph)
