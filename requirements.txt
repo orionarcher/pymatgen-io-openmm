@@ -5,6 +5,7 @@ numpy
 pytest
 openbabel
 rdkit
-openff-toolkit
+openff-toolkit>=0.12.0
 packmol
 openmmforcefields
+pydantic

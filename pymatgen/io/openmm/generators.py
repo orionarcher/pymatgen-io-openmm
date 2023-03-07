@@ -4,7 +4,7 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 
 # base python
 from pathlib import Path
-from typing import Union, Optional, Dict, List, Tuple
+from typing import Dict, List, Optional, Union
 
 import json
 from monty.json import MontyEncoder
@@ -15,9 +15,10 @@ import numpy as np
 
 # openff
 import openff
+import openff.toolkit as tk
 
 # openmm
-from openmm.unit import kelvin, picoseconds
+from openmm.unit import kelvin, picoseconds, angstrom, elementary_charge
 from openmm.openmm import (
     Context,
     LangevinMiddleIntegrator,
@@ -25,7 +26,7 @@ from openmm.openmm import (
 
 # pymatgen
 import pymatgen.core
-from pymatgen.io.core import InputSet, InputGenerator
+from pymatgen.io.core import InputGenerator
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
     SystemInput,
@@ -33,14 +34,16 @@ from pymatgen.io.openmm.inputs import (
     StateInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
+from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
-    get_openmm_topology,
-    parameterize_system,
-    xyz_to_molecule,
     smiles_to_atom_type_array,
     smiles_to_resname_array,
+    get_atom_map,
+    parameterize_w_interchange,
+    get_openff_topology,
+    infer_openff_mol,
 )
 from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction
 
@@ -67,16 +70,13 @@ class OpenMMSolutionGen(InputGenerator):
 
     def __init__(
         self,
-        force_field: Union[str, Dict[str, str]] = "Sage",
+        default_force_field: Union[str, Dict[str, str]] = "sage",
         temperature: float = 298,
         step_size: float = 0.001,
         friction_coefficient: int = 1,
-        partial_charge_method: str = "am1bcc",
-        partial_charge_scaling: Optional[Dict[str, float]] = None,
-        partial_charges: Optional[List[Tuple[Union[pymatgen.core.Molecule, str, Path], np.ndarray]]] = None,
-        initial_geometries: Dict[str, Union[pymatgen.core.Molecule, str, Path]] = None,
+        default_charge_method: str = "am1bcc",
         packmol_random_seed: int = -1,
-        smile_names: Optional[Dict[str, str]] = None,
+        packmol_timeout: int = 30,
         topology_file: Union[str, Path] = "topology.pdb",
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
@@ -86,12 +86,12 @@ class OpenMMSolutionGen(InputGenerator):
         Instantiates an OpenMMSolutionGen.
 
         Args:
-            force_field: force field for parameterization, currently supported Force Fields: 'Sage'.
+            default_force_field: force field for parameterization, currently supported Force Fields: 'Sage'.
             temperature: the temperature to be added to the integrator (Kelvin).
             step_size: the step size of the simulation (picoseconds).
             friction_coefficient: the friction coefficient which couples the system to
                 the heat bath (inverse picoseconds).
-            partial_charge_method: Any partial charge method supported by OpenFF Molecule.assign_partial_charges.
+            default_charge_method: Any partial charge method supported by OpenFF Molecule.assign_partial_charges.
                 "am1bcc" is recommended for small molecules, "mmff94" is recommended for large molecules.
             partial_charge_scaling: A dictionary of partial charge scaling for particular species. Keys
             are SMILEs and values are the scaling factor.
@@ -103,40 +103,20 @@ class OpenMMSolutionGen(InputGenerator):
                 pymatgen.Molecules or a path to a file with xyz information.
             smile_names: A dictionary of smiles and common names.
             packmol_random_seed: The random seed for Packmol. If -1, a random seed will be generated.
+            packmol_timeout: the number of seconds to wait for packmol to finish before
+                raising an Error.
             topology_file: Location to save the Topology PDB.
             system_file: Location to save the System xml.
             integrator_file: Location to save the Integrator xml.
             state_file: Location to save the State xml.
         """
-        self.force_field = force_field
+        self.default_force_field = default_force_field
         self.temperature = temperature
         self.step_size = step_size
         self.friction_coefficient = friction_coefficient
-        self.partial_charge_method = partial_charge_method
-        self.partial_charge_scaling = partial_charge_scaling or {}
-        self.partial_charges = partial_charges or []
-        for charge_tuple in self.partial_charges:
-            if len(charge_tuple) != 2:
-                raise ValueError(
-                    "partial_charges must be a list of tuples, where the first element is a "
-                    "pymatgen.Molecule or a path to an xyz file and the second element is an "
-                    "array of charges."
-                )
-        self.partial_charges = list(
-            map(
-                lambda charge_tuple: (
-                    xyz_to_molecule(charge_tuple[0]),
-                    charge_tuple[1],
-                ),
-                self.partial_charges,
-            )
-        )
-        self.initial_geometries = initial_geometries or {}
-        self.initial_geometries = {
-            smile: xyz_to_molecule(geometry) for smile, geometry in self.initial_geometries.items()
-        }
-        self.smile_names = smile_names or {}
+        self.default_charge_method = default_charge_method
         self.packmol_random_seed = packmol_random_seed
+        self.packmol_timeout = packmol_timeout
         self.topology_file = topology_file
         self.system_file = system_file
         self.integrator_file = integrator_file
@@ -144,81 +124,135 @@ class OpenMMSolutionGen(InputGenerator):
 
     def _get_input_settings(
         self,
-        smiles: Dict[str, int],
+        mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]],
         box: List[float],
-        charged_mols: List[openff.toolkit.topology.Molecule],
     ) -> Dict:
-        atom_types = smiles_to_atom_type_array(smiles)
-        atom_resnames = smiles_to_resname_array(smiles, self.smile_names)
-        initial_geometries = {smile: geo for smile, geo in self.initial_geometries.items() if smile in smiles}
-        partial_charges = {mol.to_smiles(): mol.partial_charges._value for mol in charged_mols}
+        openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
+        atom_types = smiles_to_atom_type_array(openff_counts)
+        atom_resnames = smiles_to_resname_array(mol_specs)
+        # TODO: add mol_specs
         settings_dict = {
-            "smile_counts": smiles,
             "box": box,
-            "force_field": self.force_field,
+            "force_field": self.default_force_field,
             "temperature": self.temperature,
             "step_size": self.step_size,
             "friction_coefficient": self.friction_coefficient,
-            "partial_charge_method": self.partial_charge_method,
-            "partial_charge_scaling": self.partial_charge_scaling,
-            "partial_charges": partial_charges,
-            "initial_geometries": initial_geometries,
-            "smile_names": self.smile_names,
+            "partial_charge_method": self.default_charge_method,
             "atom_types": atom_types,
             "atom_resnames": atom_resnames,
         }
         return settings_dict
 
-    def get_input_set(  # type: ignore
+    def get_input_set(
         self,
-        smiles: Dict[str, int],
+        input_mol_dicts: List[Union[Dict, InputMoleculeSpec]],
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
-    ) -> InputSet:
-        """
-        This executes all of the logic to create the input set. It generates coordinates, instantiates
-        the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
-        all information needed to generate a simulaiton.
+    ):
+        # coerce all input_mol_dicts to InputMoleculeSpec
+        input_mol_specs = []
+        for mol_dict in input_mol_dicts:
+            if isinstance(mol_dict, dict):
+                input_mol_specs.append(InputMoleculeSpec(**mol_dict))
+            else:
+                input_mol_specs.append(mol_dict)
 
-        Please note that if the molecules are chiral, then the SMILEs must specify a
-        particular stereochemistry.
+        # assert uniqueness of smiles in mol_specs
+        smiles = [mol_spec.smile for mol_spec in input_mol_specs]
+        if len(smiles) != len(set(smiles)):
+            raise ValueError("Smiles in input mol dicts must be unique.")
 
-        Args:
-            smiles: keys are smiles and values are number of that molecule to pack
-            density: the density of the system. density OR box must be given as an argument.
-            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+        mol_specs = []
+        for i, mol_dict in enumerate(input_mol_specs):
+            # TODO: put this in a function
+            openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
 
-        Returns:
-            an OpenMM.InputSet
-        """
-        assert (density is None) ^ (box is None), "Density OR box must be included, but not both."
-        smiles = {smile: count for smile, count in smiles.items() if count > 0}
-        # create dynamic openmm objects with internal methods
-        topology = get_openmm_topology(smiles)
+            # add conformer
+            if geometries := mol_dict.geometries:
+                for geometry in geometries:
+                    inferred_mol = infer_openff_mol(geometry.xyz)
+                    is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
+                    if not is_isomorphic:
+                        raise ValueError(
+                            f"An isomorphism cannot be found between smile {mol_dict.smile} "
+                            f"and the provided geometry {geometry.xyz}."
+                        )
+                    new_mol = pymatgen.core.Molecule.from_sites(
+                        [geometry.xyz.sites[i] for i in atom_map.values()]
+                    )
+                    openff_mol.add_conformer(new_mol.cart_coords * angstrom)
+            else:
+                atom_map = {i: i for i in range(openff_mol.n_atoms)}
+                # TODO document this
+                openff_mol.generate_conformers(
+                    n_conformers=mol_dict.max_conformers or 1
+                )
+
+            # assign partial charges
+            if mol_dict.partial_charges is not None:
+                partial_charges = np.array(mol_dict.partial_charges)
+                openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
+            elif openff_mol.n_atoms == 1:
+                openff_mol.partial_charges = (
+                    np.array([openff_mol.total_charge.magnitude]) * elementary_charge
+                )
+            else:
+                openff_mol.assign_partial_charges(self.default_charge_method)
+            charge_scaling = mol_dict.charge_scaling or 1
+            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+
+            # create mol_spec
+            mol_spec = dict(
+                name=mol_dict.name,
+                count=mol_dict.count,
+                smile=mol_dict.smile,
+                forcefield=mol_dict.force_field or self.default_force_field,  # type: ignore
+                formal_charge=int(
+                    np.sum(openff_mol.partial_charges.magnitude) / charge_scaling
+                ),
+                openff_mol=openff_mol,
+            )
+            mol_specs.append(mol_spec)
+
+        openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
+
+        assert (density is None) ^ (
+            box is None
+        ), "Density OR box must be included, but not both."
         if box is None:
-            box = get_box(smiles, density)  # type: ignore
-        coordinates = get_coordinates(smiles, box, self.packmol_random_seed, self.initial_geometries)
-        smile_strings = list(smiles.keys())
-        system, charged_mols = parameterize_system(
-            topology,
-            smile_strings,
-            box,
-            self.force_field,
-            self.partial_charge_method,
-            self.partial_charge_scaling,
-            self.partial_charges,
-            return_charged_mols=True,
+            box = get_box(openff_counts, density)  # type: ignore
+
+        # TODO: create molgraphs later
+        coordinates = get_coordinates(
+            openff_counts, box, self.packmol_random_seed, self.packmol_timeout
         )
+        openff_topology = get_openff_topology(openff_counts)
+        openmm_topology = openff_topology.to_openmm()
+
+        ffs = np.array([mol_spec["forcefield"] for mol_spec in mol_specs])
+        if np.all(ffs == ffs[0]) and ffs[0] in ["sage", "opls"]:
+            system = parameterize_w_interchange(
+                openff_topology, mol_specs, box, force_field=ffs[0]
+            )
+        else:
+            # system = parameterize_w_openmm_forcefields(mol_specs)
+            raise ValueError(
+                "All molecules must use the same force field and it must be 'sage' or 'opls'."
+            )
+        # figure out FF
+
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
             self.step_size * picoseconds,
         )
         context = Context(system, integrator)
-        context.setPositions(coordinates)
+        # context.setPositions needs coordinates in nm, but we have them in
+        # Angstrom from packmol. Convert.
+        context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
         # instantiate input files and feed to input_set
-        topology_input = TopologyInput(topology)
+        topology_input = TopologyInput(openmm_topology)
         system_input = SystemInput(system)
         integrator_input = IntegratorInput(integrator)
         state_input = StateInput(state)
@@ -234,7 +268,8 @@ class OpenMMSolutionGen(InputGenerator):
             integrator_file=self.integrator_file,
             state_file=self.state_file,
         )
-        input_set.settings = self._get_input_settings(smiles, box, charged_mols)
+        # TODO: get_input_settings must be refactored
+        input_set.settings = self._get_input_settings(mol_specs, box)
         return input_set
 
 
@@ -249,11 +284,11 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
 
     def get_input_set(  # type: ignore
         self,
-        smiles: Dict[str, int],
+        input_mol_dicts: List[Union[Dict, InputMoleculeSpec]],
         reaction: AlchemicalReaction,
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
-    ) -> InputSet:
+    ) -> OpenMMAlchemySet:
         """
         This executes all the logic to create the input set. It generates coordinates, instantiates
         the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
@@ -272,7 +307,8 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         Returns:
             an OpenMM.InputSet
         """
-        input_set = super().get_input_set(smiles, density, box)
+        input_set = super().get_input_set(input_mol_dicts, density, box)
+        smiles = [mol_dict["smile"] for mol_dict in input_mol_dicts]
         half_rxns, triggers_0, triggers_1 = reaction.get_half_rxns_and_triggers(smiles)
         n_particles = input_set[self.system_file].get_system().getNumParticles()
         reaction_spec = {

@@ -81,15 +81,24 @@ class OpenMMSet(InputSet):
             system_file: system_input,
             integrator_file: integrator_input,
         }
-        openmm_set = OpenMMSet(
-            inputs=inputs,  # type: ignore
-            topology_file=topology_file,
-            system_file=system_file,
-            integrator_file=integrator_file,
-        )
         if Path(source_dir / state_file).is_file():
-            openmm_set.inputs[state_file] = StateInput.from_file(source_dir / state_file)
-            openmm_set.state_file = state_file  # should this be a dict-like assignment?
+            openmm_set = OpenMMSet(
+                inputs=inputs,  # type: ignore
+                topology_file=topology_file,
+                system_file=system_file,
+                integrator_file=integrator_file,
+                state_file=state_file,
+            )
+            openmm_set.inputs[state_file] = StateInput.from_file(
+                source_dir / state_file
+            )
+        else:
+            openmm_set = OpenMMSet(
+                inputs=inputs,  # type: ignore
+                topology_file=topology_file,
+                system_file=system_file,
+                integrator_file=integrator_file,
+            )
         return openmm_set
 
     def validate(self) -> bool:
@@ -187,7 +196,9 @@ class OpenMMAlchemySet(OpenMMSet):
         integrator_input = self.inputs[self.integrator_file]
         if isinstance(platform, str):
             platform = Platform.getPlatformByName(platform)
-        assert hasattr(self, "state_file") and self.state_file, "an AlchemySet must have a state to run"
+        assert (
+            hasattr(self, "state_file") and self.state_file
+        ), "an AlchemySet must have a state to run"
         state = self.inputs[self.state_file].get_state()
         for i in range(n_cycles):
             integrator = integrator_input.get_integrator()
@@ -217,7 +228,9 @@ class OpenMMAlchemySet(OpenMMSet):
             topology = TopologyInput(topology, positions).get_topology()
             topology = self._update_topology(topology, positions, cutoff_distance)
             smiles = smiles_in_topology(topology, positions)
-            openff_mols = [openff.toolkit.topology.Molecule.from_smiles(smile) for smile in smiles]
+            openff_mols = [
+                openff.toolkit.topology.Molecule.from_smiles(smile) for smile in smiles
+            ]
             ff_template = assign_small_molecule_ff(openff_mols, "sage")
             # quick and dirty re-parameterization
             # TODO: perhaps instead of using the topology to add bonds with the modeler
@@ -230,7 +243,9 @@ class OpenMMAlchemySet(OpenMMSet):
             forcefield = openmm.app.ForceField()
             forcefield.registerTemplateGenerator(ff_template.generator)
             nonbondedCutoff = 5  # TODO: change this! use state!
-            system = forcefield.createSystem(topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff)
+            system = forcefield.createSystem(
+                topology=topology, nonbondedMethod=PME, nonbondedCutoff=nonbondedCutoff
+            )
             # openff_forcefield = smirnoff.ForceField("openff_unconstrained-2.0.0.offxml")
             # openff_topology = openff.toolkit.topology.Topology.from_openmm(
             #     topology,
@@ -249,7 +264,9 @@ class OpenMMAlchemySet(OpenMMSet):
 
     def _prepare(self):
         rxn_spec = json.loads(self.inputs[self.rxn_atoms_file], cls=MontyDecoder)
-        self.half_reactions = {int(i): spec for i, spec in rxn_spec["half_reactions"].items()}
+        self.half_reactions = {
+            int(i): spec for i, spec in rxn_spec["half_reactions"].items()
+        }
         self.trigger_atoms = rxn_spec["trigger_atoms"]
         self.index_map = np.array(rxn_spec["current_to_original_index"])
         self.force_field = rxn_spec["force_field"]
@@ -280,7 +297,9 @@ class OpenMMAlchemySet(OpenMMSet):
         for half_reaction_0, half_reaction_1 in reactions:
             # reindex rxn_atom_0 to index in topology
             # create bonds
-            bonds_to_make = zip(half_reaction_0["create_bonds"], half_reaction_1["create_bonds"])
+            bonds_to_make = zip(
+                half_reaction_0["create_bonds"], half_reaction_1["create_bonds"]
+            )
             # in theory, this is simple
             for ix_0, ix_1 in bonds_to_make:
                 atom_0, atom_1 = topology_atoms[ix_0], topology_atoms[ix_1]
@@ -306,12 +325,16 @@ class OpenMMAlchemySet(OpenMMSet):
         atoms_to_delete = []
         for half_reaction_0, half_reaction_1 in reactions:
             # generate bonds to delete
-            bonds_to_delete_ix = half_reaction_0["delete_bonds"] + half_reaction_1["delete_bonds"]
+            bonds_to_delete_ix = (
+                half_reaction_0["delete_bonds"] + half_reaction_1["delete_bonds"]
+            )
             for ix_0, ix_1 in bonds_to_delete_ix:
                 atom_0, atom_1 = topology_atoms[ix_0], topology_atoms[ix_1]
                 bonds_to_delete.append((atom_0, atom_1))
             # generate atoms to delete
-            atoms_to_delete_ix = half_reaction_0["delete_atoms"] + half_reaction_1["delete_atoms"]
+            atoms_to_delete_ix = (
+                half_reaction_0["delete_atoms"] + half_reaction_1["delete_atoms"]
+            )
             for ix_0, ix_1 in atoms_to_delete_ix:
                 atom_0, atom_1 = topology_atoms[ix_0], topology_atoms[ix_1]
                 atoms_to_delete.append((atom_0, atom_1))
@@ -328,12 +351,16 @@ class OpenMMAlchemySet(OpenMMSet):
             positions: the positions of each atom in the topology.
             cutoff_distance: cutoff distance to be used on the trigger atoms
         """
-        topology_atoms = {self.index_map[i]: atom for i, atom in enumerate(topology.atoms())}
+        topology_atoms = {
+            self.index_map[i]: atom for i, atom in enumerate(topology.atoms())
+        }
         atoms_ix_0 = self.index_map[self.trigger_atoms[0]]
         atoms_ix_1 = self.index_map[self.trigger_atoms[1]]
         # TODO: will return indices in atoms_0 array, not in topology. Need to reindex in loop.
         positions_0, positions_1 = positions[atoms_ix_0], positions[atoms_ix_1]
-        reaction_pairs = capped_distance(positions_0, positions_1, cutoff_distance, return_distances=False)
+        reaction_pairs = capped_distance(
+            positions_0, positions_1, cutoff_distance, return_distances=False
+        )
         reactions = []
         for ix_0, ix_1 in reaction_pairs:
             half_reaction_0 = self.half_reactions[atoms_ix_0[ix_0]]
@@ -341,7 +368,9 @@ class OpenMMAlchemySet(OpenMMSet):
             reactions.append((half_reaction_0, half_reaction_1))
         # TODO: we never remove the atoms from self.trigger_atoms!!!!!!
         topology = self._create_bonds(topology, topology_atoms, reactions)
-        topology = self._delete_bonds_and_atoms(topology, topology_atoms, reactions, positions)
+        topology = self._delete_bonds_and_atoms(
+            topology, topology_atoms, reactions, positions
+        )
         return topology
 
     def _update_input_files(self):

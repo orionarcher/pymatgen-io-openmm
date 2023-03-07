@@ -1,7 +1,3 @@
-# coding: utf-8
-# Copyright (c) Materials Virtual Lab
-# Distributed under the terms of the Modified BSD License.
-
 from setuptools import setup, find_namespace_packages
 
 import os
@@ -13,10 +9,21 @@ with open(os.path.join(SETUP_PTH, "README.rst")) as f:
 
 
 setup(
-    name="pymatgen-io-openmm",
+    name="pymatgen-io-openmm",  # mypy: ignore
     packages=find_namespace_packages(include=["pymatgen.io.*"]),
     version="0.0.1",
-    install_requires=["pymatgen>=2022.3.22"],
+    install_requires=[
+        # "pymatgen>=2022.3.22",
+        # "openmm",
+        # "parmed",
+        # "numpy",
+        # "pytest",
+        # "openbabel",
+        # "rdkit",
+        # "openff-toolkit>=0.12.0",
+        # "packmol",
+        # "openmmforcefields",
+    ],
     extras_require={},
     package_data={},
     author="orion cohen",
@@ -28,15 +35,20 @@ setup(
     long_description=desc,
     keywords=["pymatgen"],
     classifiers=[
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Development Status :: 4 - Beta",
+        "Development Status :: 3 - Alpha",
+        "Environment :: Console",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: BSD License",
-        "Operating System :: OS Independent",
-        "Topic :: Scientific/Engineering :: Information Analysis",
-        "Topic :: Scientific/Engineering :: Physics",
+        "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
+        "Operating System :: POSIX",
+        "Operating System :: MacOS :: MacOS X",
+        "Operating System :: Microsoft :: Windows",
+        "Programming Language :: Python",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Topic :: Scientific/Engineering",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Topic :: Scientific/Engineering :: Chemistry",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],

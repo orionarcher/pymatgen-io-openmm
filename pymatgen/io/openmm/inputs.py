@@ -33,7 +33,11 @@ class TopologyInput(InputFile):
     Input handler for OpenMM topologies. Stores and parses PDB files.
     """
 
-    def __init__(self, topology: Topology, positions: Optional[Union[List, np.ndarray]] = None):
+    def __init__(
+        self,
+        topology: Union[Topology, str],
+        positions: Optional[Union[List, np.ndarray]] = None,
+    ):
         """
         Instatiates a TopologyInput from an OpenMM.Topology. Positions can be supplied as
         a n x 3 numpy array. If they are not given, positions will be set to 0.
@@ -42,7 +46,12 @@ class TopologyInput(InputFile):
             topology: the openmm topology to serialize
             positions: coordinates for each particle in the topology
         """
-        self.content = self._serialize(topology, positions)
+        if isinstance(topology, str):
+            with io.StringIO(topology) as s:
+                pdb = PDBFile(s)
+                topology = pdb.getTopology()
+        self.topology = self._serialize(topology, positions)
+        self.positions = positions
         # TODO: add an atom_type parameter
 
     @staticmethod
@@ -62,7 +71,7 @@ class TopologyInput(InputFile):
         Returns:
             A string representation of the PDB topology file.
         """
-        return self.content
+        return self.topology
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
@@ -87,7 +96,7 @@ class TopologyInput(InputFile):
         Returns:
             openmm.app.Topology
         """
-        with io.StringIO(self.content) as s:
+        with io.StringIO(self.topology) as s:
             pdb = PDBFile(s)
             topology = pdb.getTopology()
         return topology
@@ -108,7 +117,10 @@ class XmlInput(InputFile):
         Args:
             openmm_object:
         """
-        self.content = self._serialize(openmm_object)
+        if isinstance(openmm_object, str):
+            self.openmm_object = openmm_object
+        else:
+            self.openmm_object = self._serialize(openmm_object)
 
     @staticmethod
     def _serialize(openmm_object) -> str:
@@ -121,7 +133,7 @@ class XmlInput(InputFile):
         Returns:
             string
         """
-        return self.content
+        return self.openmm_object
 
     @classmethod
     def from_string(cls, contents: str):
@@ -156,7 +168,7 @@ class SystemInput(XmlInput):
         Returns:
             openmm.System
         """
-        return XmlSerializer.deserialize(self.content)
+        return XmlSerializer.deserialize(self.openmm_object)
 
 
 class IntegratorInput(XmlInput):
@@ -184,7 +196,7 @@ class IntegratorInput(XmlInput):
         Returns:
             openmm.Integrator
         """
-        return XmlSerializer.deserialize(self.content)
+        return XmlSerializer.deserialize(self.openmm_object)
 
 
 class StateInput(XmlInput):
@@ -212,4 +224,4 @@ class StateInput(XmlInput):
         Returns:
             openmm.State
         """
-        return XmlSerializer.deserialize(self.content)
+        return XmlSerializer.deserialize(self.openmm_object)

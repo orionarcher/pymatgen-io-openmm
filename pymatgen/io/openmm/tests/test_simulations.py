@@ -18,7 +18,11 @@ __date__ = "Nov 2021"
 @pytest.fixture
 def ethanol_simulation():
     generator = OpenMMSolutionGen(packmol_random_seed=1)
-    input_set = generator.get_input_set({"O": 600, "CCO": 50}, density=1.0)
+    input_mol_dicts = [
+        {"smile": "O", "count": 600},
+        {"smile": "CCO", "count": 50},
+    ]
+    input_set = generator.get_input_set(input_mol_dicts, density=1.0)
     return input_set.get_simulation()
 
 

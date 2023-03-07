@@ -1,21 +1,66 @@
-[tool.black]
-line-length = 120
-target-version = ['py38']
-include = '\.pyi?$'
-exclude = '''
+[build-system]
+requires = [
+  "setuptools",
+  "versioneer[toml]",
+  "wheel",
+]
+build-backend = "setuptools.build_meta"
 
-(
-  /(
-      \.eggs         # exclude a few common directories in the
-    | \.git          # root of the project
-    | \.hg
-    | \.mypy_cache
-    | \.tox
-    | \.venv
-    | _build
-    | buck-out
-    | build
-    | dist
-  )/
-)
-'''
+[tool.conda-forge]
+# Add conda-forge as a source here
+url = "https://conda.anaconda.org/conda-forge"
+
+[project]
+name = "pymatgen-io-openmm"
+dynamic = ['version', 'readme']
+license = {file = "LICENSE"}
+description = "A toolkit to analyze solvation structure in molecular dynamics trajectories."
+authors = [
+    {name = 'Orion Cohen', email = 'orioncohen@gmail.com'},
+]
+maintainers = [
+    {name = 'Orion Cohen', email = 'orioncohen@gmail.com'},
+]
+requires-python = ">=3.8"
+
+keywords = [
+    "python", "science", "chemistry", "biophysics", "molecular-dynamics",
+    "computational-chemistry", "molecular-simulation", "analysis"
+]
+
+dependencies = [
+#    "pymatgen>=2022.3.22",
+#    "openmm",
+#    "parmed",
+#    "numpy",
+#    "pytest",
+#    "openbabel",
+#    "rdkit",
+#    "openff-toolkit>=0.12.0",
+#    "packmol",
+#    "openmmforcefields",
+]
+
+classifiers = [
+    'Development Status :: 3 - Alpha',
+    'Environment :: Console',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)',
+    'Operating System :: POSIX',
+    'Operating System :: MacOS :: MacOS X',
+    'Operating System :: Microsoft :: Windows',
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
+    'Topic :: Scientific/Engineering',
+    'Topic :: Scientific/Engineering :: Bio-Informatics',
+    'Topic :: Scientific/Engineering :: Chemistry',
+    'Topic :: Software Development :: Libraries :: Python Modules',
+]
+
+#[project.urls]
+#Documentation = 'https://solvation-analysis.readthedocs.io'
+#"Issue Tracker" = 'https://github.com/MDAnalysis/solvation-analysis/issues'
+#Source = 'https://github.com/MDAnalysis/solvation-analysis'
