@@ -23,7 +23,7 @@ from pint import Quantity
 
 def smiles_to_atom_type_array(openff_counts: Dict[tk.Molecule, int]) -> np.ndarray:
     """
-    Convert a SMILE to an array of atom types.
+    Cal to an array of atom types.
 
     Args:
         smiles:
@@ -275,10 +275,6 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
     return molgraph
 
 
-def openmm_topology_from_molgraph(molgraph):
-    return
-
-
 def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGraph]:
     """
     This function takes a list of molecule graphs and returns a list of unique subgraphs.
@@ -348,8 +344,7 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
 
     # set atom properties
     partial_charges = []
-    # TODO: this doens't seem to maintain ordering of atoms, must fix, breaking downstream
-    # maybe fixed?
+    # TODO: might change atom ordering?
     for i_node in range(len(molgraph.graph.nodes)):
         node = molgraph.graph.nodes[i_node]
         atomic_number = (
@@ -430,9 +425,10 @@ def infer_openff_mol(
     Infer an OpenFF molecule from a pymatgen Molecule.
 
     Args:
-        mol_geometry:
+        mol_geometry: A pymatgen Molecule
 
     Returns:
+        an OpenFF Molecule
 
     """
     molgraph = MoleculeGraph.with_local_env_strategy(mol_geometry, OpenBabelNN())
