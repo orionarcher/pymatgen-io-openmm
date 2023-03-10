@@ -2,7 +2,7 @@
 Utilities for implementing AlchemicalReactions
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from io import StringIO
 import pandas as pd
 
@@ -12,7 +12,14 @@ import numpy as np
 import MDAnalysis as mda
 
 from pymatgen.io.openmm.inputs import TopologyInput
-from pymatgen.io.openmm.utils import get_openff_topology
+from pymatgen.io.openmm.utils import get_openff_topology, molgraph_from_openff_topology
+from pymatgen.analysis.graphs import MoleculeGraph
+import openff.toolkit as tk
+
+from pydantic import BaseModel
+from dataclasses import dataclass
+
+import rdkit
 
 
 def smiles_to_universe(openff_counts):
@@ -33,6 +40,22 @@ def smiles_to_universe(openff_counts):
     return universe
 
 
+class HalfReaction(BaseModel):
+    trigger_atom: int
+    create_bonds: List[int]
+    delete_bonds: List[Tuple[int, int]]
+    delete_atoms: List[int]
+
+
+@dataclass
+class ReactionSystem(MSONable):
+    half_reactions: Dict[int, HalfReaction]
+    trigger_atoms_left: List[int]
+    trigger_atoms_right: List[int]
+    molgraph: MoleculeGraph
+    molgraph_to_rxn_index: Dict[int, int]
+
+
 class AlchemicalReaction(MSONable):
     """
     An AlchemicalReaction for use in a OpenmmAlchemyGen generator.
@@ -40,15 +63,25 @@ class AlchemicalReaction(MSONable):
 
     def __init__(
         self,
+        name: str = "alchemical reaction",
         select_dict: Dict[str, str] = None,
         create_bonds: List[Tuple[str, str]] = None,
         delete_bonds: List[Tuple[str, str]] = None,
         delete_atoms: List[str] = None,
     ):
-        self.select_dict = select_dict if select_dict else {}
-        self.create_bonds = create_bonds if create_bonds else []
-        self.delete_bonds = delete_bonds if delete_bonds else []
-        self.delete_atoms = delete_atoms if delete_atoms else []
+        """
+        Args:
+            name: a name for the reaction
+            select_dict: a dictionary of atom selection strings
+            create_bonds: a list of tuples of atom selection strings to create bonds between
+            delete_bonds: a list of tuples of atom selection strings to delete bonds between
+            delete_atoms: a list of atom selection strings to delete
+        """
+        self.name = name
+        self.select_dict = select_dict or {}
+        self.create_bonds = create_bonds or []
+        self.delete_bonds = delete_bonds or []
+        self.delete_atoms = delete_atoms or []
 
     # TODO: make sure things dont break if there are multiple possible reactions
     # TODO: need to make sure that we won't get an error if something reacts with itself
@@ -113,7 +146,7 @@ class AlchemicalReaction(MSONable):
         return pd.DataFrame(participating_atoms)
 
     @staticmethod
-    def _get_trigger_atoms(df, universe):
+    def _add_trigger_atoms(df, universe):
         """
         This extracts all of the "trigger" atoms that instigate a specific alchemical reaction,
         e.g. the atoms that can move within some cutoff to react with each other. It then organizes
@@ -146,7 +179,7 @@ class AlchemicalReaction(MSONable):
         """
         All previous functionality only operated on a small universe with one copy of each
         residue, ultimately returning a small dataframe representing a subset of all
-        residues. This funcion expands that dataframe to encapsulate the whole simulation.
+        residues. This function expands that dataframe to encapsulate the whole simulation.
         Since we know how many of each residue are present and how many atoms each residue
         has, we can essentially concatenate many duplicates of the small dataframe and then
         increment the atom indexes to reflect the full simulation.
@@ -180,7 +213,7 @@ class AlchemicalReaction(MSONable):
         return big_df
 
     @staticmethod
-    def _build_half_reactions_dict(all_atoms_df):
+    def _build_half_reactions_dict(all_atoms_df) -> Dict[int, HalfReaction]:
         """
         This takes the dataframe of all atoms and turns it into an easily parsable dictionary.
         Each "trigger atom" has a set of atom and bond deletions that are triggered when a new
@@ -194,6 +227,7 @@ class AlchemicalReaction(MSONable):
         """
         half_reactions = {}
         for trigger_ix, atoms_df in all_atoms_df.groupby(["trigger_ix"]):
+            trigger_ix = int(trigger_ix)
             create_ix = list(
                 atoms_df[atoms_df.type == "create_bonds"].sort_values("bond_n")[
                     "atom_ix"
@@ -208,118 +242,99 @@ class AlchemicalReaction(MSONable):
             delete_atom_ix = list(
                 atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].values
             )
-            half_reaction = {
-                "create_bonds": create_ix,
-                "delete_bonds": delete_ix,
-                "delete_atoms": delete_atom_ix,
-            }
+            half_reaction = HalfReaction(
+                trigger_atom=trigger_ix,
+                create_bonds=create_ix,
+                delete_bonds=delete_ix,
+                delete_atoms=delete_atom_ix,
+            )
             half_reactions[trigger_ix] = half_reaction
         return half_reactions
 
     @staticmethod
-    def _build_half_reactions(
+    def _get_triggers(all_atoms_df):
+        """This returns the trigger atoms for each half reaction."""
+        trigger_atoms_left = all_atoms_df[
+            (all_atoms_df.type == "create_bonds")
+            & (all_atoms_df.bond_n == 0)
+            & (all_atoms_df.half_rxn_ix == 0)
+        ]["trigger_ix"].values
+
+        trigger_atoms_right = all_atoms_df[
+            (all_atoms_df.type == "create_bonds")
+            & (all_atoms_df.bond_n == 0)
+            & (all_atoms_df.half_rxn_ix == 1)
+        ]["trigger_ix"].values
+
+        return list(trigger_atoms_left), list(trigger_atoms_right)
+
+    def make_reactive_system(
+        self,
         openff_counts,
-        select_dict,
-        create_bonds,
-        delete_bonds,
-        delete_atoms,
-        return_trigger_atoms=False,
-        return_atoms_df=False,
     ):
         """
         This strings together several other utility functions to return the full half reactions dictionary.
         Optional return arguments are provided to allow for the trigger atom indices to be extracted.
 
         Args:
-            smiles:
-            select_dict:
-            create_bonds:
-            delete_bonds:
-            delete_atoms:
-            return_trigger_atoms:
-            return_atoms_df:
+            openff_counts:
 
         Returns:
 
         """
-        openff_counts_1 = {mol: 1 for mol in openff_counts.keys()}
-        universe = smiles_to_universe(openff_counts_1)
-        df = AlchemicalReaction._build_reactive_atoms_df(
-            universe, select_dict, create_bonds, delete_bonds, delete_atoms
+        # we first create a small universe with one copy of each residue
+        openff_singles = {mol: 1 for mol in openff_counts.keys()}
+        universe_mini = smiles_to_universe(openff_singles)
+
+        # next we find the reactive atoms in the small universe
+        atoms_mini_df = AlchemicalReaction._build_reactive_atoms_df(
+            universe_mini,
+            self.select_dict,
+            self.create_bonds,
+            self.delete_bonds,
+            self.delete_atoms,
         )
-        trig_df = AlchemicalReaction._get_trigger_atoms(df, universe)
-        res_sizes = [res.atoms.n_atoms for res in universe.residues]
+
+        # then we assign trigger atoms to each reactive atom based on distance
+        atoms_w_triggers_mini_df = AlchemicalReaction._add_trigger_atoms(
+            atoms_mini_df, universe_mini
+        )
+
+        # finally we expand the dataframe to include all atoms in the system
+        res_sizes = [res.atoms.n_atoms for res in universe_mini.residues]
         res_counts = list(openff_counts.values())
-        all_atoms_df = AlchemicalReaction._expand_to_all_atoms(
-            trig_df, res_sizes, res_counts
-        )
-        trigger_atoms_0 = all_atoms_df[
-            (all_atoms_df.type == "create_bonds")
-            & (all_atoms_df.bond_n == 0)
-            & (all_atoms_df.half_rxn_ix == 0)
-        ]["trigger_ix"].values
-        trigger_atoms_1 = all_atoms_df[
-            (all_atoms_df.type == "create_bonds")
-            & (all_atoms_df.bond_n == 0)
-            & (all_atoms_df.half_rxn_ix == 1)
-        ]["trigger_ix"].values
-        half_reactions = AlchemicalReaction._build_half_reactions_dict(all_atoms_df)
-        return_args = tuple([half_reactions])
-        if return_trigger_atoms:
-            return_args += (trigger_atoms_0, trigger_atoms_1)
-        if return_atoms_df:
-            return_args += tuple([all_atoms_df])
-        return return_args
-
-    def get_half_rxns_and_triggers(self, smiles):
-        """
-        Because _build_half_reactions is a pure function it has an inconvenient call signature.
-        This wraps it in an impure function to allow for easier use.
-
-        Args:
-            smiles:
-
-        Returns:
-            half_reactions, trigger_atoms_0, trigger_atoms_1
-        """
-        return AlchemicalReaction._build_half_reactions(
-            smiles,
-            self.select_dict,
-            self.create_bonds,
-            self.delete_bonds,
-            self.delete_atoms,
-            return_trigger_atoms=True,
+        atoms_w_triggers_df = AlchemicalReaction._expand_to_all_atoms(
+            atoms_w_triggers_mini_df, res_sizes, res_counts
         )
 
-    def get_reactive_atoms_df(self, smiles):
-        """
-        Returns the DataFrame of all atoms that participate in the reaction. Intended primarily for debugging.
-
-        Args:
-            smiles:
-
-        Returns:
-
-        """
-        _, atoms_df = AlchemicalReaction._build_half_reactions(
-            smiles,
-            self.select_dict,
-            self.create_bonds,
-            self.delete_bonds,
-            self.delete_atoms,
-            return_atoms_df=True,
+        # we can now extract the trigger atoms from the dataframe
+        triggers_left, triggers_right = AlchemicalReaction._get_triggers(
+            atoms_w_triggers_df
         )
-        return atoms_df[["atom_ix", "type", "trigger_ix"]]
 
-    @staticmethod
-    def get_universe(smiles):
-        """
-        This is a wrapper around smiles_to_universe.
+        # convert the half reaction df into a dictionary
+        half_reactions_dict = AlchemicalReaction._build_half_reactions_dict(
+            atoms_w_triggers_df
+        )
 
-        Args:
-            smiles:
+        # build a corresponding molgraph
+        topology = get_openff_topology(openff_counts)
+        molgraph = molgraph_from_openff_topology(topology)
+        molgraph_to_rxn_index = {i: i for i in range(topology.n_atoms)}
 
-        Returns:
+        # and return
+        return ReactionSystem(
+            half_reactions=half_reactions_dict,
+            trigger_atoms_left=triggers_left,
+            trigger_atoms_right=triggers_right,
+            molgraph=molgraph,
+            molgraph_to_rxn_index=molgraph_to_rxn_index,
+        )
 
-        """
-        return smiles_to_universe(smiles)
+
+def visualize_reactions(
+    openff_mols: List[tk.Molecule],
+    alchemical_reactions: List[AlchemicalReaction],
+    filename: Optional[str] = None,
+) -> rdkit.Chem.rdchem.Mol:
+    return
