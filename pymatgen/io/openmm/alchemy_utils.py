@@ -12,10 +12,10 @@ import numpy as np
 import MDAnalysis as mda
 
 from pymatgen.io.openmm.inputs import TopologyInput
-from pymatgen.io.openmm.utils import get_openmm_topology
+from pymatgen.io.openmm.utils import get_openff_topology
 
 
-def smiles_to_universe(smiles):
+def smiles_to_universe(openff_counts):
     """
     Quick conversion from a set of smiles to a MDanalysis Universe.
 
@@ -26,7 +26,8 @@ def smiles_to_universe(smiles):
         A MDanalysis universe
 
     """
-    topology_input = TopologyInput(get_openmm_topology(smiles))
+    topology = get_openff_topology(openff_counts).to_openmm()
+    topology_input = TopologyInput(topology)
     with StringIO(topology_input.get_string()) as topology_file:
         universe = mda.Universe(topology_file, format="pdb")
     return universe
@@ -53,7 +54,9 @@ class AlchemicalReaction(MSONable):
     # TODO: need to make sure that we won't get an error if something reacts with itself
 
     @staticmethod
-    def _build_reactive_atoms_df(universe, select_dict, create_bonds, delete_bonds, delete_atoms):
+    def _build_reactive_atoms_df(
+        universe, select_dict, create_bonds, delete_bonds, delete_atoms
+    ):
         """
         This function builds a dataframe contains all the atoms that participate in the alchemical
         reaction. For each atom, it includes their atom index, which reaction they participate in,
@@ -123,11 +126,15 @@ class AlchemicalReaction(MSONable):
         Returns:
 
         """
-        trigger_atom_ix = df[((df.type == "create_bonds") & (df.bond_n == 0))]["atom_ix"]
+        trigger_atom_ix = df[((df.type == "create_bonds") & (df.bond_n == 0))][
+            "atom_ix"
+        ]
         trigger_atom_dfs = []
         # pair each trigger atom with its associated create_bonds, delete_bonds and delete_atoms
         for ix in trigger_atom_ix:
-            within_two_bonds = f"(index {ix}) or (bonded index {ix}) or (bonded bonded index {ix})"
+            within_two_bonds = (
+                f"(index {ix}) or (bonded index {ix}) or (bonded bonded index {ix})"
+            )
             nearby_atoms_ix = universe.select_atoms(within_two_bonds).ix
             atoms_df = df[np.isin(df["atom_ix"], nearby_atoms_ix)]
             atoms_df["trigger_ix"] = ix
@@ -162,7 +169,9 @@ class AlchemicalReaction(MSONable):
             expanded_df = pd.concat([res_df] * res_counts[res_ix])
             n_atoms = len(res_df)
             # create and apply offsets
-            offsets = np.arange(res_offsets[res_ix], res_offsets[res_ix + 1] + 1, res_sizes[res_ix])
+            offsets = np.arange(
+                res_offsets[res_ix], res_offsets[res_ix + 1] + 1, res_sizes[res_ix]
+            )
             offset_array = np.repeat(offsets, n_atoms)
             expanded_df.atom_ix += offset_array
             expanded_df.trigger_ix += offset_array
@@ -185,11 +194,20 @@ class AlchemicalReaction(MSONable):
         """
         half_reactions = {}
         for trigger_ix, atoms_df in all_atoms_df.groupby(["trigger_ix"]):
-            create_ix = list(atoms_df[atoms_df.type == "create_bonds"].sort_values("bond_n")["atom_ix"])
+            create_ix = list(
+                atoms_df[atoms_df.type == "create_bonds"].sort_values("bond_n")[
+                    "atom_ix"
+                ]
+            )
             delete_ix = atoms_df[atoms_df.type == "delete_bonds"]
             unique_bond_n = delete_ix["bond_n"].unique()
-            delete_ix = [tuple(delete_ix[delete_ix["bond_n"] == bond_n]["atom_ix"].values) for bond_n in unique_bond_n]
-            delete_atom_ix = list(atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].values)
+            delete_ix = [
+                tuple(delete_ix[delete_ix["bond_n"] == bond_n]["atom_ix"].values)
+                for bond_n in unique_bond_n
+            ]
+            delete_atom_ix = list(
+                atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].values
+            )
             half_reaction = {
                 "create_bonds": create_ix,
                 "delete_bonds": delete_ix,
@@ -200,7 +218,7 @@ class AlchemicalReaction(MSONable):
 
     @staticmethod
     def _build_half_reactions(
-        smiles,
+        openff_counts,
         select_dict,
         create_bonds,
         delete_bonds,
@@ -224,20 +242,26 @@ class AlchemicalReaction(MSONable):
         Returns:
 
         """
-        smiles_1 = {smile: 1 for smile in smiles.keys()}
-        universe = smiles_to_universe(smiles_1)
+        openff_counts_1 = {mol: 1 for mol in openff_counts.keys()}
+        universe = smiles_to_universe(openff_counts_1)
         df = AlchemicalReaction._build_reactive_atoms_df(
             universe, select_dict, create_bonds, delete_bonds, delete_atoms
         )
         trig_df = AlchemicalReaction._get_trigger_atoms(df, universe)
         res_sizes = [res.atoms.n_atoms for res in universe.residues]
-        res_counts = list(smiles.values())
-        all_atoms_df = AlchemicalReaction._expand_to_all_atoms(trig_df, res_sizes, res_counts)
+        res_counts = list(openff_counts.values())
+        all_atoms_df = AlchemicalReaction._expand_to_all_atoms(
+            trig_df, res_sizes, res_counts
+        )
         trigger_atoms_0 = all_atoms_df[
-            (all_atoms_df.type == "create_bonds") & (all_atoms_df.bond_n == 0) & (all_atoms_df.half_rxn_ix == 0)
+            (all_atoms_df.type == "create_bonds")
+            & (all_atoms_df.bond_n == 0)
+            & (all_atoms_df.half_rxn_ix == 0)
         ]["trigger_ix"].values
         trigger_atoms_1 = all_atoms_df[
-            (all_atoms_df.type == "create_bonds") & (all_atoms_df.bond_n == 0) & (all_atoms_df.half_rxn_ix == 1)
+            (all_atoms_df.type == "create_bonds")
+            & (all_atoms_df.bond_n == 0)
+            & (all_atoms_df.half_rxn_ix == 1)
         ]["trigger_ix"].values
         half_reactions = AlchemicalReaction._build_half_reactions_dict(all_atoms_df)
         return_args = tuple([half_reactions])
