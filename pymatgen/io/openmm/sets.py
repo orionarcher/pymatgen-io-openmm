@@ -72,6 +72,7 @@ class OpenMMSet(InputSet):
         Returns:
             an OpenMMSet
         """
+        # TODO: will need to add some sort of settings file
         source_dir = Path(directory)
         topology_input = TopologyInput.from_file(source_dir / topology_file)
         system_input = SystemInput.from_file(source_dir / system_file)

@@ -54,6 +54,7 @@ __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
 
+# TODO: change to Dataclass
 # noinspection PyMethodOverriding
 class OpenMMSolutionGen(InputGenerator):
     """
@@ -141,6 +142,8 @@ class OpenMMSolutionGen(InputGenerator):
             "atom_types": atom_types,
             "atom_resnames": atom_resnames,
         }
+        # TODO: will need to serialize this to JSON and include in settings
+        # ideally the settings should be a pydantic BaseModel
         return settings_dict
 
     def get_input_set(
@@ -149,6 +152,7 @@ class OpenMMSolutionGen(InputGenerator):
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ):
+        # TODO: add default for density, maybe 1.5?
         # coerce all input_mol_dicts to InputMoleculeSpec
         input_mol_specs = []
         for mol_dict in input_mol_dicts:

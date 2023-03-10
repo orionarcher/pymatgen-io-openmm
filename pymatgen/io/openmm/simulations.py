@@ -30,11 +30,12 @@ def equilibrate_pressure(
     steps: int,
     temperature: float = 298,
     pressure: float = 1,
+    frequency: int = 10,
 ):
     """
     Equilibrate the pressure of a simulation in the NPT ensemble.
 
-    Adds and then removes a openmm.MonteCarlo Barostat to shift the system
+    Adds and then removes an openmm.MonteCarlo Barostat to shift the system
     into the NPT ensemble.
 
     Parameters
@@ -43,13 +44,16 @@ def equilibrate_pressure(
     steps : the length of the heating, holding, and cooling stages. Steps is number of steps.
     temperature : temperature to equilibrate at (Kelvin)
     pressure : pressure to equilibrate at (Atm).
+    frequency : the frequency at which pressure changes should be attempted (steps).
     """
     context = simulation.context
     system = context.getSystem()
     assert (
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
-    barostat_force_index = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 10))
+    barostat_force_index = system.addForce(
+        MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, frequency)
+    )
     context.reinitialize(preserveState=True)
     simulation.step(steps)
     system.removeForce(barostat_force_index)
