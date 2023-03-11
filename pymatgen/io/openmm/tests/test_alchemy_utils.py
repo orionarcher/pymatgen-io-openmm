@@ -1,4 +1,4 @@
-from pymatgen.io.openmm.alchemy_utils import smiles_to_universe
+from pymatgen.io.openmm.alchemy_utils import openff_counts_to_universe
 import openff.toolkit as tk
 
 
@@ -7,7 +7,7 @@ class TestAlchemicalReaction:
         O = tk.Molecule.from_smiles("O")
         CCO = tk.Molecule.from_smiles("CCO")
         smiles = {O: 2, CCO: 2}
-        universe = smiles_to_universe(smiles)
+        universe = openff_counts_to_universe(smiles)
         assert len(universe.atoms) == 24
         assert len(universe.atoms.residues) == 4
 
@@ -19,3 +19,10 @@ class TestAlchemicalReaction:
         acetic_ethanol_condensation.make_reactive_system(openff_counts)
         return
         # TODO: write real tests
+
+    def test_visualize_reactions(self, acetic_ethanol_condensation):
+        O = tk.Molecule.from_smiles("O")
+        CCO = tk.Molecule.from_smiles("CCO")
+        CCOO = tk.Molecule.from_smiles("CC(=O)O")
+        openff_mols = [O, CCO, CCOO]
+        acetic_ethanol_condensation.visualize_reactions(openff_mols, "./test.png")
