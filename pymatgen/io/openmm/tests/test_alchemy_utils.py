@@ -15,6 +15,7 @@ class TestAlchemicalReaction:
         O = tk.Molecule.from_smiles("O")
         CCO = tk.Molecule.from_smiles("CCO")
         CCOO = tk.Molecule.from_smiles("CC(=O)O")
-        smiles = {CCOO: 2, O: 2, CCO: 2}
-        acetic_ethanol_condensation.make_reactive_system(smiles)
+        openff_counts = {CCOO: 2, O: 2, CCO: 2}
+        acetic_ethanol_condensation.make_reactive_system(openff_counts)
+        return
         # TODO: write real tests

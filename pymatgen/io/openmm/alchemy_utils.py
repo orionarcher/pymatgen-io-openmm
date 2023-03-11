@@ -175,6 +175,25 @@ class AlchemicalReaction(MSONable):
         return pd.concat(trigger_atom_dfs)
 
     @staticmethod
+    def _mini_universe_reactive_atomas_df(
+        openff_mols, select_dict, create_bonds, delete_bonds, delete_atoms
+    ):
+        # we first create a small universe with one copy of each residue
+        openff_singles = {mol: 1 for mol in openff_mols}
+        universe_mini = smiles_to_universe(openff_singles)
+
+        # next we find the reactive atoms in the small universe
+        atoms_mini_df = AlchemicalReaction._build_reactive_atoms_df(
+            universe_mini, select_dict, create_bonds, delete_bonds, delete_atoms
+        )
+
+        # then we assign trigger atoms to each reactive atom based on distance
+        atoms_w_triggers_mini_df = AlchemicalReaction._add_trigger_atoms(
+            atoms_mini_df, universe_mini
+        )
+        return atoms_w_triggers_mini_df
+
+    @staticmethod
     def _expand_to_all_atoms(trig_df, res_sizes, res_counts):
         """
         All previous functionality only operated on a small universe with one copy of each
@@ -282,26 +301,17 @@ class AlchemicalReaction(MSONable):
         Returns:
 
         """
-        # we first create a small universe with one copy of each residue
-        openff_singles = {mol: 1 for mol in openff_counts.keys()}
-        universe_mini = smiles_to_universe(openff_singles)
-
-        # next we find the reactive atoms in the small universe
-        atoms_mini_df = AlchemicalReaction._build_reactive_atoms_df(
-            universe_mini,
+        # create a dataframe with reactive atoms for a small universe with one copy of each residue
+        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atomas_df(
+            openff_counts.keys(),
             self.select_dict,
             self.create_bonds,
             self.delete_bonds,
             self.delete_atoms,
         )
 
-        # then we assign trigger atoms to each reactive atom based on distance
-        atoms_w_triggers_mini_df = AlchemicalReaction._add_trigger_atoms(
-            atoms_mini_df, universe_mini
-        )
-
         # finally we expand the dataframe to include all atoms in the system
-        res_sizes = [res.atoms.n_atoms for res in universe_mini.residues]
+        res_sizes = [mol.n_atoms for mol in openff_counts.keys()]
         res_counts = list(openff_counts.values())
         atoms_w_triggers_df = AlchemicalReaction._expand_to_all_atoms(
             atoms_w_triggers_mini_df, res_sizes, res_counts
@@ -331,10 +341,17 @@ class AlchemicalReaction(MSONable):
             molgraph_to_rxn_index=molgraph_to_rxn_index,
         )
 
-
-def visualize_reactions(
-    openff_mols: List[tk.Molecule],
-    alchemical_reactions: List[AlchemicalReaction],
-    filename: Optional[str] = None,
-) -> rdkit.Chem.rdchem.Mol:
-    return
+    def visualize_reactions(
+        self,
+        openff_mols: List[tk.Molecule],
+        filename: Optional[str] = None,
+    ) -> rdkit.Chem.rdchem.Mol:
+        # create a dataframe with reactive atoms for a small universe with one copy of each residue
+        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atomas_df(
+            openff_mols,
+            self.select_dict,
+            self.create_bonds,
+            self.delete_bonds,
+            self.delete_atoms,
+        )
+        return atoms_w_triggers_mini_df
