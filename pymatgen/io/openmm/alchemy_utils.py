@@ -1,7 +1,6 @@
 """
 Utilities for implementing AlchemicalReactions
 """
-
 from typing import List, Tuple, Dict, Optional
 from io import StringIO
 import pandas as pd
@@ -22,7 +21,7 @@ from dataclasses import dataclass
 import rdkit
 
 
-def smiles_to_universe(openff_counts):
+def openff_counts_to_universe(openff_counts):
     """
     Quick conversion from a set of smiles to a MDanalysis Universe.
 
@@ -41,19 +40,41 @@ def smiles_to_universe(openff_counts):
 
 
 class HalfReaction(BaseModel):
-    trigger_atom: int
+    """
+    A HalfReaction that contains atoms that are created or deleted in a reaction.
+
+    A HalfReaction are only useful within the context of a specific ReactiveSystem
+
+    Args:
+        create_bonds: a list of atoms that form new bonds. These should be paired
+            with another half reactions with a corresponding set of atoms.
+        delete_bonds: a list of tuples of atom indices to delete bonds between.
+        delete_atoms: a list of atom indices to delete.
+    """
+
     create_bonds: List[int]
     delete_bonds: List[Tuple[int, int]]
     delete_atoms: List[int]
 
 
 @dataclass
-class ReactionSystem(MSONable):
+class ReactiveAtoms(MSONable):
+    """
+    A ReactiveAtoms object that contains all the atoms that participate in a reaction.
+
+    ReactiveAtoms are only useful within the context of a specific ReactiveSystem
+
+    Args:
+        half_reactions: a dictionary of half reactions where the key is the trigger atom
+            and the value is the HalfReaction
+        trigger_atoms_left: a list of trigger atoms for the "left" side of the reaction
+        trigger_atoms_right: a list of trigger atoms for the "right" side of the reaction
+    """
+
     half_reactions: Dict[int, HalfReaction]
     trigger_atoms_left: List[int]
     trigger_atoms_right: List[int]
-    molgraph: MoleculeGraph
-    molgraph_to_rxn_index: Dict[int, int]
+    barrier: float = 0.0
 
 
 class AlchemicalReaction(MSONable):
@@ -68,6 +89,7 @@ class AlchemicalReaction(MSONable):
         create_bonds: List[Tuple[str, str]] = None,
         delete_bonds: List[Tuple[str, str]] = None,
         delete_atoms: List[str] = None,
+        barrier: float = 0.0,
     ):
         """
         Args:
@@ -82,6 +104,7 @@ class AlchemicalReaction(MSONable):
         self.create_bonds = create_bonds or []
         self.delete_bonds = delete_bonds or []
         self.delete_atoms = delete_atoms or []
+        self.barrier = barrier
 
     # TODO: make sure things dont break if there are multiple possible reactions
     # TODO: need to make sure that we won't get an error if something reacts with itself
@@ -180,7 +203,7 @@ class AlchemicalReaction(MSONable):
     ):
         # we first create a small universe with one copy of each residue
         openff_singles = {mol: 1 for mol in openff_mols}
-        universe_mini = smiles_to_universe(openff_singles)
+        universe_mini = openff_counts_to_universe(openff_singles)
 
         # next we find the reactive atoms in the small universe
         atoms_mini_df = AlchemicalReaction._build_reactive_atoms_df(
@@ -262,7 +285,6 @@ class AlchemicalReaction(MSONable):
                 atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].values
             )
             half_reaction = HalfReaction(
-                trigger_atom=trigger_ix,
                 create_bonds=create_ix,
                 delete_bonds=delete_ix,
                 delete_atoms=delete_atom_ix,
@@ -287,7 +309,7 @@ class AlchemicalReaction(MSONable):
 
         return list(trigger_atoms_left), list(trigger_atoms_right)
 
-    def make_reactive_system(
+    def make_reactive_atoms(
         self,
         openff_counts,
     ):
@@ -327,18 +349,12 @@ class AlchemicalReaction(MSONable):
             atoms_w_triggers_df
         )
 
-        # build a corresponding molgraph
-        topology = get_openff_topology(openff_counts)
-        molgraph = molgraph_from_openff_topology(topology)
-        molgraph_to_rxn_index = {i: i for i in range(topology.n_atoms)}
-
         # and return
-        return ReactionSystem(
+        return ReactiveAtoms(
             half_reactions=half_reactions_dict,
             trigger_atoms_left=triggers_left,
             trigger_atoms_right=triggers_right,
-            molgraph=molgraph,
-            molgraph_to_rxn_index=molgraph_to_rxn_index,
+            barrier=self.barrier,
         )
 
     def visualize_reactions(
@@ -346,6 +362,11 @@ class AlchemicalReaction(MSONable):
         openff_mols: List[tk.Molecule],
         filename: Optional[str] = None,
     ) -> rdkit.Chem.rdchem.Mol:
+        from rdkit.Chem import rdCoordGen
+        from rdkit.Chem.Draw.MolDrawing import DrawingOptions
+
+        DrawingOptions.atomLabelFontSize = 100
+
         # create a dataframe with reactive atoms for a small universe with one copy of each residue
         atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atomas_df(
             openff_mols,
@@ -354,4 +375,109 @@ class AlchemicalReaction(MSONable):
             self.delete_bonds,
             self.delete_atoms,
         )
-        return atoms_w_triggers_mini_df
+        u = openff_counts_to_universe({mol: 1 for mol in openff_mols})
+        rdmol = u.atoms.convert_to("RDKIT")
+        rdCoordGen.AddCoords(rdmol)
+
+        for i, mol in enumerate(rdmol):
+            return
+        return rdmol, atoms_w_triggers_mini_df
+
+        # if isinstance(residue, str):
+        #     if residue in [self.solute_name, "solute"]:
+        #         mol = self.solute_atoms.residues[0].atoms.convert_to("RDKIT")
+        #         mol_mda_ix = self.solute_atoms.residues[0].atoms.ix
+        #         solute_atoms_ix0 = {solute.solute_atoms.atoms.ix[0]: solute_name
+        #                             for solute_name, solute in self.atom_solutes.items()}
+        #         for i, atom in enumerate(mol.GetAtoms()):
+        #             atom_name = solute_atoms_ix0.get(mol_mda_ix[i])
+        #             label = f"{i}, " + atom_name if atom_name else str(i)
+        #             atom.SetProp("atomNote", label)
+        #     elif residue in self.solvents.keys():
+        #         mol = self.solvents[residue].residues[0].atoms.convert_to("RDKIT")
+        #         for i, atom in enumerate(mol.GetAtoms()):
+        #             atom.SetProp("atomNote", str(i))
+        #     else:
+        #         raise ValueError("If the residue is a string, it must be the name of a solute, "
+        #                          "the name of a solvent, or 'solute'.")
+        # else:
+        #     assert isinstance(residue, mda.core.groups.Residue)
+        #     mol = residue.atoms.convert_to("RDKIT")
+        #     for i, atom in enumerate(mol.GetAtoms()):
+        #         atom.SetProp("atomNote", str(i))
+        # if filename:
+        #     Draw.MolToFile(mol, filename=filename)
+        # rdCoordGen.AddCoords(mol)
+        # return mol
+
+
+class ReactiveSystem(MSONable):
+    def __init__(
+        self,
+        reactive_atom_sets: List[ReactiveAtoms],
+        molgraph: MoleculeGraph,
+        molgraph_to_rxn_index: Dict[int, int],
+    ):
+        self.reactive_atom_sets = reactive_atom_sets
+        self.molgraph = molgraph
+        self.molgraph_to_rxn_index = molgraph_to_rxn_index
+
+    @staticmethod
+    def from_reactions(
+        openff_counts: Dict[tk.Molecule, int],
+        alchemical_reactions: List[AlchemicalReaction],
+    ):
+        # calculate reactive atoms
+        reactive_atoms = [
+            reaction.make_reactive_atoms(openff_counts)
+            for reaction in alchemical_reactions
+        ]
+
+        # build a corresponding molgraph
+        topology = get_openff_topology(openff_counts)
+        molgraph = molgraph_from_openff_topology(topology)
+        molgraph_to_rxn_index = {i: i for i in range(topology.n_atoms)}
+
+        return ReactiveSystem(
+            reactive_atom_sets=reactive_atoms,
+            molgraph=molgraph,
+            molgraph_to_rxn_index=molgraph_to_rxn_index,
+        )
+
+    @staticmethod
+    def _sample_reactions(
+        reactive_atoms,
+        positions,
+        reaction_temperature,
+        distance_cutoff,
+    ) -> List[Tuple[HalfReaction, HalfReaction]]:
+        return []
+
+    @staticmethod
+    def _react_molgraph(molgraph, molgraph_to_rxn_index, full_reactions):
+        return molgraph_to_rxn_index
+
+    def react(self, positions, reaction_temperature=1, distance_cutoff=4):
+        """
+        Reacts the system with the given positions.
+        """
+
+        index_map = self.molgraph_to_rxn_index
+        molgraph = self.molgraph
+        for reactive_atoms in self.reactive_atom_sets:
+            full_reactions = ReactiveSystem._sample_reactions(
+                reactive_atoms,
+                positions,
+                reaction_temperature,
+                distance_cutoff,
+            )
+            index_map = ReactiveSystem._react_molgraph(
+                molgraph,
+                index_map,
+                full_reactions,
+            )
+
+    def generate_topology(self, update_index_map=True) -> tk.Topology:
+        if update_index_map:
+            self.molgraph_to_rxn_index = {}
+        return tk.Topology()
