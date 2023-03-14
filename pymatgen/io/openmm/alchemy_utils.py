@@ -4,6 +4,7 @@ Utilities for implementing AlchemicalReactions
 from typing import List, Tuple, Dict, Optional
 from io import StringIO
 import pandas as pd
+from MDAnalysis.lib.distances import capped_distance
 
 from monty.json import MSONable
 
@@ -60,20 +61,22 @@ class HalfReaction(MSONable):
     delete_bonds: List[Tuple[int, int]]
     delete_atoms: List[int]
 
-    def remap(self, mapping: Dict[int, int]) -> "HalfReaction":
+    def remap(self, old_to_new_map: Dict[int, int]) -> "HalfReaction":
         """
         A pure function that creates a new half reaction with a different mapping
 
         Args:
-            mapping:
+            old_to_new_map: a mapping between atom indices
 
         Returns:
 
         """
         return HalfReaction(
-            create_bonds=[mapping[i] for i in self.create_bonds],
-            delete_bonds=[(mapping[i], mapping[j]) for i, j in self.delete_bonds],
-            delete_atoms=[mapping[i] for i in self.delete_atoms],
+            create_bonds=[old_to_new_map[i] for i in self.create_bonds],
+            delete_bonds=[
+                (old_to_new_map[i], old_to_new_map[j]) for i, j in self.delete_bonds
+            ],
+            delete_atoms=[old_to_new_map[i] for i in self.delete_atoms],
         )
 
 
@@ -96,22 +99,23 @@ class ReactiveAtoms(MSONable):
     trigger_atoms_right: List[int]
     barrier: float = 0.0
 
-    def remap(self, mapping: Dict[int, int]) -> "ReactiveAtoms":
+    def remap(self, old_to_new_map: Dict[int, int]) -> "ReactiveAtoms":
         """
         A pure function that creates a new ReactiveAtoms with a different mapping
 
         Args:
-            mapping:
+            old_to_new_map: a mapping between atom indices
 
         Returns:
 
         """
         return ReactiveAtoms(
             half_reactions={
-                mapping[k]: v.remap(mapping) for k, v in self.half_reactions.items()
+                old_to_new_map[k]: v.remap(old_to_new_map)
+                for k, v in self.half_reactions.items()
             },
-            trigger_atoms_left=[mapping[i] for i in self.trigger_atoms_left],
-            trigger_atoms_right=[mapping[i] for i in self.trigger_atoms_right],
+            trigger_atoms_left=[old_to_new_map[i] for i in self.trigger_atoms_left],
+            trigger_atoms_right=[old_to_new_map[i] for i in self.trigger_atoms_right],
             barrier=self.barrier,
         )
 
@@ -462,11 +466,9 @@ class ReactiveSystem(MSONable):
         self,
         reactive_atom_sets: List[ReactiveAtoms],
         molgraph: MoleculeGraph,
-        molgraph_to_rxn_index: Dict[int, int],
     ):
         self.reactive_atom_sets = reactive_atom_sets
         self.molgraph = molgraph
-        self.molgraph_to_rxn_index = molgraph_to_rxn_index
 
     @staticmethod
     def from_reactions(
@@ -482,19 +484,17 @@ class ReactiveSystem(MSONable):
         # build a corresponding molgraph
         topology = get_openff_topology(openff_counts)
         molgraph = molgraph_from_openff_topology(topology)
-        molgraph_to_rxn_index = {i: i for i in range(topology.n_atoms)}
+        # molgraph_to_rxn_index = {i: i for i in range(topology.n_atoms)}
 
         return ReactiveSystem(
             reactive_atom_sets=reactive_atoms,
             molgraph=molgraph,
-            molgraph_to_rxn_index=molgraph_to_rxn_index,
         )
 
     @staticmethod
     def _sample_reactions(
         reactive_atoms: ReactiveAtoms,
         positions: np.ndarray,
-        index_map: Dict[int, int],
         reaction_temperature: float,
         distance_cutoff: float,
     ) -> List[Tuple[HalfReaction, HalfReaction]]:
@@ -510,9 +510,35 @@ class ReactiveSystem(MSONable):
         Returns:
 
         """
-        # index_map[reactive_atoms.trigger_atoms_left]
-        # index_map[reactive_atoms.trigger_atoms_right]
-        return []
+        # get the positions of the trigger atoms
+        atoms_left = positions[reactive_atoms.trigger_atoms_left]
+        atoms_right = positions[reactive_atoms.trigger_atoms_right]
+
+        # calculate distances between trigger atoms
+        reaction_pairs = capped_distance(
+            atoms_left, atoms_right, distance_cutoff, return_distances=False
+        )
+
+        reactions = []
+        reacted_atoms = []
+        for l, r in reaction_pairs:
+
+            # calculate the probability of the reaction
+            p = np.exp(-reactive_atoms.barrier / reaction_temperature)
+
+            # don't react the same atom twice
+            if l in reacted_atoms or r in reacted_atoms:
+                p = 0
+
+            if np.random.random() < p:
+                reactions.append(
+                    (
+                        reactive_atoms.half_reactions[l],
+                        reactive_atoms.half_reactions[r],
+                    )
+                )
+                reacted_atoms += [l, r]
+        return reactions
 
     @staticmethod
     def _react_molgraph(molgraph, molgraph_to_rxn_index, full_reactions):
@@ -523,32 +549,43 @@ class ReactiveSystem(MSONable):
         Reacts the system with the given positions.
         """
 
-        index_map = self.molgraph_to_rxn_index
+        index_map = {i: i for i in range(len(self.molgraph))}
         molgraph = self.molgraph
-        for reactive_atoms in self.reactive_atom_sets:
+        for i, reactive_atoms in enumerate(self.reactive_atom_sets):
+            # remapping is only needed if the molgraph has changed, e.g. atoms deleted
+            if len(index_map) != len(self.molgraph):
+                reactive_atoms = reactive_atoms.remap(index_map)
+
+            # sample reactions
             full_reactions = ReactiveSystem._sample_reactions(
                 reactive_atoms,
-                index_map,
                 positions,
                 reaction_temperature,
                 distance_cutoff,
             )
+
+            # react our molgraph, deleting atoms may create a different index_map
             molgraph, index_map = ReactiveSystem._react_molgraph(
                 molgraph,
                 index_map,
                 full_reactions,
             )
-        self.molgraph_to_rxn_index = index_map
+        # only needed if atom indices have changed
+        if len(index_map) != len(self.molgraph):
+            self.reactive_atom_sets = [
+                atoms.remap(index_map) for atoms in self.reactive_atom_sets
+            ]
         self.molgraph = molgraph
 
     def generate_topology(self, update_self=False) -> tk.Topology:
-        topology, new_to_old_index = molgraph_to_openff_topology(self.molgraph)
+        topology, new_to_old_index = molgraph_to_openff_topology(
+            self.molgraph, return_index_map=True
+        )
         old_to_new_index = {v: k for k, v in new_to_old_index.items()}
 
         if update_self:
-            self.molgraph_to_rxn_index = {
-                old_to_new_index[i]: j for i, j in self.molgraph_to_rxn_index.items()
-            }
-            # TODO: should we make a copy?
             self.molgraph = molgraph_from_openff_topology(topology)
+            self.reactive_atom_sets = [
+                atoms.remap(old_to_new_index) for atoms in self.reactive_atom_sets
+            ]
         return topology
