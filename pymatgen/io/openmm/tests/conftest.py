@@ -31,7 +31,7 @@ def acetic_ethanol_condensation():
 
 
 @pytest.fixture
-def acetic_ethanol_condensation_del_water(acetic_ethanol_select_dict):
+def acetic_ethanol_condensation_del_water():
     """
     A fixture for an acetic acid and ethanol condensation Alchemical Reaction where
     the water is deleted.
@@ -54,7 +54,7 @@ def acetic_ethanol_condensation_del_water(acetic_ethanol_select_dict):
 
 
 @pytest.fixture
-def propanedioic_ethanol_condensation_del_water(acetic_ethanol_select_dict):
+def propanedioic_ethanol_condensation_del_water():
     """
     A fixture for an acetic acid and ethanol condensation Alchemical Reaction where
     the water is deleted.
@@ -66,8 +66,8 @@ def propanedioic_ethanol_condensation_del_water(acetic_ethanol_select_dict):
         "ethanol_O": "smarts [CH3][CH2]O and element O",
         "ethanol_H": "smarts [CH3][CH2]O[H] and smarts [OX2][H] and element H",
     }
-    create_bonds = [("acetic_acid_C", "ethanol_O")]
-    delete_atoms = ["acetic_acid_O", "acetic_acid_H", "ethanol_H"]
+    create_bonds = [("propanedioic_acid_C", "ethanol_O")]
+    delete_atoms = ["propanedioic_acid_O", "propanedioic_acid_H", "ethanol_H"]
     rxn = AlchemicalReaction(
         select_dict=select_dict,
         create_bonds=create_bonds,
