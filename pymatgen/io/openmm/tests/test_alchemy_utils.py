@@ -23,7 +23,7 @@ class TestAlchemicalReaction:
 
         acetic_ethanol_condensation_del_water.make_reactive_atoms(openff_counts)
         return
-        # TODO: write real tests
+        # TODO: add rigorous testing
 
     def test_visualize_reactions(
         self, acetic_ethanol_condensation, acetic_ethanol_condensation_del_water
@@ -33,7 +33,7 @@ class TestAlchemicalReaction:
         CCOO = tk.Molecule.from_smiles("CC(=O)O")
         openff_mols = [O, CCO, CCOO]
         # acetic_ethanol_condensation_del_water.visualize_reactions(openff_mols)
-        acetic_ethanol_condensation.visualize_reactions(openff_mols, "./test2.png")
+        acetic_ethanol_condensation.visualize_reactions(openff_mols)
 
     def test_propanedioic(self, propanedioic_ethanol_condensation_del_water):
         O = tk.Molecule.from_smiles("O")
@@ -41,5 +41,23 @@ class TestAlchemicalReaction:
         CCOO = tk.Molecule.from_smiles("C(C(=O)O)C(=O)O")
         openff_mols = [O, CCO, CCOO]
         propanedioic_ethanol_condensation_del_water.visualize_reactions(
-            openff_mols, "./test.png"
+            openff_mols,
         )
+        # TODO: add rigorous testing
+
+
+class TestReactiveSystem:
+    def test_from_reactions(self):
+        return
+
+    def test_sample_reactions(self):
+        return
+
+    def test_react_molgraph(self):
+        return
+
+    def test_react(self):
+        return
+
+    def test_generate_topology(self):
+        return
