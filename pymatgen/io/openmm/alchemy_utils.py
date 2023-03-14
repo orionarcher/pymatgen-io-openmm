@@ -324,11 +324,11 @@ class AlchemicalReaction(MSONable):
             delete_ix = atoms_df[atoms_df.type == "delete_bonds"]
             unique_bond_n = delete_ix["bond_n"].unique()
             delete_ix = [
-                tuple(delete_ix[delete_ix["bond_n"] == bond_n]["atom_ix"].values)
+                tuple(delete_ix[delete_ix["bond_n"] == bond_n]["atom_ix"].tolist())
                 for bond_n in unique_bond_n
             ]
             delete_atom_ix = list(
-                atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].values
+                atoms_df[atoms_df.type == "delete_atom"]["atom_ix"].tolist()
             )
             half_reaction = HalfReaction(
                 create_bonds=create_ix,
@@ -353,7 +353,7 @@ class AlchemicalReaction(MSONable):
             & (all_atoms_df.half_rxn_ix == 1)
         ]["trigger_ix"].values
 
-        return list(trigger_atoms_left), list(trigger_atoms_right)
+        return trigger_atoms_left.tolist(), trigger_atoms_right.tolist()
 
     def make_reactive_atoms(
         self,
@@ -411,21 +411,14 @@ class AlchemicalReaction(MSONable):
         from rdkit.Chem import rdCoordGen
         from rdkit.Chem.Draw import rdMolDraw2D
 
-        # create a dataframe with reactive atoms for a small universe with one copy of each residue
-        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atoms_df(
-            openff_mols,
-            self.select_dict,
-            self.create_bonds,
-            self.delete_bonds,
-            self.delete_atoms,
-        )
-        half_reactions_dict = AlchemicalReaction._build_half_reactions_dict(
-            atoms_w_triggers_mini_df
-        )
-        # we can now extract the trigger atoms from the dataframe
-        triggers_left, triggers_right = AlchemicalReaction._get_triggers(
-            atoms_w_triggers_mini_df
-        )
+        # TODO: can this be cleaned up?
+
+        reactive_atoms = self.make_reactive_atoms({mol: 1 for mol in openff_mols})
+
+        half_reactions_dict = reactive_atoms.half_reactions
+        triggers_left = reactive_atoms.trigger_atoms_left
+        triggers_right = reactive_atoms.trigger_atoms_right
+
         u = openff_counts_to_universe({mol: 1 for mol in openff_mols})
         rdmol = u.atoms.convert_to("RDKIT")
         rdCoordGen.AddCoords(rdmol)
