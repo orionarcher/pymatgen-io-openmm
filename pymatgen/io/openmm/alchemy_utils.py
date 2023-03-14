@@ -11,11 +11,14 @@ import numpy as np
 import MDAnalysis as mda
 
 from pymatgen.io.openmm.inputs import TopologyInput
-from pymatgen.io.openmm.utils import get_openff_topology, molgraph_from_openff_topology
+from pymatgen.io.openmm.utils import (
+    get_openff_topology,
+    molgraph_from_openff_topology,
+    molgraph_to_openff_topology,
+)
 from pymatgen.analysis.graphs import MoleculeGraph
 import openff.toolkit as tk
 
-from pydantic import BaseModel
 from dataclasses import dataclass
 
 import rdkit
@@ -39,7 +42,8 @@ def openff_counts_to_universe(openff_counts):
     return universe
 
 
-class HalfReaction(BaseModel):
+@dataclass
+class HalfReaction(MSONable):
     """
     A HalfReaction that contains atoms that are created or deleted in a reaction.
 
@@ -55,6 +59,22 @@ class HalfReaction(BaseModel):
     create_bonds: List[int]
     delete_bonds: List[Tuple[int, int]]
     delete_atoms: List[int]
+
+    def remap(self, mapping: Dict[int, int]) -> "HalfReaction":
+        """
+        A pure function that creates a new half reaction with a different mapping
+
+        Args:
+            mapping:
+
+        Returns:
+
+        """
+        return HalfReaction(
+            create_bonds=[mapping[i] for i in self.create_bonds],
+            delete_bonds=[(mapping[i], mapping[j]) for i, j in self.delete_bonds],
+            delete_atoms=[mapping[i] for i in self.delete_atoms],
+        )
 
 
 @dataclass
@@ -75,6 +95,25 @@ class ReactiveAtoms(MSONable):
     trigger_atoms_left: List[int]
     trigger_atoms_right: List[int]
     barrier: float = 0.0
+
+    def remap(self, mapping: Dict[int, int]) -> "ReactiveAtoms":
+        """
+        A pure function that creates a new ReactiveAtoms with a different mapping
+
+        Args:
+            mapping:
+
+        Returns:
+
+        """
+        return ReactiveAtoms(
+            half_reactions={
+                mapping[k]: v.remap(mapping) for k, v in self.half_reactions.items()
+            },
+            trigger_atoms_left=[mapping[i] for i in self.trigger_atoms_left],
+            trigger_atoms_right=[mapping[i] for i in self.trigger_atoms_right],
+            barrier=self.barrier,
+        )
 
 
 class AlchemicalReaction(MSONable):
@@ -453,11 +492,26 @@ class ReactiveSystem(MSONable):
 
     @staticmethod
     def _sample_reactions(
-        reactive_atoms,
-        positions,
-        reaction_temperature,
-        distance_cutoff,
+        reactive_atoms: ReactiveAtoms,
+        positions: np.ndarray,
+        index_map: Dict[int, int],
+        reaction_temperature: float,
+        distance_cutoff: float,
     ) -> List[Tuple[HalfReaction, HalfReaction]]:
+        """
+
+
+        Args:
+            reactive_atoms:
+            positions:
+            reaction_temperature:
+            distance_cutoff:
+
+        Returns:
+
+        """
+        # index_map[reactive_atoms.trigger_atoms_left]
+        # index_map[reactive_atoms.trigger_atoms_right]
         return []
 
     @staticmethod
@@ -474,17 +528,27 @@ class ReactiveSystem(MSONable):
         for reactive_atoms in self.reactive_atom_sets:
             full_reactions = ReactiveSystem._sample_reactions(
                 reactive_atoms,
+                index_map,
                 positions,
                 reaction_temperature,
                 distance_cutoff,
             )
-            index_map = ReactiveSystem._react_molgraph(
+            molgraph, index_map = ReactiveSystem._react_molgraph(
                 molgraph,
                 index_map,
                 full_reactions,
             )
+        self.molgraph_to_rxn_index = index_map
+        self.molgraph = molgraph
 
-    def generate_topology(self, update_index_map=True) -> tk.Topology:
-        if update_index_map:
-            self.molgraph_to_rxn_index = {}
-        return tk.Topology()
+    def generate_topology(self, update_self=False) -> tk.Topology:
+        topology, new_to_old_index = molgraph_to_openff_topology(self.molgraph)
+        old_to_new_index = {v: k for k, v in new_to_old_index.items()}
+
+        if update_self:
+            self.molgraph_to_rxn_index = {
+                old_to_new_index[i]: j for i, j in self.molgraph_to_rxn_index.items()
+            }
+            # TODO: should we make a copy?
+            self.molgraph = molgraph_from_openff_topology(topology)
+        return topology
