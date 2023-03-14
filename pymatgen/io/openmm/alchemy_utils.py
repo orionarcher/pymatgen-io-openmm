@@ -1,6 +1,7 @@
 """
 Utilities for implementing AlchemicalReactions
 """
+import copy
 from typing import List, Tuple, Dict, Optional
 from io import StringIO
 import pandas as pd
@@ -541,20 +542,56 @@ class ReactiveSystem(MSONable):
         return reactions
 
     @staticmethod
-    def _react_molgraph(molgraph, molgraph_to_rxn_index, full_reactions):
-        return molgraph_to_rxn_index
+    def _react_molgraph(molgraph, old_to_new_map, full_reactions):
+        # TODO: this copy should be removed once things are working?
+        molgraph = copy.deepcopy(molgraph)
+
+        for left_reaction, right_reaction in full_reactions:
+
+            # create bonds
+            assert len(left_reaction.create_bonds) == len(right_reaction.create_bonds)
+            for bond_ix in range(len(left_reaction.create_bonds)):
+                molgraph.add_edge(
+                    left_reaction.create_bonds[bond_ix],
+                    right_reaction.create_bonds[bond_ix],
+                )
+
+            # delete bonds
+            for l_atom_ix, r_atom_ix in (
+                left_reaction.delete_bonds + right_reaction.delete_bonds
+            ):
+                molgraph.break_edge(l_atom_ix, r_atom_ix, allow_reverse=True)
+
+            # delete atoms
+            deleted_atoms = []
+            for atom_ix in sorted(
+                left_reaction.delete_atoms + right_reaction.delete_atoms
+            ):
+                molgraph.remove_node(atom_ix - len(deleted_atoms))
+                deleted_atoms.append(atom_ix)
+
+            # update the molgraph_to_rxn_index
+            # this works because we are only deleting atoms
+            # as a result, keys are always a contiguous list of indices
+            new_to_old_index = list(old_to_new_map.keys())
+            for atom_ix in deleted_atoms[::-1]:
+                new_to_old_index.pop(atom_ix)
+
+            old_to_new_map = {old: new for new, old in enumerate(new_to_old_index)}
+
+        return molgraph, old_to_new_map
 
     def react(self, positions, reaction_temperature=1, distance_cutoff=4):
         """
         Reacts the system with the given positions.
         """
-
-        index_map = {i: i for i in range(len(self.molgraph))}
+        # we use new to old map because it can be maintained as a list of indices
+        old_to_new_map = {i: i for i in range(len(self.molgraph))}
         molgraph = self.molgraph
         for i, reactive_atoms in enumerate(self.reactive_atom_sets):
             # remapping is only needed if the molgraph has changed, e.g. atoms deleted
-            if len(index_map) != len(self.molgraph):
-                reactive_atoms = reactive_atoms.remap(index_map)
+            if len(old_to_new_map) != len(self.molgraph):
+                reactive_atoms = reactive_atoms.remap(old_to_new_map)
 
             # sample reactions
             full_reactions = ReactiveSystem._sample_reactions(
@@ -565,15 +602,15 @@ class ReactiveSystem(MSONable):
             )
 
             # react our molgraph, deleting atoms may create a different index_map
-            molgraph, index_map = ReactiveSystem._react_molgraph(
+            molgraph, old_to_new_map = ReactiveSystem._react_molgraph(
                 molgraph,
-                index_map,
+                old_to_new_map,
                 full_reactions,
             )
         # only needed if atom indices have changed
-        if len(index_map) != len(self.molgraph):
+        if len(old_to_new_map) != len(self.molgraph):
             self.reactive_atom_sets = [
-                atoms.remap(index_map) for atoms in self.reactive_atom_sets
+                atoms.remap(old_to_new_map) for atoms in self.reactive_atom_sets
             ]
         self.molgraph = molgraph
 
