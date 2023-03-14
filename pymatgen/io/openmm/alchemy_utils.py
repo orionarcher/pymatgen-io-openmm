@@ -216,7 +216,7 @@ class AlchemicalReaction(MSONable):
         return df
 
     @staticmethod
-    def _add_trigger_atoms(df, universe):
+    def _add_trigger_atoms(df, u):
         """
         This extracts all of the "trigger" atoms that instigate a specific alchemical reaction,
         e.g. the atoms that can move within some cutoff to react with each other. It then organizes
@@ -224,7 +224,7 @@ class AlchemicalReaction(MSONable):
 
         Args:
             df:
-            universe:
+            u:
 
         Returns:
 
@@ -236,9 +236,14 @@ class AlchemicalReaction(MSONable):
         # pair each trigger atom with its associated create_bonds, delete_bonds and delete_atoms
         for ix in trigger_atom_ix:
             # TODO: should this be one or two bonds? (bonded bonded index {ix})
-            within_one_bond = f"(index {ix}) or (bonded index {ix})"
-            nearby_atoms_ix = universe.select_atoms(within_one_bond).ix
-            atoms_df = df[np.isin(df["atom_ix"], nearby_atoms_ix)]
+            within_one_bond = u.select_atoms(f"(index {ix}) or (bonded index {ix})").ix
+            at_two_bonds = u.select_atoms(f"(bonded bonded index {ix})").ix
+
+            within_one_bond_arr = np.isin(df["atom_ix"], within_one_bond)
+            at_two_bonds_arr = np.isin(df["atom_ix"], at_two_bonds) & (
+                df["type"] == "delete_atom"
+            )
+            atoms_df = df[within_one_bond_arr | at_two_bonds_arr]
             atoms_df["trigger_ix"] = ix
             trigger_atom_dfs.append(atoms_df)
         return pd.concat(trigger_atom_dfs)
@@ -260,6 +265,10 @@ class AlchemicalReaction(MSONable):
         atoms_w_triggers_mini_df = AlchemicalReaction._add_trigger_atoms(
             atoms_mini_df, universe_mini
         )
+        # TODO: add in clearer error message
+        assert len(atoms_w_triggers_mini_df) == len(
+            atoms_mini_df
+        ), "Not all atoms were assigned a trigger atom."
         return atoms_w_triggers_mini_df
 
     @staticmethod
@@ -410,8 +419,6 @@ class AlchemicalReaction(MSONable):
     ) -> rdkit.Chem.rdchem.Mol:
         from rdkit.Chem import rdCoordGen
         from rdkit.Chem.Draw import rdMolDraw2D
-
-        # TODO: can this be cleaned up?
 
         reactive_atoms = self.make_reactive_atoms({mol: 1 for mol in openff_mols})
 
