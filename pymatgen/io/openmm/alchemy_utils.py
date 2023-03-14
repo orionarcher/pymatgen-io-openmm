@@ -163,10 +163,13 @@ class AlchemicalReaction(MSONable):
                         "atom_ix": atom_ix,
                         "res_ix": res_ix,
                         "type": "delete_atom",
-                        "bond_n": None,
+                        "bond_n": np.nan,
+                        "half_rxn_ix": np.nan,
                     }
                 )
-        return pd.DataFrame(participating_atoms)
+        df = pd.DataFrame(participating_atoms)
+        df = df.astype({"bond_n": "Int64", "half_rxn_ix": "Int64"})
+        return df
 
     @staticmethod
     def _add_trigger_atoms(df, universe):
@@ -188,17 +191,16 @@ class AlchemicalReaction(MSONable):
         trigger_atom_dfs = []
         # pair each trigger atom with its associated create_bonds, delete_bonds and delete_atoms
         for ix in trigger_atom_ix:
-            within_two_bonds = (
-                f"(index {ix}) or (bonded index {ix}) or (bonded bonded index {ix})"
-            )
-            nearby_atoms_ix = universe.select_atoms(within_two_bonds).ix
+            # TODO: should this be one or two bonds? (bonded bonded index {ix})
+            within_one_bond = f"(index {ix}) or (bonded index {ix})"
+            nearby_atoms_ix = universe.select_atoms(within_one_bond).ix
             atoms_df = df[np.isin(df["atom_ix"], nearby_atoms_ix)]
             atoms_df["trigger_ix"] = ix
             trigger_atom_dfs.append(atoms_df)
         return pd.concat(trigger_atom_dfs)
 
     @staticmethod
-    def _mini_universe_reactive_atomas_df(
+    def _mini_universe_reactive_atoms_df(
         openff_mols, select_dict, create_bonds, delete_bonds, delete_atoms
     ):
         # we first create a small universe with one copy of each residue
@@ -324,7 +326,7 @@ class AlchemicalReaction(MSONable):
 
         """
         # create a dataframe with reactive atoms for a small universe with one copy of each residue
-        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atomas_df(
+        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atoms_df(
             openff_counts.keys(),
             self.select_dict,
             self.create_bonds,
@@ -363,52 +365,57 @@ class AlchemicalReaction(MSONable):
         filename: Optional[str] = None,
     ) -> rdkit.Chem.rdchem.Mol:
         from rdkit.Chem import rdCoordGen
-        from rdkit.Chem.Draw.MolDrawing import DrawingOptions
-
-        DrawingOptions.atomLabelFontSize = 100
+        from rdkit.Chem.Draw import rdMolDraw2D
 
         # create a dataframe with reactive atoms for a small universe with one copy of each residue
-        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atomas_df(
+        atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atoms_df(
             openff_mols,
             self.select_dict,
             self.create_bonds,
             self.delete_bonds,
             self.delete_atoms,
         )
+        half_reactions_dict = AlchemicalReaction._build_half_reactions_dict(
+            atoms_w_triggers_mini_df
+        )
+        # we can now extract the trigger atoms from the dataframe
+        triggers_left, triggers_right = AlchemicalReaction._get_triggers(
+            atoms_w_triggers_mini_df
+        )
         u = openff_counts_to_universe({mol: 1 for mol in openff_mols})
         rdmol = u.atoms.convert_to("RDKIT")
         rdCoordGen.AddCoords(rdmol)
+        for trigger_atom, half_reaction in half_reactions_dict.items():
+            for i, bond in enumerate(half_reaction.create_bonds):
+                l_r = "L" if trigger_atom in triggers_left else "R"
+                rdmol.GetAtomWithIdx(bond).SetProp(
+                    "atomNote", f"{trigger_atom}: form {l_r}{i}"
+                )
+            for l_atom, r_atom in half_reaction.delete_bonds:
+                rdmol.GetBondBetweenAtoms(l_atom, r_atom).SetProp(
+                    "bondNote", f"{trigger_atom}: del bond"
+                )
+            for atom in half_reaction.delete_atoms:
+                rdmol.GetAtomWithIdx(atom).SetProp(
+                    "atomNote", f"{trigger_atom}: del atom"
+                )
 
-        for i, mol in enumerate(rdmol):
-            return
-        return rdmol, atoms_w_triggers_mini_df
+        rdCoordGen.AddCoords(rdmol)
+        if filename:
+            # Draw.MolToFile(rdmol, size=(1500, 1500), filename=filename)
+            d = rdMolDraw2D.MolDraw2DCairo(1500, 1500)
+            left_colors = {int(atom): (0.95, 0.8, 0.8) for atom in triggers_left}
+            right_colors = {int(atom): (0.8, 0.9, 0.95) for atom in triggers_right}
+            rdMolDraw2D.PrepareAndDrawMolecule(
+                d,
+                rdmol,
+                highlightAtoms=[int(atom) for atom in triggers_left + triggers_right],
+                highlightAtomColors={**left_colors, **right_colors},
+            )
+            d.FinishDrawing()
+            d.WriteDrawingText(filename)
 
-        # if isinstance(residue, str):
-        #     if residue in [self.solute_name, "solute"]:
-        #         mol = self.solute_atoms.residues[0].atoms.convert_to("RDKIT")
-        #         mol_mda_ix = self.solute_atoms.residues[0].atoms.ix
-        #         solute_atoms_ix0 = {solute.solute_atoms.atoms.ix[0]: solute_name
-        #                             for solute_name, solute in self.atom_solutes.items()}
-        #         for i, atom in enumerate(mol.GetAtoms()):
-        #             atom_name = solute_atoms_ix0.get(mol_mda_ix[i])
-        #             label = f"{i}, " + atom_name if atom_name else str(i)
-        #             atom.SetProp("atomNote", label)
-        #     elif residue in self.solvents.keys():
-        #         mol = self.solvents[residue].residues[0].atoms.convert_to("RDKIT")
-        #         for i, atom in enumerate(mol.GetAtoms()):
-        #             atom.SetProp("atomNote", str(i))
-        #     else:
-        #         raise ValueError("If the residue is a string, it must be the name of a solute, "
-        #                          "the name of a solvent, or 'solute'.")
-        # else:
-        #     assert isinstance(residue, mda.core.groups.Residue)
-        #     mol = residue.atoms.convert_to("RDKIT")
-        #     for i, atom in enumerate(mol.GetAtoms()):
-        #         atom.SetProp("atomNote", str(i))
-        # if filename:
-        #     Draw.MolToFile(mol, filename=filename)
-        # rdCoordGen.AddCoords(mol)
-        # return mol
+        return rdmol
 
 
 class ReactiveSystem(MSONable):
