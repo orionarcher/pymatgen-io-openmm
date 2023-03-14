@@ -548,6 +548,12 @@ class ReactiveSystem(MSONable):
 
         for left_reaction, right_reaction in full_reactions:
 
+            # delete bonds
+            for l_atom_ix, r_atom_ix in (
+                left_reaction.delete_bonds + right_reaction.delete_bonds
+            ):
+                molgraph.break_edge(l_atom_ix, r_atom_ix, allow_reverse=True)
+
             # create bonds
             assert len(left_reaction.create_bonds) == len(right_reaction.create_bonds)
             for bond_ix in range(len(left_reaction.create_bonds)):
@@ -555,12 +561,6 @@ class ReactiveSystem(MSONable):
                     left_reaction.create_bonds[bond_ix],
                     right_reaction.create_bonds[bond_ix],
                 )
-
-            # delete bonds
-            for l_atom_ix, r_atom_ix in (
-                left_reaction.delete_bonds + right_reaction.delete_bonds
-            ):
-                molgraph.break_edge(l_atom_ix, r_atom_ix, allow_reverse=True)
 
             # delete atoms
             deleted_atoms = []
@@ -571,11 +571,14 @@ class ReactiveSystem(MSONable):
                 deleted_atoms.append(atom_ix)
 
             # update the molgraph_to_rxn_index
-            # this works because we are only deleting atoms
-            # as a result, keys are always a contiguous list of indices
+            assert list(old_to_new_map.keys()) == list(
+                range(len(old_to_new_map))
+            )  # TODO: remove
             new_to_old_index = list(old_to_new_map.keys())
             for atom_ix in deleted_atoms[::-1]:
                 new_to_old_index.pop(atom_ix)
+            # this works because only deleting atoms means keys() are a contiguous list
+            # so keys are always a contiguous list of indices
 
             old_to_new_map = {old: new for new, old in enumerate(new_to_old_index)}
 
