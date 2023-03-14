@@ -29,6 +29,7 @@ from pymatgen.io.openmm.inputs import (
     IntegratorInput,
     StateInput,
 )
+from pymatgen.io.openmm.parameterizer import Parameterizer
 from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.utils import (
@@ -37,7 +38,6 @@ from pymatgen.io.openmm.utils import (
     smiles_to_atom_type_array,
     smiles_to_resname_array,
     get_atom_map,
-    parameterize_w_interchange,
     get_openff_topology,
     infer_openff_mol,
 )
@@ -226,17 +226,13 @@ class OpenMMSolutionGen(InputGenerator):
         openff_topology = get_openff_topology(openff_counts)
         openmm_topology = openff_topology.to_openmm()
 
+        assert np.all(ffs == ffs[0]), "All Molecules must use the same force field"
+
         ffs = np.array([mol_spec["forcefield"] for mol_spec in mol_specs])
-        if np.all(ffs == ffs[0]) and ffs[0] in ["sage", "opls"]:
-            system = parameterize_w_interchange(
-                openff_topology, mol_specs, box, force_field=ffs[0]
-            )
-        else:
-            # system = parameterize_w_openmm_forcefields(mol_specs)
-            raise ValueError(
-                "All molecules must use the same force field and it must be 'sage' or 'opls'."
-            )
-        # figure out FF
+
+        parameterizer = Parameterizer(openff_topology, mol_specs,box,ffs[0])
+
+        system = parameterizer.parameterize_system()
 
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
