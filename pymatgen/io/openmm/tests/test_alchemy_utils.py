@@ -1,4 +1,9 @@
-from pymatgen.io.openmm.alchemy_utils import openff_counts_to_universe
+from pymatgen.io.openmm.alchemy_utils import (
+    openff_counts_to_universe,
+    HalfReaction,
+    ReactiveAtoms,
+    ReactiveSystem,
+)
 import openff.toolkit as tk
 import numpy as np
 
@@ -89,7 +94,29 @@ class TestReactiveSystem:
         return
 
     def test_sample_reactions(self):
-        return
+        half_reaction_l = HalfReaction(
+            create_bonds=[0, 1], delete_atoms=[], delete_bonds=[]
+        )
+        half_reaction_r = HalfReaction(
+            create_bonds=[2, 3], delete_atoms=[], delete_bonds=[]
+        )
+        reactive_atoms = ReactiveAtoms(
+            half_reactions={0: half_reaction_l, 5: half_reaction_r},
+            trigger_atoms_left=[0],
+            trigger_atoms_right=[2],
+            probability=0,
+        )
+        box_1 = np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0]])
+        reactions_1 = ReactiveSystem._sample_reactions(reactive_atoms, box_1, 2)
+        assert len(reactions_1) == 0
+
+        reactive_atoms.probability = 1
+        reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_1, 2)
+        assert len(reactions_2) == 1
+
+        box_2 = np.array([[0, 0, 0], [0, 1, 0], [3, 0, 0], [3, 1, 0]])
+        reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_2, 2)
+        assert len(reactions_2) == 0
 
     def test_react_molgraph(self):
         return
