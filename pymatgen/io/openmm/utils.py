@@ -378,7 +378,7 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
 
     # set edge properties, default to single bond and assume not aromatic
     for i_node, j, bond_data in molgraph.graph.edges(data=True):
-        bond_order = bond_data.get("weight", 1) or 1
+        bond_order = bond_data.get("bond_order") or 1
         is_aromatic = bond_data.get("is_aromatic") or False
         openff_mol.add_bond(i_node, j, bond_order, is_aromatic=is_aromatic)
 
