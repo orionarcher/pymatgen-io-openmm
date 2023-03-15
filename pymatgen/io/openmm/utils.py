@@ -258,9 +258,17 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
             molgraph.graph.nodes[cum_atoms + j][
                 "stereochemistry"
             ] = atom.stereochemistry
-            molgraph.graph.nodes[cum_atoms + j]["formal_charge"] = atom.formal_charge
-            molgraph.graph.nodes[cum_atoms + j]["partial_charge"] = atom.partial_charge
-            formal_charge += atom.formal_charge.magnitude
+            # set partial charge as a pure float
+            partial_charge = (
+                None if atom.partial_charge is None else atom.partial_charge.magnitude
+            )
+            molgraph.graph.nodes[cum_atoms + j]["partial_charge"] = partial_charge
+            # set formal charge as a pure float
+            formal_charge = (
+                None if atom.formal_charge is None else atom.formal_charge.magnitude  # type: ignore
+            )
+            molgraph.graph.nodes[cum_atoms + j]["formal_charge"] = formal_charge
+            formal_charge += formal_charge
         for bond in molecule.bonds:
             molgraph.graph.add_edge(
                 cum_atoms + bond.atom1_index,
