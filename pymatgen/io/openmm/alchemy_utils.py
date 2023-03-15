@@ -61,6 +61,7 @@ class HalfReaction(MSONable):
     create_bonds: List[int]
     delete_bonds: List[Tuple[int, int]]
     delete_atoms: List[int]
+    trigger_atom: int
 
     def remap(self, old_to_new_map: Dict[int, int]) -> "HalfReaction":
         """
@@ -78,6 +79,7 @@ class HalfReaction(MSONable):
                 (old_to_new_map[i], old_to_new_map[j]) for i, j in self.delete_bonds
             ],
             delete_atoms=[old_to_new_map[i] for i in self.delete_atoms],
+            trigger_atom=old_to_new_map[self.trigger_atom],
         )
 
 
@@ -341,6 +343,7 @@ class AlchemicalReaction(MSONable):
                 create_bonds=create_ix,
                 delete_bonds=delete_ix,
                 delete_atoms=delete_atom_ix,
+                trigger_atom=trigger_ix,
             )
             half_reactions[trigger_ix] = half_reaction
         return half_reactions
@@ -610,6 +613,13 @@ class ReactiveSystem(MSONable):
                 positions,
                 distance_cutoff,
             )
+
+            # remove reactions from reactive_atoms
+            for left_reaction, right_reaction in full_reactions:
+                reactive_atoms.trigger_atoms_left.remove(left_reaction.trigger_atom)
+                reactive_atoms.trigger_atoms_right.remove(right_reaction.trigger_atom)
+                reactive_atoms.half_reactions.pop(left_reaction.trigger_atom)
+                reactive_atoms.half_reactions.pop(right_reaction.trigger_atom)
 
             # react our molgraph, deleting atoms may create a different index_map
             molgraph, old_to_new_map = ReactiveSystem._react_molgraph(
