@@ -365,7 +365,7 @@ def test_molgraph_from_atom_bonds():
     assert nx.is_isomorphic(pf6_graph.graph, pf6_graph2.graph, edge_match=em)
 
 
-def test_molgraph_from_openff_mol():
+def test_molgraph_from_openff_mol_cco():
     from pymatgen.analysis.local_env import OpenBabelNN
 
     cco_openff = openff.toolkit.topology.Molecule.from_smiles("CCO")
@@ -383,6 +383,28 @@ def test_molgraph_from_openff_mol():
     em = iso.categorical_edge_match("weight", 1)
 
     assert nx.is_isomorphic(cco_molgraph_1.graph, cco_molgraph_2.graph, edge_match=em)
+
+
+def test_openff_back_and_forth():
+
+    cco_openff = openff.toolkit.topology.Molecule.from_smiles("CC(=O)O")
+    cco_openff.assign_partial_charges("mmff94")
+
+    cco_molgraph_1 = molgraph_from_openff_mol(cco_openff)
+
+    assert len(cco_molgraph_1.molecule) == 8
+    assert cco_molgraph_1.molecule.charge == 0
+    assert len(cco_molgraph_1.graph.edges) == 7
+
+    cco_openff_2 = molgraph_to_openff_mol(cco_molgraph_1)
+
+    assert tk.Molecule.is_isomorphic_with(
+        cco_openff, cco_openff_2, bond_order_matching=True
+    )
+    assert max(bond.bond_order for bond in cco_openff_2.bonds) == 2
+
+
+# [cco_molgraph_1.graph[edge[0]][edge[1]][0] for edge in cco_molgraph_1.graph.edges]
 
 
 def test_molgraph_to_openff_pf6():
