@@ -98,7 +98,7 @@ class ReactiveAtoms(MSONable):
     half_reactions: Dict[int, HalfReaction]
     trigger_atoms_left: List[int]
     trigger_atoms_right: List[int]
-    barrier: float = 0.0
+    probability: float = 0.0
 
     def remap(self, old_to_new_map: Dict[int, int]) -> "ReactiveAtoms":
         """
@@ -117,7 +117,7 @@ class ReactiveAtoms(MSONable):
             },
             trigger_atoms_left=[old_to_new_map[i] for i in self.trigger_atoms_left],
             trigger_atoms_right=[old_to_new_map[i] for i in self.trigger_atoms_right],
-            barrier=self.barrier,
+            probability=self.probability,
         )
 
 
@@ -235,7 +235,7 @@ class AlchemicalReaction(MSONable):
         trigger_atom_dfs = []
         # pair each trigger atom with its associated create_bonds, delete_bonds and delete_atoms
         for ix in trigger_atom_ix:
-            # TODO: should this be one or two bonds? (bonded bonded index {ix})
+            # selects bonds connected to the trigger atom and atoms within two bonds
             within_one_bond = u.select_atoms(f"(index {ix}) or (bonded index {ix})").ix
             at_two_bonds = u.select_atoms(f"(bonded bonded index {ix})").ix
 
@@ -409,7 +409,7 @@ class AlchemicalReaction(MSONable):
             half_reactions=half_reactions_dict,
             trigger_atoms_left=triggers_left,
             trigger_atoms_right=triggers_right,
-            barrier=self.barrier,
+            probability=self.barrier,
         )
 
     def visualize_reactions(
@@ -496,7 +496,6 @@ class ReactiveSystem(MSONable):
     def _sample_reactions(
         reactive_atoms: ReactiveAtoms,
         positions: np.ndarray,
-        reaction_temperature: float,
         distance_cutoff: float,
     ) -> List[Tuple[HalfReaction, HalfReaction]]:
         """
@@ -524,8 +523,7 @@ class ReactiveSystem(MSONable):
         reacted_atoms = []
         for l, r in reaction_pairs:
 
-            # calculate the probability of the reaction
-            p = np.exp(-reactive_atoms.barrier / reaction_temperature)
+            p = reactive_atoms.probability
 
             # don't react the same atom twice
             if l in reacted_atoms or r in reacted_atoms:
