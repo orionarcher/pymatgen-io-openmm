@@ -162,7 +162,42 @@ class TestReactiveSystem:
         topology_old = molgraph_to_openff_topology(system.molgraph)
         assert topology_old.n_unique_molecules == 3
 
-    def test_react(self, acetic_rxn):
+    def test_react_molgraph_delete(self, acetic_rxn_rm_water):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn_rm_water])
+        molgraph = copy.deepcopy(system.molgraph)
+
+        old_to_new_map = {i: i for i in range(len(molgraph))}
+
+        reactive_atoms = system.reactive_atom_sets[0]
+        trig_index_l = reactive_atoms.trigger_atoms_left[0]
+        trig_index_r = reactive_atoms.trigger_atoms_right[0]
+        rxn_l = reactive_atoms.half_reactions[trig_index_l]
+        rxn_r = reactive_atoms.half_reactions[trig_index_r]
+
+        molgraph, old_to_new_map = ReactiveSystem._react_molgraph(
+            molgraph, old_to_new_map, [(rxn_l, rxn_r)]
+        )
+
+        assert len(old_to_new_map) == len(molgraph) == len(system.molgraph) - 3
+
+        assert len(molgraph.graph.edges) == len(system.molgraph.graph.edges) - 2
+        assert len(molgraph) == len(system.molgraph) - 3
+
+        new_fragments = molgraph.get_disconnected_fragments()
+        new_mol_sizes = [len(molgraph) for molgraph in new_fragments]
+        assert sorted(new_mol_sizes) == [3, 3, 8, 9, 14]
+
+        topology_new = molgraph_to_openff_topology(molgraph)
+        assert topology_new.n_unique_molecules == 4
+        assert max(bond.bond_order for bond in topology_new.bonds) == 2
+
+        topology_old = molgraph_to_openff_topology(system.molgraph)
+        assert topology_old.n_unique_molecules == 3
+
+    def test_react_acetic(self, acetic_rxn):
         smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
         openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
 
