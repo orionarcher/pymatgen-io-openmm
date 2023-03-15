@@ -485,7 +485,6 @@ class ReactiveSystem(MSONable):
         # build a corresponding molgraph
         topology = get_openff_topology(openff_counts)
         molgraph = molgraph_from_openff_topology(topology)
-        # molgraph_to_rxn_index = {i: i for i in range(topology.n_atoms)}
 
         return ReactiveSystem(
             reactive_atom_sets=reactive_atoms,
@@ -540,7 +539,11 @@ class ReactiveSystem(MSONable):
         return reactions
 
     @staticmethod
-    def _react_molgraph(molgraph, old_to_new_map, full_reactions):
+    def _react_molgraph(
+        molgraph: MoleculeGraph,
+        old_to_new_map: Dict[int, int],
+        full_reactions: List[Tuple[HalfReaction, HalfReaction]],
+    ):
         # TODO: this copy should be removed once things are working?
         molgraph = copy.deepcopy(molgraph)
 
@@ -561,7 +564,7 @@ class ReactiveSystem(MSONable):
                 )
 
             # delete atoms
-            deleted_atoms = []
+            deleted_atoms: List[int] = []
             for atom_ix in sorted(
                 left_reaction.delete_atoms + right_reaction.delete_atoms
             ):
