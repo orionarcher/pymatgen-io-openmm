@@ -45,7 +45,7 @@ from pymatgen.io.openmm.utils import (
     get_openff_topology,
     infer_openff_mol,
 )
-from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction
+from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction, ReactiveSystem
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
@@ -282,14 +282,14 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
     An InputGenerator for openmm alchemy.
     """
 
-    def __init__(self, rxn_atoms_file="reaction_spec.json", **kwargs):
+    def __init__(self, reactive_system_file="reactive_system.json", **kwargs):
         super().__init__(**kwargs)
-        self.reaction_spec_file = rxn_atoms_file
+        self.reactive_system_file = reactive_system_file
 
     def get_input_set(  # type: ignore
         self,
         input_mol_dicts: List[Union[Dict, InputMoleculeSpec]],
-        reaction: AlchemicalReaction,
+        reactions: List[AlchemicalReaction] = None,
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ) -> OpenMMAlchemySet:
@@ -303,33 +303,33 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         particular stereochemistry.
 
         Args:
-            smiles: keys are smiles and values are number of that molecule to pack.
-            reaction: a AlchemicalReaction object specifying the desired reaction to perform.
+            input_mol_dicts: a set of input_mol_dicts.
+            reactions: a list of AlchemicalReactions specifying the reactions to perform.
             density: the density of the system. density OR box must be given as an argument.
             box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
 
         Returns:
             an OpenMM.InputSet
         """
+        reactions = reactions or []
+
         input_set = super().get_input_set(input_mol_dicts, density, box)
-        smiles = [mol_dict["smile"] for mol_dict in input_mol_dicts]
-        half_rxns, triggers_0, triggers_1 = reaction.get_half_rxns_and_triggers(smiles)
-        n_particles = input_set[self.system_file].get_system().getNumParticles()
-        reaction_spec = {
-            "half_reactions": half_rxns,
-            "trigger_atoms": [triggers_0, triggers_1],
-            "current_to_original_index": list(range(n_particles)),
-            "force_field": self.force_field,
+        openff_counts = {
+            tk.Molecule.from_smiles(mol_dict["smile"]): mol_dict["count"]
+            for mol_dict in input_mol_dicts
         }
+        reactive_system = ReactiveSystem.from_reactions(openff_counts, reactions)
         rxn_input_set = OpenMMAlchemySet(
             inputs={
                 **input_set.inputs,
-                self.reaction_spec_file: json.dumps(reaction_spec, cls=MontyEncoder),
+                self.reactive_system_file: json.dumps(
+                    reactive_system, cls=MontyEncoder
+                ),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
             integrator_file=self.integrator_file,
             state_file=self.state_file,
-            rxn_atoms_file=self.reaction_spec_file,
+            reactive_system_file=self.reactive_system_file,
         )
         return rxn_input_set
