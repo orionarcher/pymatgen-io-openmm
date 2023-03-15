@@ -21,7 +21,7 @@ from pymatgen.io.openmm.generators import OpenMMSolutionGen, OpenMMAlchemyGen
 # from pymatgen.io.openmm.tests.test_alchemy_utils import (
 #     acetic_ethanol_hydrolysis,
 #     acetic_ethanol_hydrolysis_del_water,
-#     select_dict,
+#     acetic_ethanol_select_dict,
 # )
 from pymatgen.io.openmm.tests.datafiles import (
     PF6_xyz,
@@ -146,12 +146,18 @@ class TestOpenMMSolutionGen:
 
 
 class TestOpenMMAlchemyGen:
-    def test_get_alchemical_input_set(self, acetic_ethanol_condensation):
-        generator = OpenMMAlchemyGen(force_field="sage")
+    def test_get_alchemical_input_set(self, acetic_rxn):
+        generator = OpenMMAlchemyGen(default_force_field="sage")
+        input_mol_dicts = [
+            {"smile": "O", "count": 20},
+            {"smile": "CCO", "count": 10},
+            {"smile": "CC(=O)O", "count": 10},
+        ]
+        # density is low to prevent a non bonded cutoff error
         input_set = generator.get_input_set(
-            {"O": 200, "CC(=O)O": 10, "CCO": 10},
-            reaction=acetic_ethanol_condensation,
-            density=1,
+            input_mol_dicts,
+            reactions=[acetic_rxn],
+            density=0.2,
         )
         assert input_set
 

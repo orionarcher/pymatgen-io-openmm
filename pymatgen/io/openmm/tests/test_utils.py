@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 import openff.toolkit.topology
+from monty.json import MontyEncoder
+import json
+
 import pymatgen
 from pymatgen.analysis.graphs import MoleculeGraph
 
@@ -454,8 +457,9 @@ def test_molgraph_from_openff_topology():
     molgraph_lengths = [len(subgraph.molecule) for subgraph in subgraphs]
     np.testing.assert_almost_equal(mol_lengths, molgraph_lengths)
 
-    subgraphs = molgraph.get_disconnected_fragments()
-    return
+    # test serialization
+    json.dumps(molgraph, cls=MontyEncoder)
+    # subgraphs = molgraph.get_disconnected_fragments()
 
 
 def test_molgraph_to_openff_topology():
