@@ -98,7 +98,7 @@ class ReactiveAtoms(MSONable):
     half_reactions: Dict[int, HalfReaction]
     trigger_atoms_left: List[int]
     trigger_atoms_right: List[int]
-    probability: float = 0.0
+    probability: float
 
     def remap(self, old_to_new_map: Dict[int, int]) -> "ReactiveAtoms":
         """
@@ -133,7 +133,6 @@ class AlchemicalReaction(MSONable):
         create_bonds: List[Tuple[str, str]] = None,
         delete_bonds: List[Tuple[str, str]] = None,
         delete_atoms: List[str] = None,
-        barrier: float = 0.0,
     ):
         """
         Args:
@@ -148,7 +147,6 @@ class AlchemicalReaction(MSONable):
         self.create_bonds = create_bonds or []
         self.delete_bonds = delete_bonds or []
         self.delete_atoms = delete_atoms or []
-        self.barrier = barrier
 
     # TODO: make sure things dont break if there are multiple possible reactions
     # TODO: need to make sure that we won't get an error if something reacts with itself
@@ -367,6 +365,7 @@ class AlchemicalReaction(MSONable):
     def make_reactive_atoms(
         self,
         openff_counts,
+        probability=1.0,
     ):
         """
         This strings together several other utility functions to return the full half reactions dictionary.
@@ -374,6 +373,7 @@ class AlchemicalReaction(MSONable):
 
         Args:
             openff_counts:
+            probability:
 
         Returns:
 
@@ -409,7 +409,7 @@ class AlchemicalReaction(MSONable):
             half_reactions=half_reactions_dict,
             trigger_atoms_left=triggers_left,
             trigger_atoms_right=triggers_right,
-            probability=self.barrier,
+            probability=probability,
         )
 
     def visualize_reactions(
@@ -510,17 +510,24 @@ class ReactiveSystem(MSONable):
 
         """
         # get the positions of the trigger atoms
-        atoms_left = positions[reactive_atoms.trigger_atoms_left]
-        atoms_right = positions[reactive_atoms.trigger_atoms_right]
+        triggers_left = reactive_atoms.trigger_atoms_left
+        triggers_right = reactive_atoms.trigger_atoms_right
+        atoms_left = positions[triggers_left]
+        atoms_right = positions[triggers_right]
 
         # calculate distances between trigger atoms
         reaction_pairs = capped_distance(
             atoms_left, atoms_right, distance_cutoff, return_distances=False
         )
 
+        # need to back out the original indices
+        reactive_reverse_l = {i: trig for i, trig in enumerate(triggers_left)}
+        reactive_reverse_r = {i: trig for i, trig in enumerate(triggers_right)}
+
         reactions = []
         reacted_atoms = []
         for l, r in reaction_pairs:
+            l, r = reactive_reverse_l[l], reactive_reverse_r[r]
 
             p = reactive_atoms.probability
 
@@ -585,7 +592,7 @@ class ReactiveSystem(MSONable):
 
         return molgraph, old_to_new_map
 
-    def react(self, positions, reaction_temperature=1, distance_cutoff=4):
+    def react(self, positions, distance_cutoff=4):
         """
         Reacts the system with the given positions.
         """
@@ -601,7 +608,6 @@ class ReactiveSystem(MSONable):
             full_reactions = ReactiveSystem._sample_reactions(
                 reactive_atoms,
                 positions,
-                reaction_temperature,
                 distance_cutoff,
             )
 
