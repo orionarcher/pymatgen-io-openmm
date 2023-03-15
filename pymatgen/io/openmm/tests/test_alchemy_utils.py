@@ -1,8 +1,13 @@
+import copy
+
 from pymatgen.io.openmm.alchemy_utils import (
     openff_counts_to_universe,
     HalfReaction,
     ReactiveAtoms,
     ReactiveSystem,
+)
+from pymatgen.io.openmm.utils import (
+    molgraph_to_openff_topology,
 )
 import openff.toolkit as tk
 import numpy as np
@@ -90,8 +95,14 @@ class TestAlchemicalReaction:
 
 
 class TestReactiveSystem:
-    def test_from_reactions(self):
-        return
+    def test_from_reactions(self, acetic_rxn):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn])
+
+        assert len(system.molgraph.molecule) == 40
+        assert len(system.reactive_atom_sets) == 1
 
     def test_sample_reactions(self):
         half_reaction_l = HalfReaction(
@@ -118,7 +129,38 @@ class TestReactiveSystem:
         reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_2, 2)
         assert len(reactions_2) == 0
 
-    def test_react_molgraph(self):
+    def test_react_molgraph_no_delete(self, acetic_rxn):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn])
+        molgraph = copy.deepcopy(system.molgraph)
+
+        old_to_new_map = {i: i for i in range(len(molgraph.molecule))}
+
+        reactive_atoms = system.reactive_atom_sets[0]
+        trig_index_l = reactive_atoms.trigger_atoms_left[0]
+        trig_index_r = reactive_atoms.trigger_atoms_right[0]
+        rxn_l = reactive_atoms.half_reactions[trig_index_l]
+        rxn_r = reactive_atoms.half_reactions[trig_index_r]
+
+        molgraph, old_to_new_map = ReactiveSystem._react_molgraph(
+            molgraph, old_to_new_map, [(rxn_l, rxn_r)]
+        )
+
+        assert len(molgraph.graph.edges) == len(system.molgraph.graph.edges)
+        assert len(molgraph) == len(system.molgraph)
+
+        new_fragments = molgraph.get_disconnected_fragments()
+        new_mol_sizes = [len(molgraph) for molgraph in new_fragments]
+        assert sorted(new_mol_sizes) == [3, 3, 3, 8, 9, 14]
+
+        # TODO: we are losing the double bond here, error in from_topology
+        topology = molgraph_to_openff_topology(molgraph)
+        assert topology.n_unique_molecules == 4
+
+        topology_2 = molgraph_to_openff_topology(system.molgraph)
+        assert topology_2.n_unique_molecules == 3
         return
 
     def test_react(self):
