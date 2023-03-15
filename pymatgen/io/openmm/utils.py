@@ -297,7 +297,7 @@ def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGra
     return list(unique_graphs.values())
 
 
-def molgraph_to_openff_topology(molgraph):
+def molgraph_to_openff_topology(molgraph, return_index_map=False):
     """
     Convert a Pymatgen MoleculeGraph to an OpenFF Topology.
 
@@ -309,6 +309,8 @@ def molgraph_to_openff_topology(molgraph):
 
     Args:
         molgraph: A Pymatgen MoleculeGraph
+        return_index_map:
+            If True, return a dictionary mapping the new atom ordering to the old atom ordering.
 
     Returns:
         OpenFF Topology, new_to_old_index
@@ -321,7 +323,9 @@ def molgraph_to_openff_topology(molgraph):
     )
     molecules = [molgraph_to_openff_mol(subgraph) for subgraph in subgraphs]
     openff_topology = tk.Topology.from_molecules(molecules)
-    return openff_topology, new_to_old_index
+    if return_index_map:
+        return openff_topology, new_to_old_index
+    return openff_topology
 
 
 def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
@@ -344,7 +348,7 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
 
     # set atom properties
     partial_charges = []
-    # TODO: might change atom ordering?
+    # TODO: should assert that there is only one molecule
     for i_node in range(len(molgraph.graph.nodes)):
         node = molgraph.graph.nodes[i_node]
         atomic_number = (
