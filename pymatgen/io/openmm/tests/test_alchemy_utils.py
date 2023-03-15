@@ -319,13 +319,3 @@ class TestReactiveSystem:
             hr_post = reactive_atoms_post.half_reactions[index_map[trigger]]
             assert an_pre[hr_pre.create_bonds[0]] == an_post[hr_post.create_bonds[0]]
             assert an_pre[hr_pre.delete_atoms[0]] == an_post[hr_post.delete_atoms[0]]
-
-
-class TestReactiveAtoms:
-    def test_remap(self):
-        return
-
-
-class TestHalfReaction:
-    def test_remap(self):
-        return
