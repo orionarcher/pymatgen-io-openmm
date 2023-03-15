@@ -575,7 +575,7 @@ class ReactiveSystem(MSONable):
             for atom_ix in sorted(
                 left_reaction.delete_atoms + right_reaction.delete_atoms
             ):
-                molgraph.remove_node(atom_ix - len(deleted_atoms))
+                molgraph.remove_nodes([atom_ix - len(deleted_atoms)])
                 deleted_atoms.append(atom_ix)
 
             # update the molgraph_to_rxn_index
