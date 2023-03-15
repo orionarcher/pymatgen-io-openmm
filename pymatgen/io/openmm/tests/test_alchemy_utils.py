@@ -106,10 +106,10 @@ class TestReactiveSystem:
 
     def test_sample_reactions(self):
         half_reaction_l = HalfReaction(
-            create_bonds=[1, 0], delete_atoms=[], delete_bonds=[]
+            create_bonds=[1, 0], delete_atoms=[], delete_bonds=[], trigger_atom=1
         )
         half_reaction_r = HalfReaction(
-            create_bonds=[2, 3], delete_atoms=[], delete_bonds=[]
+            create_bonds=[2, 3], delete_atoms=[], delete_bonds=[], trigger_atom=0
         )
         reactive_atoms = ReactiveAtoms(
             half_reactions={1: half_reaction_l, 2: half_reaction_r},
@@ -218,6 +218,36 @@ class TestReactiveSystem:
         new_fragments = molgraph.get_disconnected_fragments()
         new_mol_sizes = [len(molgraph) for molgraph in new_fragments]
         assert sorted(new_mol_sizes) == [3, 3, 3, 8, 9, 14]
+
+        topology_new = molgraph_to_openff_topology(molgraph)
+        assert topology_new.n_unique_molecules == 4
+        assert max(bond.bond_order for bond in topology_new.bonds) == 2
+
+    def test_react_acetic_delete(self, acetic_rxn_rm_water):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn_rm_water])
+        molgraph_og = copy.deepcopy(system.molgraph)
+
+        reactive_atoms = system.reactive_atom_sets[0]
+        trig_index_l = reactive_atoms.trigger_atoms_left[0]
+        trig_index_r = reactive_atoms.trigger_atoms_right[0]
+
+        position_list = [[i * 3, 0, 0] for i in range(len(system.molgraph))]
+        position_list[trig_index_l] = position_list[trig_index_r]
+        positions = np.array(position_list)
+
+        system.react(positions)
+
+        molgraph = system.molgraph
+
+        assert len(molgraph.graph.edges) == len(molgraph_og.graph.edges) - 2
+        assert len(molgraph) == len(molgraph_og) - 3
+
+        new_fragments = molgraph.get_disconnected_fragments()
+        new_mol_sizes = [len(molgraph) for molgraph in new_fragments]
+        assert sorted(new_mol_sizes) == [3, 3, 8, 9, 14]
 
         topology_new = molgraph_to_openff_topology(molgraph)
         assert topology_new.n_unique_molecules == 4
