@@ -106,27 +106,27 @@ class TestReactiveSystem:
 
     def test_sample_reactions(self):
         half_reaction_l = HalfReaction(
-            create_bonds=[0, 1], delete_atoms=[], delete_bonds=[]
+            create_bonds=[1, 0], delete_atoms=[], delete_bonds=[]
         )
         half_reaction_r = HalfReaction(
             create_bonds=[2, 3], delete_atoms=[], delete_bonds=[]
         )
         reactive_atoms = ReactiveAtoms(
-            half_reactions={0: half_reaction_l, 5: half_reaction_r},
-            trigger_atoms_left=[0],
+            half_reactions={1: half_reaction_l, 2: half_reaction_r},
+            trigger_atoms_left=[1],
             trigger_atoms_right=[2],
             probability=0,
         )
-        box_1 = np.array([[0, 0, 0], [0, 1, 0], [1, 0, 0], [1, 1, 0]])
-        reactions_1 = ReactiveSystem._sample_reactions(reactive_atoms, box_1, 2)
+        box_1 = np.array([[0, 0, 0], [1, 0, 0], [2, 0, 0], [3, 0, 0]])
+        reactions_1 = ReactiveSystem._sample_reactions(reactive_atoms, box_1, 1.5)
         assert len(reactions_1) == 0
 
         reactive_atoms.probability = 1
-        reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_1, 2)
+        reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_1, 1.5)
         assert len(reactions_2) == 1
 
-        box_2 = np.array([[0, 0, 0], [0, 1, 0], [3, 0, 0], [3, 1, 0]])
-        reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_2, 2)
+        box_2 = np.array([[0, 0, 0], [1, 0, 0], [4, 0, 0], [5, 0, 0]])
+        reactions_2 = ReactiveSystem._sample_reactions(reactive_atoms, box_2, 1.5)
         assert len(reactions_2) == 0
 
     def test_react_molgraph_no_delete(self, acetic_rxn):
@@ -155,16 +155,38 @@ class TestReactiveSystem:
         new_mol_sizes = [len(molgraph) for molgraph in new_fragments]
         assert sorted(new_mol_sizes) == [3, 3, 3, 8, 9, 14]
 
-        # TODO: we are losing the double bond here, error in from_topology
-        topology = molgraph_to_openff_topology(molgraph)
-        assert topology.n_unique_molecules == 4
+        topology_new = molgraph_to_openff_topology(molgraph)
+        assert topology_new.n_unique_molecules == 4
+        assert max(bond.bond_order for bond in topology_new.bonds) == 2
 
-        topology_2 = molgraph_to_openff_topology(system.molgraph)
-        assert topology_2.n_unique_molecules == 3
-        return
+        topology_old = molgraph_to_openff_topology(system.molgraph)
+        assert topology_old.n_unique_molecules == 3
 
-    def test_react(self):
-        return
+    def test_react(self, acetic_rxn):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn])
+
+        reactive_atoms = system.reactive_atom_sets[0]
+        trig_index_l = reactive_atoms.trigger_atoms_left[0]
+        trig_index_r = reactive_atoms.trigger_atoms_right[0]
+
+        position_list = [[i * 3, 0, 0] for i in range(len(system.molgraph))]
+        position_list[trig_index_l] = position_list[trig_index_r]
+        positions = np.array(position_list)
+
+        system.react(positions)
+
+        molgraph = system.molgraph
+
+        new_fragments = molgraph.get_disconnected_fragments()
+        new_mol_sizes = [len(molgraph) for molgraph in new_fragments]
+        assert sorted(new_mol_sizes) == [3, 3, 3, 8, 9, 14]
+
+        topology_new = molgraph_to_openff_topology(molgraph)
+        assert topology_new.n_unique_molecules == 4
+        assert max(bond.bond_order for bond in topology_new.bonds) == 2
 
     def test_generate_topology(self):
         return
