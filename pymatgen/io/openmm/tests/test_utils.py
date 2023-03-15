@@ -404,9 +404,6 @@ def test_openff_back_and_forth():
     assert max(bond.bond_order for bond in cco_openff_2.bonds) == 2
 
 
-# [cco_molgraph_1.graph[edge[0]][edge[1]][0] for edge in cco_molgraph_1.graph.edges]
-
-
 def test_molgraph_to_openff_pf6():
     """transform a water MoleculeGraph to a OpenFF water molecule"""
     pf6_mol = pymatgen.core.Molecule.from_file(PF6_xyz)
