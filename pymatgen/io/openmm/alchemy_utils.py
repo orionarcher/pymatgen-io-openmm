@@ -634,7 +634,7 @@ class ReactiveSystem(MSONable):
             ]
         self.molgraph = molgraph
 
-    def generate_topology(self, update_self=False) -> tk.Topology:
+    def generate_topology(self, update_self=False, return_index=False):
         topology, new_to_old_index = molgraph_to_openff_topology(
             self.molgraph, return_index_map=True
         )
@@ -645,4 +645,6 @@ class ReactiveSystem(MSONable):
             self.reactive_atom_sets = [
                 atoms.remap(old_to_new_index) for atoms in self.reactive_atom_sets
             ]
+        if return_index:
+            return topology, old_to_new_index
         return topology
