@@ -211,8 +211,17 @@ class TestReactiveSystem:
         position_list[trig_index_l] = position_list[trig_index_r]
         positions = np.array(position_list)
 
+        reactive_atoms = system.reactive_atom_sets[0]
+        pre_triggers_l = len(reactive_atoms.trigger_atoms_left)
+        pre_triggers_r = len(reactive_atoms.trigger_atoms_right)
+        pre_n_sets = len(reactive_atoms.half_reactions)
+
         system.react(positions)
 
+        reactive_atoms = system.reactive_atom_sets[0]
+        assert len(reactive_atoms.trigger_atoms_left) == pre_triggers_l - 1
+        assert len(reactive_atoms.trigger_atoms_right) == pre_triggers_r - 1
+        assert len(reactive_atoms.half_reactions) == pre_n_sets - 2
         molgraph = system.molgraph
 
         new_fragments = molgraph.get_disconnected_fragments()
@@ -238,7 +247,17 @@ class TestReactiveSystem:
         position_list[trig_index_l] = position_list[trig_index_r]
         positions = np.array(position_list)
 
+        reactive_atoms = system.reactive_atom_sets[0]
+        pre_triggers_l = len(reactive_atoms.trigger_atoms_left)
+        pre_triggers_r = len(reactive_atoms.trigger_atoms_right)
+        pre_n_sets = len(reactive_atoms.half_reactions)
+
         system.react(positions)
+
+        reactive_atoms = system.reactive_atom_sets[0]
+        assert len(reactive_atoms.trigger_atoms_left) == pre_triggers_l - 1
+        assert len(reactive_atoms.trigger_atoms_right) == pre_triggers_r - 1
+        assert len(reactive_atoms.half_reactions) == pre_n_sets - 2
 
         molgraph = system.molgraph
 
@@ -253,8 +272,53 @@ class TestReactiveSystem:
         assert topology_new.n_unique_molecules == 4
         assert max(bond.bond_order for bond in topology_new.bonds) == 2
 
-    def test_generate_topology(self):
-        return
+    def test_generate_topology(self, acetic_rxn_rm_water):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn_rm_water])
+        molgraph = system.molgraph
+
+        topology = system.generate_topology(update_self=True)
+
+        topology_atomic_numbers = [atom.atomic_number for atom in topology.atoms]
+        assert topology_atomic_numbers == list(molgraph.molecule.atomic_numbers)
+
+    def test_generate_topology_w_reaction(self, acetic_rxn_rm_water):
+        smile_dict = {"O": 2, "CCO": 2, "CC(=O)O": 2}  # water, ethanol, acetic
+        openff_counts = {tk.Molecule.from_smiles(s): n for s, n in smile_dict.items()}
+
+        system = ReactiveSystem.from_reactions(openff_counts, [acetic_rxn_rm_water])
+
+        reactive_atoms = system.reactive_atom_sets[0]
+        trig_index_l = reactive_atoms.trigger_atoms_left[0]
+        trig_index_r = reactive_atoms.trigger_atoms_right[0]
+
+        position_list = [[i * 3, 0, 0] for i in range(len(system.molgraph))]
+        position_list[trig_index_l] = position_list[trig_index_r]
+        positions = np.array(position_list)
+
+        system.react(positions)
+
+        reactive_atoms_pre = system.reactive_atom_sets[0]
+        an_pre = list(system.molgraph.molecule.atomic_numbers)
+
+        topology, index_map = system.generate_topology(
+            update_self=True, return_index=True
+        )
+
+        topology_atomic_numbers = [atom.atomic_number for atom in topology.atoms]
+
+        an_post = list(system.molgraph.molecule.atomic_numbers)
+        assert topology_atomic_numbers == an_post
+
+        reactive_atoms_post = system.reactive_atom_sets[0]
+
+        for trigger, hr_pre in reactive_atoms_pre.half_reactions.items():
+            assert an_pre[trigger] == an_post[index_map[trigger]]
+            hr_post = reactive_atoms_post.half_reactions[index_map[trigger]]
+            assert an_pre[hr_pre.create_bonds[0]] == an_post[hr_post.create_bonds[0]]
+            assert an_pre[hr_pre.delete_atoms[0]] == an_post[hr_post.delete_atoms[0]]
 
 
 class TestReactiveAtoms:
