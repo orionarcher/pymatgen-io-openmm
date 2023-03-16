@@ -5,6 +5,8 @@ Concrete implementations of InputFiles for the OpenMM IO.
 # base python
 import io
 from typing import Union, Optional, List
+import json
+from monty.json import MontyDecoder, MontyEncoder
 
 # scipy
 import numpy as np
@@ -225,3 +227,42 @@ class StateInput(XmlInput):
             openmm.State
         """
         return XmlSerializer.deserialize(self.openmm_object)
+
+
+class MSONableInput(InputFile):
+    """
+    A standardized definition for InputFiles based on MSON serialization.
+
+    # TODO: there has to be a better way than this
+    """
+
+    def __init__(self, msonable):
+        """
+        Create an InputFile from a serializable OpenMM object.
+
+        Args:
+            msonable:
+        """
+        self.msonable = msonable
+
+    @classmethod
+    def from_string(cls, contents: str) -> InputFile:
+        """
+        Return an MSONInput from a serialized MSON file.
+
+        Args:
+            contents: the MSON string
+
+        Returns:
+            MSONInput object
+        """
+        return MSONableInput(json.loads(contents, cls=MontyDecoder))
+
+    def get_string(self) -> str:
+        """
+        Return a string of the serialized MSON file.
+
+        Returns:
+            string
+        """
+        return json.dumps(self.msonable, cls=MontyEncoder)
