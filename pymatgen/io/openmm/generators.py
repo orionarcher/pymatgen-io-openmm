@@ -6,9 +6,6 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
-import json
-from monty.json import MontyEncoder
-
 
 # scipy
 import numpy as np
@@ -32,6 +29,7 @@ from pymatgen.io.openmm.inputs import (
     SystemInput,
     IntegratorInput,
     StateInput,
+    MSONableInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
 from pymatgen.io.openmm.schema import InputMoleculeSpec
@@ -255,17 +253,12 @@ class OpenMMSolutionGen(InputGenerator):
         # Angstrom from packmol. Convert.
         context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
-        # instantiate input files and feed to input_set
-        topology_input = TopologyInput(openmm_topology)
-        system_input = SystemInput(system)
-        integrator_input = IntegratorInput(integrator)
-        state_input = StateInput(state)
         input_set = OpenMMSet(
             inputs={
-                self.topology_file: topology_input,
-                self.system_file: system_input,
-                self.integrator_file: integrator_input,
-                self.state_file: state_input,
+                self.topology_file: TopologyInput(openmm_topology),
+                self.system_file: SystemInput(system),
+                self.integrator_file: IntegratorInput(integrator),
+                self.state_file: StateInput(state),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
@@ -322,9 +315,7 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         rxn_input_set = OpenMMAlchemySet(
             inputs={
                 **input_set.inputs,
-                self.reactive_system_file: json.dumps(
-                    reactive_system, cls=MontyEncoder
-                ),
+                self.reactive_system_file: MSONableInput(reactive_system),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
