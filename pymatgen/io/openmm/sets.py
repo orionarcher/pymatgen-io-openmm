@@ -19,6 +19,7 @@ from pymatgen.io.openmm.inputs import (
     SystemInput,
     IntegratorInput,
     StateInput,
+    MSONableInput,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -154,12 +155,14 @@ class OpenMMAlchemySet(OpenMMSet):
     def from_directory(cls, directory: Union[str, Path], reactive_system_file="reactive_system.json", **kwargs):  # type: ignore
         input_set = super().from_directory(directory, **kwargs)
         source_dir = Path(directory)
-        with open(source_dir / reactive_system_file) as file:
-            file_string = file.read()
+        reactive_system_input = MSONableInput.from_file(
+            source_dir / reactive_system_file
+        )
         input_set.inputs = {
             **input_set.inputs,
-            reactive_system_file: file_string,
+            reactive_system_file: reactive_system_input,
         }
+        # TODO: do we need a InputFile for the reactive system?
         input_set.reactive_system_file = reactive_system_file
         input_set.__class__ = OpenMMAlchemySet
         return input_set
