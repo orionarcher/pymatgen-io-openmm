@@ -469,14 +469,14 @@ def test_molgraph_to_openff_topology():
     topology = get_openff_topology({O: 2, CCO: 1})
     molgraph = molgraph_from_openff_topology(topology)
 
-    topology_2, index_map = molgraph_to_openff_topology(molgraph)
+    topology_2, index_map = molgraph_to_openff_topology(molgraph, return_index_map=True)
 
     assert topology.n_atoms == topology_2.n_atoms
     assert topology.n_molecules == topology_2.n_molecules
     assert topology.n_bonds == topology_2.n_bonds
 
     molgraph.add_edge(0, 6)
-    topology_3, _ = molgraph_to_openff_topology(molgraph)
+    topology_3, _ = molgraph_to_openff_topology(molgraph, return_index_map=True)
     assert topology_3.n_molecules == 2
     assert topology_3.n_atoms == 15
     assert topology_3.n_bonds == 13

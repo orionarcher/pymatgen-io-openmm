@@ -1,12 +1,10 @@
 # base python
-import json
 import tempfile
 
 import monty
 import monty.serialization
 
 # pymatgen
-from monty.json import MontyDecoder
 
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -17,7 +15,7 @@ from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
 from pymatgen.io.openmm.tests.datafiles import (
     input_set_dir,
     corrupted_state_path,
-    input_set_path,
+    default_input_set_path,
     alchemy_input_set_path,
 )
 
@@ -45,7 +43,7 @@ class TestOpenMMSet:
 
     def test_dump_load_input_set(self):
 
-        input_set1 = OpenMMSet.from_directory(input_set_path)
+        input_set1 = OpenMMSet.from_directory(default_input_set_path)
         with tempfile.TemporaryDirectory() as tmpdir:
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
@@ -95,6 +93,26 @@ class TestOpenMMSet:
 
 
 class TestOpenMMAlchemySet:
+    def test_dump_load_input_set(self):
+
+        input_set1 = OpenMMSet.from_directory(alchemy_input_set_path)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
+            input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
+
+        assert input_set1.as_dict() == input_set2.as_dict()
+
+        assert input_set1.keys() == input_set2.keys()
+
+        topology1 = input_set1.inputs["topology.pdb"].topology
+        topology2 = input_set2.inputs["topology.pdb"].topology
+        assert topology1 == topology2
+
+        for file in ["state.xml", "integrator.xml", "system.xml"]:
+            openmm_object1 = input_set1.inputs[file].openmm_object
+            openmm_object2 = input_set2.inputs[file].openmm_object
+            assert openmm_object1 == openmm_object2
+
     def test_from_directory(self):
         """
         to do
@@ -106,15 +124,11 @@ class TestOpenMMAlchemySet:
             "system.xml",
             "integrator.xml",
             "state.xml",
-            "reaction_spec.json",
+            "reactive_system.json",
         }
         assert input_set.validate()
-        rxn_spec = json.loads(input_set.inputs["reaction_spec.json"], cls=MontyDecoder)
-        assert len(rxn_spec["trigger_atoms"][0]) == 10
-        assert len(rxn_spec["trigger_atoms"][1]) == 10
-        assert len(rxn_spec["half_reactions"]) == 20
-        assert rxn_spec["force_field"] == "sage"
-
-    def test_run(self):
-        input_set = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
-        input_set.run(2, 200)
+        reactive_system = input_set.inputs["reactive_system.json"].msonable
+        reactive_atoms = reactive_system.reactive_atom_sets[0]
+        assert len(reactive_atoms.trigger_atoms_left) == 10
+        assert len(reactive_atoms.trigger_atoms_right) == 10
+        assert len(reactive_atoms.half_reactions) == 20
