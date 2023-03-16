@@ -595,7 +595,7 @@ class ReactiveSystem(MSONable):
 
         return molgraph, old_to_new_map
 
-    def react(self, positions, distance_cutoff=4):
+    def react(self, positions, cutoff_distance=4) -> Dict[int, int]:
         """
         Reacts the system with the given positions.
         """
@@ -611,7 +611,7 @@ class ReactiveSystem(MSONable):
             full_reactions = ReactiveSystem._sample_reactions(
                 reactive_atoms,
                 positions,
-                distance_cutoff,
+                cutoff_distance,
             )
 
             # remove reactions from reactive_atoms
@@ -633,18 +633,19 @@ class ReactiveSystem(MSONable):
                 atoms.remap(old_to_new_map) for atoms in self.reactive_atom_sets
             ]
         self.molgraph = molgraph
+        return old_to_new_map
 
     def generate_topology(self, update_self=False, return_index=False):
-        topology, new_to_old_index = molgraph_to_openff_topology(
+        topology, new_to_old_map = molgraph_to_openff_topology(
             self.molgraph, return_index_map=True
         )
-        old_to_new_index = {v: k for k, v in new_to_old_index.items()}
+        old_to_new_map = {v: k for k, v in new_to_old_map.items()}
 
         if update_self:
             self.molgraph = molgraph_from_openff_topology(topology)
             self.reactive_atom_sets = [
-                atoms.remap(old_to_new_index) for atoms in self.reactive_atom_sets
+                atoms.remap(old_to_new_map) for atoms in self.reactive_atom_sets
             ]
         if return_index:
-            return topology, old_to_new_index
+            return topology, old_to_new_map
         return topology
