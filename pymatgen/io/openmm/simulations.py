@@ -7,14 +7,14 @@ simulation forward in time.
 """
 
 # base python
-from typing import Union, List
+from typing import Union, List, Optional, Dict
 
 # scipy
 import numpy as np
 
 # openmm
-from openmm.openmm import MonteCarloBarostat
-from openmm.unit import kelvin, atmosphere
+from openmm.openmm import MonteCarloBarostat, Platform
+from openmm.unit import atmosphere, kelvin
 from openmm.app import Simulation
 
 
@@ -23,6 +23,94 @@ __version__ = "1.0"
 __maintainer__ = "Orion Cohen"
 __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
+
+from pymatgen.io.openmm.sets import OpenMMAlchemySet
+from pymatgen.io.openmm.utils import parameterize_w_interchange
+from pymatgen.io.openmm.inputs import (
+    TopologyInput,
+    SystemInput,
+    IntegratorInput,
+    StateInput,
+    MSONableInput,
+)
+
+
+def react_system(
+    input_set: OpenMMAlchemySet,
+    n_cycles: int = 1,
+    steps_per_cycle: int = 1000,
+    initial_steps: int = 0,
+    cutoff_distance: float = 4,
+    platform: Optional[Union[str, Platform]] = None,
+    platformProperties: Optional[Dict[str, str]] = None,
+):
+    simulation = input_set.get_simulation(
+        platform=platform, platformProperties=platformProperties
+    )
+    openmm_topology = None
+    openmm_system = None
+
+    # initial minimization and equilibration
+    simulation.minimizeEnergy()
+    simulation.step(initial_steps)
+
+    reactive_system = input_set.inputs[input_set.reactive_system_file]
+
+    for cycle in range(n_cycles):
+        # get positions
+        state = simulation.context.getState(getPositions=True)
+        positions = state.getPositions(asNumpy=True)
+
+        # react system, generate mapping
+        old_to_new_1 = reactive_system.react(positions, cutoff_distance=cutoff_distance)
+        openff_topology, old_to_new_2 = reactive_system.get_topology(
+            update_self=True, return_index=True
+        )
+
+        # use mapping to update positions, dicts must be sorted by key
+        old_to_new_arr_1 = np.array([i for i in old_to_new_1.keys()])
+        old_to_new_arr_2 = np.array([i for i in old_to_new_2.keys()])
+        new_positions = positions[old_to_new_arr_1][old_to_new_arr_2]
+        # TODO: confirm this works
+
+        # charges must be assigned with mmff94
+        mol_specs = [{"openff_mol": mol} for mol in openff_topology.unique_molecules()]
+        for spec in mol_specs:
+            spec["openff_mol"].assign_partial_charges("mmff94")
+
+        box = state.getPeriodicBoxVectors()
+        # TODO: remap box vectors
+        openmm_system = parameterize_w_interchange(openff_topology, mol_specs, box)
+        openmm_topology = openff_topology.to_openmm()
+
+        # create and evolve simulation
+        simulation = Simulation(
+            openmm_topology,
+            openmm_system,
+            simulation.integrator,
+            platform=simulation.context.getPlatform(),
+            platformProperties=platformProperties,
+        )
+        simulation.context.setPositions(np.divide(new_positions, 10))
+        simulation.minimizeEnergy()
+        simulation.step(steps_per_cycle)
+
+    state = simulation.context.getState(getPositions=True, getVelocities=True)
+    # instantiate input files and feed to input_set
+    input_set = OpenMMAlchemySet(
+        inputs={
+            input_set.topology_file: TopologyInput(openmm_topology),
+            input_set.system_file: SystemInput(openmm_system),
+            input_set.integrator_file: IntegratorInput(simulation.integrator),
+            input_set.state_file: StateInput(state),
+            input_set.reactive_system_file: MSONableInput(reactive_system),
+        },
+        topology_file=input_set.topology_file,
+        system_file=input_set.system_file,
+        integrator_file=input_set.integrator_file,
+        state_file=input_set.state_file,
+    )
+    return input_set
 
 
 def equilibrate_pressure(
