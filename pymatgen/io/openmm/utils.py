@@ -240,7 +240,7 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
         name="none",
     )
     p_table = {el.Z: str(el) for el in Element}
-    formal_charge = 0
+    total_charge = 0
     cum_atoms = 0
     for molecule in molecules:
         if molecule.conformers is not None:
@@ -264,11 +264,9 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
             )
             molgraph.graph.nodes[cum_atoms + j]["partial_charge"] = partial_charge
             # set formal charge as a pure float
-            formal_charge = (
-                None if atom.formal_charge is None else atom.formal_charge.magnitude  # type: ignore
-            )
+            formal_charge = atom.formal_charge.magnitude  # type: ignore
             molgraph.graph.nodes[cum_atoms + j]["formal_charge"] = formal_charge
-            formal_charge += formal_charge
+            total_charge += formal_charge
         for bond in molecule.bonds:
             molgraph.graph.add_edge(
                 cum_atoms + bond.atom1_index,
@@ -279,7 +277,7 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
             )
         # formal_charge += molecule.total_charge
         cum_atoms += molecule.n_atoms
-    molgraph.molecule.set_charge_and_spin(charge=formal_charge)
+    molgraph.molecule.set_charge_and_spin(charge=total_charge)
     return molgraph
 
 
