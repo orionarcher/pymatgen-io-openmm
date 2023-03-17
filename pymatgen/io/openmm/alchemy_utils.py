@@ -2,7 +2,7 @@
 Utilities for implementing AlchemicalReactions
 """
 import copy
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 from io import StringIO
 import pandas as pd
 from MDAnalysis.lib.distances import capped_distance
@@ -415,13 +415,15 @@ class AlchemicalReaction(MSONable):
             probability=probability,
         )
 
-    def visualize_reactions(
+    def visualize_reaction(
         self,
-        openff_mols: List[tk.Molecule],
+        smiles: str,
         filename: Optional[str] = None,
     ) -> rdkit.Chem.rdchem.Mol:
         from rdkit.Chem import rdCoordGen
         from rdkit.Chem.Draw import rdMolDraw2D
+
+        openff_mols = [tk.Molecule.from_smiles(smile) for smile in smiles]
 
         reactive_atoms = self.make_reactive_atoms({mol: 1 for mol in openff_mols})
 

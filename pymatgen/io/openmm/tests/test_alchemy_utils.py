@@ -87,10 +87,10 @@ class TestAlchemicalReaction:
         self, acetic_rxn, acetic_rxn_rm_water, propanedioic_rxn_rm_water
     ):
         smiles = ["O", "CCO", "C(C(=O)O)C(=O)O"]  # water, ethanol, acetic
-        openff_mols = [tk.Molecule.from_smiles(s) for s in smiles]
-        # acetic_rxn_rm_water.visualize_reactions(openff_mols)
-        rdmol = propanedioic_rxn_rm_water.visualize_reactions(openff_mols)
+        # acetic_rxn_rm_water.visualize_reaction(openff_mols)
+        rdmol = propanedioic_rxn_rm_water.visualize_reaction(smiles)
 
+        openff_mols = [tk.Molecule.from_smiles(s) for s in smiles]
         assert len(rdmol.GetAtoms()) == sum(mol.n_atoms for mol in openff_mols)
 
 
