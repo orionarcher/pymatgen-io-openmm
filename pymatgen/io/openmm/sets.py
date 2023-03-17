@@ -158,6 +158,13 @@ class OpenMMAlchemySet(OpenMMSet):
         reactive_system_input = MSONableInput.from_file(
             source_dir / reactive_system_file
         )
+
+        # the json will store the int keys as strings, so we need to convert them back
+        for reactive_atom_set in reactive_system_input.msonable.reactive_atom_sets:
+            reactive_atom_set.half_reactions = {
+                int(k): v for k, v in reactive_atom_set.half_reactions.items()
+            }
+
         input_set.inputs = {
             **input_set.inputs,
             reactive_system_file: reactive_system_input,
