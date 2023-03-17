@@ -244,7 +244,8 @@ class AlchemicalReaction(MSONable):
                 df["type"] == "delete_atom"
             )
             atoms_df = df[within_one_bond_arr | at_two_bonds_arr]
-            atoms_df["trigger_ix"] = ix
+            atoms_df = atoms_df.copy()
+            atoms_df.loc[:, ["trigger_ix"]] = ix
             trigger_atom_dfs.append(atoms_df)
         return pd.concat(trigger_atom_dfs)
 
@@ -295,7 +296,7 @@ class AlchemicalReaction(MSONable):
         res_offsets = np.insert(res_offsets, 0, 0)
         # duplicate the small dataframe into a larger dataframe
         big_df_list = []
-        for res_ix, res_df in trig_df.groupby(["res_ix"]):
+        for res_ix, res_df in trig_df.groupby("res_ix"):
             expanded_df = pd.concat([res_df] * res_counts[res_ix])
             n_atoms = len(res_df)
             # create and apply offsets
@@ -323,7 +324,7 @@ class AlchemicalReaction(MSONable):
 
         """
         half_reactions = {}
-        for trigger_ix, atoms_df in all_atoms_df.groupby(["trigger_ix"]):
+        for trigger_ix, atoms_df in all_atoms_df.groupby("trigger_ix"):
             trigger_ix = int(trigger_ix)
             create_ix = list(
                 atoms_df[atoms_df.type == "create_bonds"].sort_values("bond_n")[
