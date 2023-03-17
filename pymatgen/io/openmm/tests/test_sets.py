@@ -129,6 +129,6 @@ class TestOpenMMAlchemySet:
         assert input_set.validate()
         reactive_system = input_set.inputs["reactive_system.json"].msonable
         reactive_atoms = reactive_system.reactive_atom_sets[0]
-        assert len(reactive_atoms.trigger_atoms_left) == 10
-        assert len(reactive_atoms.trigger_atoms_right) == 10
-        assert len(reactive_atoms.half_reactions) == 20
+        assert len(reactive_atoms.trigger_atoms_left) == 40
+        assert len(reactive_atoms.trigger_atoms_right) == 40
+        assert len(reactive_atoms.half_reactions) == 80

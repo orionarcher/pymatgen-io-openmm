@@ -445,30 +445,3 @@ def infer_openff_mol(
     molgraph = metal_edge_extender(molgraph)
     inferred_mol = molgraph_to_openff_mol(molgraph)
     return inferred_mol
-
-
-"""
-Plan:
-1. pack mol with geometries generated from openbabel
-2. create an appropriate topology file
-3. infer bonding with OpenBabel, THIS SHOULD WORK
-4. test that it works with an array of smiles
-5. test adding bonds and removing bonds
-6. test regenerating PDB
-7. test regenerating unique mols
-8. implement and loop!
-"""
-
-
-def topology_to_universe(topology: tk.Topology):
-    """
-    probably no longer needed.
-    """
-    return
-
-
-def get_atom_ix_in_universe(universe, select_strings):
-    """
-    given a universe and select strings, this will return the indices of the selected atoms.
-    """
-    return
