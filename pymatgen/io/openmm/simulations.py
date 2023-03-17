@@ -54,16 +54,16 @@ def react_system(
     simulation.minimizeEnergy()
     simulation.step(initial_steps)
 
-    reactive_system = input_set.inputs[input_set.reactive_system_file]
+    reactive_system = input_set.inputs[input_set.reactive_system_file].msonable
 
     for cycle in range(n_cycles):
         # get positions
         state = simulation.context.getState(getPositions=True)
-        positions = state.getPositions(asNumpy=True)
+        positions = state.getPositions(asNumpy=True)._value * 10
 
         # react system, generate mapping
         old_to_new_1 = reactive_system.react(positions, cutoff_distance=cutoff_distance)
-        openff_topology, old_to_new_2 = reactive_system.get_topology(
+        openff_topology, old_to_new_2 = reactive_system.generate_topology(
             update_self=True, return_index=True
         )
 
@@ -74,12 +74,12 @@ def react_system(
         # TODO: confirm this works
 
         # charges must be assigned with mmff94
-        mol_specs = [{"openff_mol": mol} for mol in openff_topology.unique_molecules()]
+        mol_specs = [{"openff_mol": mol} for mol in openff_topology.unique_molecules]
         for spec in mol_specs:
             spec["openff_mol"].assign_partial_charges("mmff94")
 
-        box = state.getPeriodicBoxVectors()
-        # TODO: remap box vectors
+        box_matrix = state.getPeriodicBoxVectors(asNumpy=True)._value
+        box = np.concatenate([[0, 0, 0], np.diag(box_matrix)]) * 10
         openmm_system = parameterize_w_interchange(openff_topology, mol_specs, box)
         openmm_topology = openff_topology.to_openmm()
 
@@ -87,7 +87,7 @@ def react_system(
         simulation = Simulation(
             openmm_topology,
             openmm_system,
-            simulation.integrator,
+            input_set[input_set.integrator_file].get_integrator(),
             platform=simulation.context.getPlatform(),
             platformProperties=platformProperties,
         )
