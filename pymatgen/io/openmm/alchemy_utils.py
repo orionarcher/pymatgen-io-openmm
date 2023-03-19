@@ -26,12 +26,12 @@ from dataclasses import dataclass
 import rdkit
 
 
-def openff_counts_to_universe(openff_counts):
+def openff_counts_to_universe(openff_counts: Dict[tk.Molecule, int]):
     """
     Quick conversion from a set of smiles to a MDanalysis Universe.
 
     Args:
-        smiles: a dict of smiles: counts.
+        openff_counts: a dict of openff Molecules and counts.
 
     Returns:
         A MDanalysis universe
@@ -182,7 +182,11 @@ class AlchemicalReaction(MSONable):
 
     @staticmethod
     def _build_reactive_atoms_df(
-        universe, select_dict, create_bonds, delete_bonds, delete_atoms
+        universe: mda.Universe,
+        select_dict: Dict[str, str],
+        create_bonds: List[Tuple[str, str]],
+        delete_bonds: List[Tuple[str, str]],
+        delete_atoms: List[str],
     ):
         """
         This function builds a dataframe that contains all the atoms that participate in the alchemical
@@ -233,7 +237,7 @@ class AlchemicalReaction(MSONable):
         return df
 
     @staticmethod
-    def _add_trigger_atoms(df, u):
+    def _add_trigger_atoms(df: pd.DataFrame, u: mda.Universe):
         """
         This extracts all the "trigger" atoms that instigate a specific alchemical reaction,
         e.g. the atoms that can move within some cutoff to react with each other. It then organizes
@@ -275,7 +279,11 @@ class AlchemicalReaction(MSONable):
 
     @staticmethod
     def _mini_universe_reactive_atoms_df(
-        openff_mols, select_dict, create_bonds, delete_bonds, delete_atoms
+        openff_mols: List[tk.Molecule],
+        select_dict: Dict[str, str],
+        create_bonds: List[Tuple[str, str]],
+        delete_bonds: List[Tuple[str, str]],
+        delete_atoms: List[str],
     ):
         """
         This function creates a small universe with one copy of each residue, uses MDAnalysis
@@ -302,7 +310,9 @@ class AlchemicalReaction(MSONable):
         return atoms_w_triggers_mini_df
 
     @staticmethod
-    def _expand_to_all_atoms(trig_df, res_sizes, res_counts):
+    def _expand_to_all_atoms(
+        trig_df: pd.DataFrame, res_sizes: List[int], res_counts: List[int]
+    ):
         """
         All previous functionality only operated on a small universe with one copy of each
         residue, ultimately returning a small dataframe representing a subset of all
@@ -332,7 +342,9 @@ class AlchemicalReaction(MSONable):
         return big_df
 
     @staticmethod
-    def _build_half_reactions_dict(all_atoms_df) -> Dict[int, HalfReaction]:
+    def _build_half_reactions_dict(
+        all_atoms_df: pd.DataFrame,
+    ) -> Dict[int, HalfReaction]:
         """
         This takes the dataframe of all atoms and turns it into an easily parsable dictionary.
         Each "trigger atom" has a set of atom and bond deletions that are triggered when a new
@@ -365,7 +377,7 @@ class AlchemicalReaction(MSONable):
         return half_reactions
 
     @staticmethod
-    def _get_triggers(all_atoms_df):
+    def _get_triggers(all_atoms_df: pd.DataFrame):
         """This returns the trigger atoms for each half reaction."""
         trigger_atoms_left = all_atoms_df[
             (all_atoms_df.type == "create_bonds")
@@ -383,8 +395,8 @@ class AlchemicalReaction(MSONable):
 
     def make_reactive_atoms(
         self,
-        openff_counts,
-        probability=1.0,
+        openff_counts: Dict[tk.Molecule, int],
+        probability: float,
     ):
         """
         This strings together several other utility functions to return the full half reactions dictionary.
@@ -399,7 +411,7 @@ class AlchemicalReaction(MSONable):
         """
         # create a dataframe with reactive atoms for a small universe with one copy of each residue
         atoms_w_triggers_mini_df = AlchemicalReaction._mini_universe_reactive_atoms_df(
-            openff_counts.keys(),
+            list(openff_counts.keys()),
             self.select_dict,
             self.create_bonds,
             self.delete_bonds,
@@ -441,7 +453,7 @@ class AlchemicalReaction(MSONable):
 
         openff_mols = [tk.Molecule.from_smiles(smile) for smile in smiles]
 
-        reactive_atoms = self.make_reactive_atoms({mol: 1 for mol in openff_mols})
+        reactive_atoms = self.make_reactive_atoms({mol: 1 for mol in openff_mols}, 1)
 
         half_reactions_dict = reactive_atoms.half_reactions
         triggers_left = reactive_atoms.trigger_atoms_left
@@ -496,11 +508,37 @@ class ReactiveSystem(MSONable):
     def from_reactions(
         openff_counts: Dict[tk.Molecule, int],
         alchemical_reactions: List[AlchemicalReaction],
+        probabilities: Optional[List[float]] = None,
     ):
+        """
+        Create a ReactiveSystem from a list of AlchemicalReactions and a dictionary
+        of openff molecules and their counts.
+
+        The openff_counts dictionary defines an MD system and the alchemical_reactions
+        define the alchemical transformations that will be applied to the system.
+
+        The probabilities argument allows for the user to specify the probability of
+        each reaction occurring when reactions are sampled during the `react` operation.
+        If not specified, reactions will always if the trigger atoms are within
+        the cutoff distance.
+
+        Args:
+            openff_counts: A dictionary of openff molecules and their counts.
+            alchemical_reactions: A list of AlchemicalReactions.
+            probabilities: A list of probabilities for each reaction.
+
+        Returns:
+
+        """
+        if probabilities is None:
+            probabilities = [1] * len(alchemical_reactions)
+
+        assert len(alchemical_reactions) == len(probabilities)
+
         # calculate reactive atoms
         reactive_atoms = [
-            reaction.make_reactive_atoms(openff_counts)
-            for reaction in alchemical_reactions
+            reaction.make_reactive_atoms(openff_counts, probabilities[i])
+            for i, reaction in enumerate(alchemical_reactions)
         ]
 
         # build a corresponding molgraph
@@ -519,16 +557,14 @@ class ReactiveSystem(MSONable):
         distance_cutoff: float,
     ) -> List[Tuple[HalfReaction, HalfReaction]]:
         """
+        Sample reactions from a ReactiveAtoms object given a set of positions and
+        a distance cutoff.
 
-
-        Args:
-            reactive_atoms:
-            positions:
-            reaction_temperature:
-            distance_cutoff:
-
-        Returns:
-
+        `_sample_reactions` is a helper function for the `react` method. It will
+        identify all sets of trigger atoms within the distance cutoff and return
+        a list of tuples of HalfReactions. The first HalfReaction is the "left"
+        half of the reaction and the second HalfReaction is the "right" half of the
+        reaction.
         """
         # get the positions of the trigger atoms
         triggers_left = reactive_atoms.trigger_atoms_left
@@ -572,6 +608,16 @@ class ReactiveSystem(MSONable):
         old_to_new_map: Dict[int, int],
         full_reactions: List[Tuple[HalfReaction, HalfReaction]],
     ):
+        """
+        Apply a list of HalfReaction tuples to a MoleculeGraph.
+
+        The HalfReactions are applied in order and the MoleculeGraph is modified
+        in place. The `old_to_new_map` argument is used to map the indices of the
+        original molgraph to the indices of the new molgraph. This is necessary
+        because the indices of the atoms may change as reactions are applied.
+
+        NOTE: currently the molgraph is copied but this should be changed.
+        """
         # TODO: this copy should be removed once things are working?
         molgraph = copy.deepcopy(molgraph)
 
@@ -613,9 +659,9 @@ class ReactiveSystem(MSONable):
 
         return molgraph, old_to_new_map
 
-    def react(self, positions, cutoff_distance=4) -> Dict[int, int]:
+    def react(self, positions: np.ndarry, cutoff_distance: float = 4) -> Dict[int, int]:
         """
-        Reacts the system with the given positions.
+        Reacts the system according to trigger atom proximity in the given positions.
         """
         # we use new to old map because it can be maintained as a list of indices
         old_to_new_map = {i: i for i in range(len(self.molgraph))}
