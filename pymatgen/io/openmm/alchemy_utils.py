@@ -662,6 +662,21 @@ class ReactiveSystem(MSONable):
     def react(self, positions: np.ndarry, cutoff_distance: float = 4) -> Dict[int, int]:
         """
         Reacts the system according to trigger atom proximity in the given positions.
+
+        The `positions` argument should be a numpy array of shape (n_atoms, 3) where
+        n_atoms is the number of atoms in the ReactiveSystem. The `cutoff_distance` argument
+        is the distance in angstroms that two trigger atoms must be within to react.
+
+        Because atoms may be deleted during the reaction process, `react` returns
+        a dictionary mapping the original atom indices to the new atom indices.
+
+        Args:
+            positions: The positions of the atoms in the system.
+            cutoff_distance: The distance in angstroms that two trigger atoms must be
+                within to react.
+
+        Returns:
+            A dictionary mapping the original atom indices to the new atom indices.
         """
         # we use new to old map because it can be maintained as a list of indices
         old_to_new_map = {i: i for i in range(len(self.molgraph))}
@@ -700,6 +715,24 @@ class ReactiveSystem(MSONable):
         return old_to_new_map
 
     def generate_topology(self, update_self=False, return_index=False):
+        """
+        Generate an OpenFF Topology from the current MoleculeGraph.
+
+        The ordering of atoms in the topology may differ from the ordering of atoms
+        in ReactiveSystem.molgraph. If `update_self` is True, the ReactiveSystem
+        will be updated to match the ordering of the topology. If `return_index` is True,
+        a dictionary mapping the old ReactiveSystem indices to the new ReactiveSystem
+        indices will be returned.
+
+        Args:
+            update_self: If True, ReactiveSystem.molgraph and ReactiveSystem.reactive_atoms
+                will be updated to match the atom ordering of the topology.
+            return_index: If True, a dictionary mapping the old molgraph indices to the new
+                molgraph indices will be returned.
+
+        Returns:
+
+        """
         topology, new_to_old_map = molgraph_to_openff_topology(
             self.molgraph, return_index_map=True
         )
