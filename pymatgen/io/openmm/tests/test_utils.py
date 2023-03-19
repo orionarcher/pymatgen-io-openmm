@@ -1,6 +1,9 @@
 import numpy as np
 import pytest
 import openff.toolkit.topology
+from monty.json import MontyEncoder
+import json
+
 import pymatgen
 from pymatgen.analysis.graphs import MoleculeGraph
 
@@ -39,6 +42,7 @@ from pymatgen.io.openmm.tests.datafiles import (
     # FEC_charges,
     # Li_charges,
     # PF6_charges,
+    # alchemy_input_set_path,
 )
 from openff.units import unit
 
@@ -364,7 +368,7 @@ def test_molgraph_from_atom_bonds():
     assert nx.is_isomorphic(pf6_graph.graph, pf6_graph2.graph, edge_match=em)
 
 
-def test_molgraph_from_openff_mol():
+def test_molgraph_from_openff_mol_cco():
     from pymatgen.analysis.local_env import OpenBabelNN
 
     cco_openff = openff.toolkit.topology.Molecule.from_smiles("CCO")
@@ -382,6 +386,25 @@ def test_molgraph_from_openff_mol():
     em = iso.categorical_edge_match("weight", 1)
 
     assert nx.is_isomorphic(cco_molgraph_1.graph, cco_molgraph_2.graph, edge_match=em)
+
+
+def test_openff_back_and_forth():
+
+    cco_openff = openff.toolkit.topology.Molecule.from_smiles("CC(=O)O")
+    cco_openff.assign_partial_charges("mmff94")
+
+    cco_molgraph_1 = molgraph_from_openff_mol(cco_openff)
+
+    assert len(cco_molgraph_1.molecule) == 8
+    assert cco_molgraph_1.molecule.charge == 0
+    assert len(cco_molgraph_1.graph.edges) == 7
+
+    cco_openff_2 = molgraph_to_openff_mol(cco_molgraph_1)
+
+    assert tk.Molecule.is_isomorphic_with(
+        cco_openff, cco_openff_2, bond_order_matching=True
+    )
+    assert max(bond.bond_order for bond in cco_openff_2.bonds) == 2
 
 
 def test_molgraph_to_openff_pf6():
@@ -434,8 +457,9 @@ def test_molgraph_from_openff_topology():
     molgraph_lengths = [len(subgraph.molecule) for subgraph in subgraphs]
     np.testing.assert_almost_equal(mol_lengths, molgraph_lengths)
 
-    subgraphs = molgraph.get_disconnected_fragments()
-    return
+    # test serialization
+    json.dumps(molgraph, cls=MontyEncoder)
+    # subgraphs = molgraph.get_disconnected_fragments()
 
 
 def test_molgraph_to_openff_topology():
@@ -445,14 +469,14 @@ def test_molgraph_to_openff_topology():
     topology = get_openff_topology({O: 2, CCO: 1})
     molgraph = molgraph_from_openff_topology(topology)
 
-    topology_2, index_map = molgraph_to_openff_topology(molgraph)
+    topology_2, index_map = molgraph_to_openff_topology(molgraph, return_index_map=True)
 
     assert topology.n_atoms == topology_2.n_atoms
     assert topology.n_molecules == topology_2.n_molecules
     assert topology.n_bonds == topology_2.n_bonds
 
     molgraph.add_edge(0, 6)
-    topology_3, _ = molgraph_to_openff_topology(molgraph)
+    topology_3, _ = molgraph_to_openff_topology(molgraph, return_index_map=True)
     assert topology_3.n_molecules == 2
     assert topology_3.n_atoms == 15
     assert topology_3.n_bonds == 13

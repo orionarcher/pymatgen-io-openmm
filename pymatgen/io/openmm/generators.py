@@ -6,6 +6,7 @@ Concrete implementations of InputGenerators for the OpenMM IO.
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+
 # scipy
 import numpy as np
 
@@ -28,9 +29,10 @@ from pymatgen.io.openmm.inputs import (
     SystemInput,
     IntegratorInput,
     StateInput,
+    MSONableInput,
 )
+from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
 from pymatgen.io.openmm.schema import InputMoleculeSpec
-from pymatgen.io.openmm.sets import OpenMMSet
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
@@ -41,7 +43,7 @@ from pymatgen.io.openmm.utils import (
     get_openff_topology,
     infer_openff_mol,
 )
-
+from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction, ReactiveSystem
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
@@ -50,6 +52,7 @@ __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
 
+# TODO: change to Dataclass
 # noinspection PyMethodOverriding
 class OpenMMSolutionGen(InputGenerator):
     """
@@ -137,6 +140,8 @@ class OpenMMSolutionGen(InputGenerator):
             "atom_types": atom_types,
             "atom_resnames": atom_resnames,
         }
+        # TODO: will need to serialize this to JSON and include in settings
+        # ideally the settings should be a pydantic BaseModel
         return settings_dict
 
     def get_input_set(
@@ -145,6 +150,7 @@ class OpenMMSolutionGen(InputGenerator):
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ):
+        # TODO: add default for density, maybe 1.5?
         # coerce all input_mol_dicts to InputMoleculeSpec
         input_mol_specs = []
         for mol_dict in input_mol_dicts:
@@ -247,17 +253,12 @@ class OpenMMSolutionGen(InputGenerator):
         # Angstrom from packmol. Convert.
         context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
-        # instantiate input files and feed to input_set
-        topology_input = TopologyInput(openmm_topology)
-        system_input = SystemInput(system)
-        integrator_input = IntegratorInput(integrator)
-        state_input = StateInput(state)
         input_set = OpenMMSet(
             inputs={
-                self.topology_file: topology_input,
-                self.system_file: system_input,
-                self.integrator_file: integrator_input,
-                self.state_file: state_input,
+                self.topology_file: TopologyInput(openmm_topology),
+                self.system_file: SystemInput(system),
+                self.integrator_file: IntegratorInput(integrator),
+                self.state_file: StateInput(state),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
@@ -267,3 +268,59 @@ class OpenMMSolutionGen(InputGenerator):
         # TODO: get_input_settings must be refactored
         input_set.settings = self._get_input_settings(mol_specs, box)
         return input_set
+
+
+class OpenMMAlchemyGen(OpenMMSolutionGen):
+    """
+    An InputGenerator for openmm alchemy.
+    """
+
+    def __init__(self, reactive_system_file="reactive_system.json", **kwargs):
+        super().__init__(**kwargs)
+        self.reactive_system_file = reactive_system_file
+
+    def get_input_set(  # type: ignore
+        self,
+        input_mol_dicts: List[Union[Dict, InputMoleculeSpec]],
+        reactions: List[AlchemicalReaction] = None,
+        density: Optional[float] = None,
+        box: Optional[List[float]] = None,
+    ) -> OpenMMAlchemySet:
+        """
+        This executes all the logic to create the input set. It generates coordinates, instantiates
+        the OpenMM objects, serializes the OpenMM objects, and then returns an InputSet containing
+        all information needed to generate a simulation. In addition, it also identifies what atoms
+        will participate in a given AlchemicalReaction and includes that information in the reaction_spec.
+
+        Please note that if the molecules are chiral, then the SMILEs must specify a
+        particular stereochemistry.
+
+        Args:
+            input_mol_dicts: a set of input_mol_dicts.
+            reactions: a list of AlchemicalReactions specifying the reactions to perform.
+            density: the density of the system. density OR box must be given as an argument.
+            box: list of [xlo, ylo, zlo, xhi, yhi, zhi]. density OR box must be given as an argument.
+
+        Returns:
+            an OpenMM.InputSet
+        """
+        reactions = reactions or []
+
+        input_set = super().get_input_set(input_mol_dicts, density, box)
+        openff_counts = {
+            tk.Molecule.from_smiles(mol_dict["smile"]): mol_dict["count"]
+            for mol_dict in input_mol_dicts
+        }
+        reactive_system = ReactiveSystem.from_reactions(openff_counts, reactions)
+        rxn_input_set = OpenMMAlchemySet(
+            inputs={
+                **input_set.inputs,
+                self.reactive_system_file: MSONableInput(reactive_system),
+            },
+            topology_file=self.topology_file,
+            system_file=self.system_file,
+            integrator_file=self.integrator_file,
+            state_file=self.state_file,
+            reactive_system_file=self.reactive_system_file,
+        )
+        return rxn_input_set

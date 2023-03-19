@@ -6,7 +6,10 @@ import numpy as np
 
 # pymatgen
 from pymatgen.io.openmm.generators import OpenMMSolutionGen
-from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal
+from pymatgen.io.openmm.sets import OpenMMAlchemySet
+from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal, react_system
+
+from datafiles import alchemy_input_set_path
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
@@ -23,6 +26,7 @@ def ethanol_simulation():
         {"smile": "CCO", "count": 50},
     ]
     input_set = generator.get_input_set(input_mol_dicts, density=1.0)
+
     return input_set.get_simulation()
 
 
@@ -40,3 +44,21 @@ def test_anneal(ethanol_simulation):
     np.testing.assert_almost_equal(0.300, end_time)
     end_temp = ethanol_simulation.integrator.getTemperature()._value  # Kelvin
     np.testing.assert_almost_equal(298, end_temp)
+
+
+def test_react_system():
+    # 20 water, 40 ethanol, 40 acetic
+    input_set = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
+    assert input_set.validate()
+    input_set_2 = react_system(
+        input_set,
+        n_cycles=5,
+        steps_per_cycle=500,
+    )
+    topology = input_set_2.inputs["reactive_system.json"].msonable.generate_topology()
+
+    [mol for mol in topology.unique_molecules]
+    [mol.n_atoms for mol in topology.molecules]
+    # TODO: need to test with delete atoms
+    # TODO: should also test with multiple reactions
+    return

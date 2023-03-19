@@ -16,7 +16,13 @@ from pymatgen.io.openmm.schema import InputMoleculeSpec
 # pymatgen
 
 from pymatgen.io.openmm.sets import OpenMMSet
-from pymatgen.io.openmm.generators import OpenMMSolutionGen
+from pymatgen.io.openmm.generators import OpenMMSolutionGen, OpenMMAlchemyGen
+
+# from pymatgen.io.openmm.tests.test_alchemy_utils import (
+#     acetic_ethanol_hydrolysis,
+#     acetic_ethanol_hydrolysis_del_water,
+#     acetic_ethanol_select_dict,
+# )
 from pymatgen.io.openmm.tests.datafiles import (
     PF6_xyz,
     PF6_charges,
@@ -137,3 +143,22 @@ class TestOpenMMSolutionGen:
             "state.xml",
         }
         assert input_set.validate()
+
+
+class TestOpenMMAlchemyGen:
+    def test_get_alchemical_input_set(self, acetic_rxn):
+        generator = OpenMMAlchemyGen(default_force_field="sage")
+        input_mol_dicts = [
+            {"smile": "O", "count": 20},
+            {"smile": "CCO", "count": 10},
+            {"smile": "CC(=O)O", "count": 10},
+        ]
+        # density is low to prevent a non bonded cutoff error
+        input_set = generator.get_input_set(
+            input_mol_dicts,
+            reactions=[acetic_rxn],
+            density=0.2,
+        )
+        assert input_set
+
+    # TODO: add another reaction with multiple reactive sites

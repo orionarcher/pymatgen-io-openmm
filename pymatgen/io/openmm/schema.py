@@ -90,3 +90,9 @@ class InputMoleculeSpec(BaseModel):
                     "partial_charges must be the same length as all geometries"
                 )
         return list(partial_charges)
+
+
+class InputSetSettings(BaseModel):
+    # TODO: need to fill this out and integrate with SolutionGen and InputSet
+    # one option would be to have base settings and then inherit from multiple classes
+    settings: dict

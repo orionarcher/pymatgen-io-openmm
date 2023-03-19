@@ -23,7 +23,7 @@ from pint import Quantity
 
 def smiles_to_atom_type_array(openff_counts: Dict[tk.Molecule, int]) -> np.ndarray:
     """
-    Convert a SMILE to an array of atom types.
+    Cal to an array of atom types.
 
     Args:
         smiles:
@@ -240,7 +240,7 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
         name="none",
     )
     p_table = {el.Z: str(el) for el in Element}
-    formal_charge = 0
+    total_charge = 0
     cum_atoms = 0
     for molecule in molecules:
         if molecule.conformers is not None:
@@ -258,9 +258,15 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
             molgraph.graph.nodes[cum_atoms + j][
                 "stereochemistry"
             ] = atom.stereochemistry
-            molgraph.graph.nodes[cum_atoms + j]["formal_charge"] = atom.formal_charge
-            molgraph.graph.nodes[cum_atoms + j]["partial_charge"] = atom.partial_charge
-            formal_charge += atom.formal_charge.magnitude
+            # set partial charge as a pure float
+            partial_charge = (
+                None if atom.partial_charge is None else atom.partial_charge.magnitude
+            )
+            molgraph.graph.nodes[cum_atoms + j]["partial_charge"] = partial_charge
+            # set formal charge as a pure float
+            formal_charge = atom.formal_charge.magnitude  # type: ignore
+            molgraph.graph.nodes[cum_atoms + j]["formal_charge"] = formal_charge
+            total_charge += formal_charge
         for bond in molecule.bonds:
             molgraph.graph.add_edge(
                 cum_atoms + bond.atom1_index,
@@ -271,12 +277,8 @@ def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
             )
         # formal_charge += molecule.total_charge
         cum_atoms += molecule.n_atoms
-    molgraph.molecule.set_charge_and_spin(charge=formal_charge)
+    molgraph.molecule.set_charge_and_spin(charge=total_charge)
     return molgraph
-
-
-def openmm_topology_from_molgraph(molgraph):
-    return
 
 
 def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGraph]:
@@ -301,7 +303,7 @@ def get_unique_subgraphs(molgraph_list: List[MoleculeGraph]) -> List[MoleculeGra
     return list(unique_graphs.values())
 
 
-def molgraph_to_openff_topology(molgraph):
+def molgraph_to_openff_topology(molgraph, return_index_map=False):
     """
     Convert a Pymatgen MoleculeGraph to an OpenFF Topology.
 
@@ -313,6 +315,8 @@ def molgraph_to_openff_topology(molgraph):
 
     Args:
         molgraph: A Pymatgen MoleculeGraph
+        return_index_map:
+            If True, return a dictionary mapping the new atom ordering to the old atom ordering.
 
     Returns:
         OpenFF Topology, new_to_old_index
@@ -325,7 +329,9 @@ def molgraph_to_openff_topology(molgraph):
     )
     molecules = [molgraph_to_openff_mol(subgraph) for subgraph in subgraphs]
     openff_topology = tk.Topology.from_molecules(molecules)
-    return openff_topology, new_to_old_index
+    if return_index_map:
+        return openff_topology, new_to_old_index
+    return openff_topology
 
 
 def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
@@ -348,8 +354,7 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
 
     # set atom properties
     partial_charges = []
-    # TODO: this doens't seem to maintain ordering of atoms, must fix, breaking downstream
-    # maybe fixed?
+    # TODO: should assert that there is only one molecule
     for i_node in range(len(molgraph.graph.nodes)):
         node = molgraph.graph.nodes[i_node]
         atomic_number = (
@@ -379,7 +384,7 @@ def molgraph_to_openff_mol(molgraph: MoleculeGraph) -> tk.Molecule:
 
     # set edge properties, default to single bond and assume not aromatic
     for i_node, j, bond_data in molgraph.graph.edges(data=True):
-        bond_order = bond_data.get("weight", 1) or 1
+        bond_order = bond_data.get("bond_order") or 1
         is_aromatic = bond_data.get("is_aromatic") or False
         openff_mol.add_bond(i_node, j, bond_order, is_aromatic=is_aromatic)
 
@@ -430,9 +435,10 @@ def infer_openff_mol(
     Infer an OpenFF molecule from a pymatgen Molecule.
 
     Args:
-        mol_geometry:
+        mol_geometry: A pymatgen Molecule
 
     Returns:
+        an OpenFF Molecule
 
     """
     molgraph = MoleculeGraph.with_local_env_strategy(mol_geometry, OpenBabelNN())

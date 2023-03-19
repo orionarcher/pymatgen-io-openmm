@@ -7,14 +7,14 @@ simulation forward in time.
 """
 
 # base python
-from typing import Union, List
+from typing import Union, List, Optional, Dict
 
 # scipy
 import numpy as np
 
 # openmm
-from openmm.openmm import MonteCarloBarostat
-from openmm.unit import kelvin, atmosphere
+from openmm.openmm import MonteCarloBarostat, Platform
+from openmm.unit import atmosphere, kelvin
 from openmm.app import Simulation
 
 
@@ -24,17 +24,106 @@ __maintainer__ = "Orion Cohen"
 __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
+from pymatgen.io.openmm.sets import OpenMMAlchemySet
+from pymatgen.io.openmm.utils import parameterize_w_interchange
+from pymatgen.io.openmm.inputs import (
+    TopologyInput,
+    SystemInput,
+    IntegratorInput,
+    StateInput,
+    MSONableInput,
+)
+
+
+def react_system(
+    input_set: OpenMMAlchemySet,
+    n_cycles: int = 1,
+    steps_per_cycle: int = 1000,
+    initial_steps: int = 0,
+    cutoff_distance: float = 4,
+    platform: Optional[Union[str, Platform]] = None,
+    platformProperties: Optional[Dict[str, str]] = None,
+):
+    simulation = input_set.get_simulation(
+        platform=platform, platformProperties=platformProperties
+    )
+    openmm_topology = None
+    openmm_system = None
+
+    # initial minimization and equilibration
+    simulation.minimizeEnergy()
+    simulation.step(initial_steps)
+
+    reactive_system = input_set.inputs[input_set.reactive_system_file].msonable
+
+    for cycle in range(n_cycles):
+        # get positions
+        state = simulation.context.getState(getPositions=True)
+        positions = state.getPositions(asNumpy=True)._value * 10
+
+        # react system, generate mapping
+        old_to_new_1 = reactive_system.react(positions, cutoff_distance=cutoff_distance)
+        openff_topology, old_to_new_2 = reactive_system.generate_topology(
+            update_self=True, return_index=True
+        )
+
+        # use mapping to update positions, dicts must be sorted by key
+        old_to_new_arr_1 = np.array([i for i in old_to_new_1.keys()])
+        old_to_new_arr_2 = np.array([i for i in old_to_new_2.keys()])
+        new_positions = positions[old_to_new_arr_1][old_to_new_arr_2]
+        # TODO: confirm this works
+
+        # charges must be assigned with mmff94
+        mol_specs = [{"openff_mol": mol} for mol in openff_topology.unique_molecules]
+        for spec in mol_specs:
+            spec["openff_mol"].assign_partial_charges("mmff94")
+
+        box_matrix = state.getPeriodicBoxVectors(asNumpy=True)._value
+        box = np.concatenate([[0, 0, 0], np.diag(box_matrix)]) * 10
+        openmm_system = parameterize_w_interchange(openff_topology, mol_specs, box)
+        openmm_topology = openff_topology.to_openmm()
+
+        # create and evolve simulation
+        simulation = Simulation(
+            openmm_topology,
+            openmm_system,
+            input_set[input_set.integrator_file].get_integrator(),
+            platform=simulation.context.getPlatform(),
+            platformProperties=platformProperties,
+        )
+        simulation.context.setPositions(np.divide(new_positions, 10))
+        simulation.minimizeEnergy()
+        simulation.step(steps_per_cycle)
+
+    state = simulation.context.getState(getPositions=True, getVelocities=True)
+    # instantiate input files and feed to input_set
+    input_set = OpenMMAlchemySet(
+        inputs={
+            input_set.topology_file: TopologyInput(openmm_topology),
+            input_set.system_file: SystemInput(openmm_system),
+            input_set.integrator_file: IntegratorInput(simulation.integrator),
+            input_set.state_file: StateInput(state),
+            input_set.reactive_system_file: MSONableInput(reactive_system),
+        },
+        topology_file=input_set.topology_file,
+        system_file=input_set.system_file,
+        integrator_file=input_set.integrator_file,
+        state_file=input_set.state_file,
+    )
+    return input_set
+
 
 def equilibrate_pressure(
     simulation: Simulation,
     steps: int,
     temperature: float = 298,
     pressure: float = 1,
+    frequency: int = 10,
 ):
     """
     Equilibrate the pressure of a simulation in the NPT ensemble.
 
-    Adds and then removes a openmm.MonteCarlo Barostat to shift the system
+    Adds and then removes an openmm.MonteCarlo Barostat to shift the system
     into the NPT ensemble.
 
     Parameters
@@ -43,13 +132,16 @@ def equilibrate_pressure(
     steps : the length of the heating, holding, and cooling stages. Steps is number of steps.
     temperature : temperature to equilibrate at (Kelvin)
     pressure : pressure to equilibrate at (Atm).
+    frequency : the frequency at which pressure changes should be attempted (steps).
     """
     context = simulation.context
     system = context.getSystem()
     assert (
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
-    barostat_force_index = system.addForce(MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, 10))
+    barostat_force_index = system.addForce(
+        MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, frequency)
+    )
     context.reinitialize(preserveState=True)
     simulation.step(steps)
     system.removeForce(barostat_force_index)
