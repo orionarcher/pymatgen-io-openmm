@@ -30,7 +30,7 @@ class TestAlchemicalReaction:
         # for testing purposes
         mda_atoms = openff_counts_to_universe(openff_counts).atoms
 
-        reactive_atoms = acetic_rxn.make_reactive_atoms(openff_counts)
+        reactive_atoms = acetic_rxn.make_reactive_atoms(openff_counts, 1)
         trig_left = reactive_atoms.trigger_atoms_left
         trig_right = reactive_atoms.trigger_atoms_right
         assert len(trig_left) == 2
@@ -49,7 +49,7 @@ class TestAlchemicalReaction:
         # for testing purposes
         mda_atoms = openff_counts_to_universe(openff_counts).atoms
 
-        reactive_atoms = acetic_rxn_rm_water.make_reactive_atoms(openff_counts)
+        reactive_atoms = acetic_rxn_rm_water.make_reactive_atoms(openff_counts, 1)
         trig_left = reactive_atoms.trigger_atoms_left
         trig_right = reactive_atoms.trigger_atoms_right
         assert len(trig_left) == 2
@@ -67,7 +67,7 @@ class TestAlchemicalReaction:
 
         mda_atoms = openff_counts_to_universe(openff_counts).atoms
 
-        reactive_atoms = propanedioic_rxn_rm_water.make_reactive_atoms(openff_counts)
+        reactive_atoms = propanedioic_rxn_rm_water.make_reactive_atoms(openff_counts, 1)
         trig_left = reactive_atoms.trigger_atoms_left
         trig_right = reactive_atoms.trigger_atoms_right
         assert len(trig_left) == 4

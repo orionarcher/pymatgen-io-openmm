@@ -659,7 +659,9 @@ class ReactiveSystem(MSONable):
 
         return molgraph, old_to_new_map
 
-    def react(self, positions: np.ndarry, cutoff_distance: float = 4) -> Dict[int, int]:
+    def react(
+        self, positions: np.ndarray, cutoff_distance: float = 4
+    ) -> Dict[int, int]:
         """
         Reacts the system according to trigger atom proximity in the given positions.
 
