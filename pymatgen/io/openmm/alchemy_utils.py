@@ -47,15 +47,34 @@ def openff_counts_to_universe(openff_counts):
 @dataclass
 class HalfReaction(MSONable):
     """
-    A HalfReaction that contains atoms that are created or deleted in a reaction.
+    A HalfReaction stores the indices of the atoms that participate in the "left"
+    or "right" half of a reaction. It is instantiated when a AlchemicalReaction is
+    applied to a specific set of molecules to create a ReactiveSystem.
 
-    A HalfReaction are only useful within the context of a specific ReactiveSystem
+    Half Reactions are intended to be paired with a partner HalfReaction to form a
+    full reaction. These are referred to as the "left" and "right" half reactions,
+    the ordering is arbitrary.
+    For example, if we want a condensation reaction, the "left" reaction might include
+    the alcohol atoms and the "right" reaction might include the carboxylic acid atoms.
+
+    The HalfReaction stores indices involved in creating bonds, deleting bonds, and
+    deleting atoms. It also stores a "trigger atom", when the trigger atom of one
+    half reaction is within a cutoff distance of the trigger atom of the other half
+    reaction, the reaction will occur.
 
     Args:
-        create_bonds: a list of atoms that form new bonds. These should be paired
-            with another half reactions with a corresponding set of atoms.
-        delete_bonds: a list of tuples of atom indices to delete bonds between.
-        delete_atoms: a list of atom indices to delete.
+        create_bonds: a list of atoms that form new bonds. Each atom in the list
+            will form a bond with the corresponding atom in the partner HalfReaction.
+            So if create bonds is [0, 1] and the partner HalfReaction has create bonds
+            [2, 3], then atoms 0 and 2 will form a bond, and atoms 1 and 3 will form a
+            bond.
+        delete_bonds: a list of tuples of atom indices to delete bonds between. Each
+            tuple should contain two atom indices and the bond between those atoms will
+            be deleted.
+        delete_atoms: a list of atom indices to delete. These atoms will be deleted
+            and any bonds they are involved in will be deleted.
+        trigger_atom: the atom index that triggers the reaction when in proximity
+            to a partner HalfReaction's trigger atom.
     """
 
     create_bonds: List[int]
@@ -86,15 +105,23 @@ class HalfReaction(MSONable):
 @dataclass
 class ReactiveAtoms(MSONable):
     """
-    A ReactiveAtoms object that contains all the atoms that participate in a reaction.
+    ReactiveAtoms describes all the alchemical reactions that can occur within
+    a ReactiveSystem.
 
-    ReactiveAtoms are only useful within the context of a specific ReactiveSystem
+    In particular, ReactiveAtoms contain all possible half reactions and their corresponding
+    trigger atoms. The trigger atoms are divided into "left" and "right" trigger atoms,
+    which can react with each other but not with themselves.
+
+    During the `react` step of a ReactiveSystem, the trigger atoms are checked for
+    proximity to each other. If two trigger atoms are within a cutoff distance of each
+    other, then the reaction will occur with the set `probability`.
 
     Args:
         half_reactions: a dictionary of half reactions where the key is the trigger atom
             and the value is the HalfReaction
         trigger_atoms_left: a list of trigger atoms for the "left" side of the reaction
         trigger_atoms_right: a list of trigger atoms for the "right" side of the reaction
+        probability: the probability of the reaction occurring when sampled.
     """
 
     half_reactions: Dict[int, HalfReaction]
@@ -158,19 +185,9 @@ class AlchemicalReaction(MSONable):
         universe, select_dict, create_bonds, delete_bonds, delete_atoms
     ):
         """
-        This function builds a dataframe contains all the atoms that participate in the alchemical
+        This function builds a dataframe that contains all the atoms that participate in the alchemical
         reaction. For each atom, it includes their atom index, which reaction they participate in,
         and the type of reaction it is.
-
-        Args:
-            universe:
-            select_dict:
-            create_bonds:
-            delete_bonds:
-            delete_atoms:
-
-        Returns:
-
         """
         participating_atoms = []
         # loop to reuse code for create_bonds and delete_bonds
@@ -218,16 +235,23 @@ class AlchemicalReaction(MSONable):
     @staticmethod
     def _add_trigger_atoms(df, u):
         """
-        This extracts all of the "trigger" atoms that instigate a specific alchemical reaction,
+        This extracts all the "trigger" atoms that instigate a specific alchemical reaction,
         e.g. the atoms that can move within some cutoff to react with each other. It then organizes
-        all atoms by which trigger atoms then correspond to.
+        all atoms by which trigger atoms then correspond to. Trigger atoms are the atoms in the
+        first tuple of the create_bonds list. For example, if the create_bonds list in the
+        Alchemical Reaction is
+        [("C1", "O1"), ("C2", "O2")], then the left trigger atom will be the C1 atom, and the right
+        trigger atom will be the O1 atom. The bond between C2 and O2 will be formed when the
+        reaction is triggered, regardless of the inter-atomic distance between C2 and O2.
 
-        Args:
-            df:
-            u:
-
-        Returns:
-
+        This function is necessary because when a user selects the reactive atom groups, there may
+        be multiple identical functional groups that can react. For example, if there are two alcohols
+        on the same molecule that can participate in a reaction, how does the program know which
+        Hydrogen is paired with which Oxygen? This function solves this problem by looping through
+        the trigger atoms and finding the atoms and bonds in close proximity to each trigger atom.
+        Specifically, it will create or delete bonds between atoms within one bond of the trigger atom,
+        and delete atoms within two bonds of the trigger atom. This is done for both left and
+        right trigger atoms.
         """
         trigger_atom_ix = df[((df.type == "create_bonds") & (df.bond_n == 0))][
             "atom_ix"
@@ -253,6 +277,11 @@ class AlchemicalReaction(MSONable):
     def _mini_universe_reactive_atoms_df(
         openff_mols, select_dict, create_bonds, delete_bonds, delete_atoms
     ):
+        """
+        This function creates a small universe with one copy of each residue, uses MDAnalysis
+        to apply the selection string in `select_dict` to identify the reactive atom indices,
+        and then identifies the trigger atoms for each reactive atom.
+        """
         # we first create a small universe with one copy of each residue
         openff_singles = {mol: 1 for mol in openff_mols}
         universe_mini = openff_counts_to_universe(openff_singles)
@@ -281,14 +310,6 @@ class AlchemicalReaction(MSONable):
         Since we know how many of each residue are present and how many atoms each residue
         has, we can essentially concatenate many duplicates of the small dataframe and then
         increment the atom indexes to reflect the full simulation.
-
-        Args:
-            trig_df:
-            res_sizes:
-            res_counts:
-
-        Returns:
-
         """
         trig_df = trig_df.sort_values("res_ix")
         # create a list of offsets to be applied to the duplicated dataframe
@@ -316,12 +337,6 @@ class AlchemicalReaction(MSONable):
         This takes the dataframe of all atoms and turns it into an easily parsable dictionary.
         Each "trigger atom" has a set of atom and bond deletions that are triggered when a new
         bond is created.
-
-        Args:
-            all_atoms_df:
-
-        Returns:
-
         """
         half_reactions = {}
         for trigger_ix, atoms_df in all_atoms_df.groupby("trigger_ix"):
