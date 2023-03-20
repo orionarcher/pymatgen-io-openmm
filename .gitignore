@@ -1,4 +1,3 @@
-.DS_Store
 *.egg-info
 *.o
 *.so
@@ -12,11 +11,17 @@ build
 .pydevproject
 .settings
 .externalToolBuilders
-.idea
 setuptools*
 .ipynb_checkpoints
 .tox
 
+# VSCode
 pymatgen/\.vscode/
-
 .vscode/
+
+# MacOS
+.DS_Store
+
+# Intellij
+*.iml
+.idea
