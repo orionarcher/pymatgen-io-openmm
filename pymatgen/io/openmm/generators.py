@@ -150,6 +150,25 @@ class OpenMMSolutionGen(InputGenerator):
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
     ):
+        """
+        Helper function for instantiating OpenMMSet objects from by specifying a
+        list of dictionaries or InputMoleculeSpecs, simulation density or simulation
+        dimensions.
+
+        Parameters
+        ----------
+        input_mol_dicts : List[Union[Dict, InputMoleculeSpec]]
+            List of dicts or InputMoleculeSpecs.
+            Dicts must have smile and count str keys - see required args for InputMoleculeSpec.
+        density : Optional[float]
+            simulation density, molecules/atoms per cubic centimeter
+        box : Optional[List[float]]
+            simulation box dimensions in centimeters
+        Returns
+        -------
+        input_set : OpenMMSet
+            OpenMM instance with containing simulation input files
+        """
         # TODO: add default for density, maybe 1.5?
         # coerce all input_mol_dicts to InputMoleculeSpec
         input_mol_specs = []
