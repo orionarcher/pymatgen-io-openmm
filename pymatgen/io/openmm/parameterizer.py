@@ -62,34 +62,31 @@ class Parameterizer:
             self.parameterizer_type = ParameterizerType.DEFAULT_PARAMETERIZER
 
     def assign_parameterizer(self, force_field: str, parameterizer_type: Optional[ParameterizerType], parameterizer_assignment: ParameterizerAssignment):
-        match parameterizer_assignment:
-            case ParameterizerAssignment.INFERRED:
-                self.infer_parameterizer_type(force_field)
-            case ParameterizerAssignment.EXPLICIT:
-                assert parameterizer_type != None, PARAMETERIZER_TYPE_REQUIRED
-                self.parameterizer_type = parameterizer_type
-            case ParameterizerAssignment.DEFAULT:
-                self.parameterizer_type  = ParameterizerType.DEFAULT_PARAMETERIZER
-            case _:
-                self.parameterizer_type  = ParameterizerType.DEFAULT_PARAMETERIZER
+        if parameterizer_assignment == ParameterizerAssignment.INFERRED:
+            self.infer_parameterizer_type(force_field)
+        elif parameterizer_assignment == ParameterizerAssignment.EXPLICIT:
+            assert parameterizer_type != None, PARAMETERIZER_TYPE_REQUIRED
+            self.parameterizer_type = parameterizer_type
+        elif parameterizer_assignment == ParameterizerAssignment.DEFAULT:
+            self.parameterizer_type  = ParameterizerType.DEFAULT_PARAMETERIZER
+        else:
+            self.parameterizer_type  = ParameterizerType.DEFAULT_PARAMETERIZER
     
     def assert_valid_inputs(self):
         assert self.force_field in self.parameterizer_type.value.keys(), f"{self.parameterizer_type.name} only supports the following force fields ${self.parameterizer_type.value.keys()}"
 
-        match self.parameterizer_type:
-            case ParameterizerType.INTERCHANGE_PARAMETERIZER:
-                assert type(self.topology) == tk.Topology, UNEXPECTED_TOPOLOGY_TYPE(self.parameterizer_type, type(self.topology), tk.Topology)
-            case ParameterizerType.OPENMM_PARAMETERIZER:
-                assert type(self.topology) == OpenMMTopology, UNEXPECTED_TOPOLOGY_TYPE(self.parameterizer_type, type(self.topology), OpenMMTopology)
+        if self.parameterizer_type == ParameterizerType.INTERCHANGE_PARAMETERIZER:
+            assert type(self.topology) == tk.Topology, UNEXPECTED_TOPOLOGY_TYPE(self.parameterizer_type, type(self.topology), tk.Topology)
+        if self.parameterizer_type == ParameterizerType.OPENMM_PARAMETERIZER:
+            assert type(self.topology) == OpenMMTopology, UNEXPECTED_TOPOLOGY_TYPE(self.parameterizer_type, type(self.topology), OpenMMTopology)
     
     def parameterize_system(self)->any:
-        match self.parameterizer_type:
-            case ParameterizerType.OPENMM_PARAMETERIZER:
-                return self.parameterize_w_openmm()
-            case ParameterizerType.INTERCHANGE_PARAMETERIZER:
-                return self.parameterize_w_interchange()
-            case _:
-                raise NotImplementedError("The only implemented Parameterizers are OPENMM and INTERCHANGE")
+        if self.parameterizer_type == ParameterizerType.OPENMM_PARAMETERIZER:
+            return self.parameterize_w_openmm()
+        elif self.parameterizer_type == ParameterizerType.INTERCHANGE_PARAMETERIZER:
+            return self.parameterize_w_interchange()
+        else:
+            raise NotImplementedError("The only implemented Parameterizers are OPENMM and INTERCHANGE")
 
     def parameterize_w_interchange(self)->any:
         from openff.interchange import Interchange
