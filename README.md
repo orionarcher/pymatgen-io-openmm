@@ -4,7 +4,7 @@
 `pymatgen-io-openmm` makes setting up OpenMM simulations fast and easy.
 
 The documentation is under active development. If you would like to use this package,
-please contact the [Orion Cohen](https://orioncohen.com/) so that he makes
+please contact [Orion Cohen](https://orioncohen.com/) so that he makes
 time to finish documenting and mint a PyPI release.
 
 `pymatgen-io-openmm` is a [pymatgen](https://pymatgen.org/) namespace package.
