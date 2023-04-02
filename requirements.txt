@@ -1,11 +1,10 @@
 pymatgen>=2022.3.22
+MDAnalysis
 openmm
-parmed
 numpy
 pytest
 openbabel
 rdkit
 openff-toolkit>=0.12.0
 packmol
-openmmforcefields
 pydantic

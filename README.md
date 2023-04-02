@@ -29,3 +29,44 @@ simulation = input_set.get_simulation()
 simulation.minimizeEnergy()
 simulation.step(1000)
 ```
+
+### Developer Mode Installation Instructions
+
+1. Install the conda package manager and create a fresh conda environment
+with python 3.10 or greater.
+
+    ```bash
+    conda create -n openmm python=3.10
+    ```
+
+2. Clone this repository and move into it.
+
+    ```bash
+    git clone git@github.com:orionarcher/pymatgen-io-openmm.git
+    cd pymatgen-io-openmm
+    ```
+
+3. Install the requirements in `requirements.txt`.
+
+    ```bash
+    conda install -c conda-forge --file requirements.txt
+    ```
+
+4. Clone and install the [networking support](https://github.com/orionarcher/pymatgen/tree/networking_support)
+branch of [orionarcher](https://github.com/orionarcher)'s fork of pymatgen. This branch fixes are few bugs that
+this package needs to run. These will eventually be integrated into the main pymatgen
+repository, but for now you will need to install this branch.
+
+    ```bash
+    conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
+    git clone git@github.com:orionarcher/pymatgen.git
+    cd pymatgen
+    git checkout networking_support
+    pip install -e . # install in editable mode in case further changes are needed
+    ```
+
+5. Install the package in editable mode.
+
+    ```bash
+    pip install -e .
+    ```
