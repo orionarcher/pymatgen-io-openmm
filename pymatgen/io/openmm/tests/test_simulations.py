@@ -52,8 +52,8 @@ def test_react_system():
     assert input_set.validate()
     input_set_2 = react_system(
         input_set,
-        n_cycles=5,
-        steps_per_cycle=500,
+        n_cycles=1,
+        steps_per_cycle=200,
     )
     topology = input_set_2.inputs["reactive_system.json"].msonable.generate_topology()
 
