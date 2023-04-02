@@ -59,10 +59,7 @@ repository, but for now you will need to install this branch.
 
     ```bash
     conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
-    git clone git@github.com:orionarcher/pymatgen.git
-    cd pymatgen
-    git checkout networking_support
-    pip install -e . # install in editable mode in case further changes are needed
+    pip install git+ssh://git@github.com/orionarcher/pymatgen.git@networking_support
     ```
 
 5. Install the package in editable mode.
@@ -70,3 +67,15 @@ repository, but for now you will need to install this branch.
     ```bash
     pip install -e .
     ```
+
+### Running tests
+
+To run the testing suite, run following commands from the root of the repository and with your 
+conda environment activated:
+
+```bash
+cd /pymatgen/io/openmm/tests
+pytest .
+```
+
+Data files paths within the testing suite assuming a path relative to `pymatgen/io/openmm/tests`.
