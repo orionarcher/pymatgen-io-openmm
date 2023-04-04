@@ -52,7 +52,7 @@ with python 3.10 or greater.
     conda install -c conda-forge --file requirements.txt
     ```
 
-4. Clone and install pymatgen. Some important bug fixes are not yet integrated bugs that into a release.
+4. Clone and install pymatgen. Some important bug fixes are not yet integrated that into a release.
 
     ```bash
     conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
