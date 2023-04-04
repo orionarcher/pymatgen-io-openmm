@@ -52,10 +52,7 @@ with python 3.10 or greater.
     conda install -c conda-forge --file requirements.txt
     ```
 
-4. Clone and install the [networking support](https://github.com/orionarcher/pymatgen/tree/networking_support)
-branch of [orionarcher](https://github.com/orionarcher)'s fork of pymatgen. This branch fixes are few bugs that
-this package needs to run. These will eventually be integrated into the main pymatgen
-repository, but for now you will need to install this branch.
+4. Clone and install pymatgen. Some important bug fixes are not yet integrated bugs that into a release.
 
     ```bash
     conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
