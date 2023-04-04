@@ -59,7 +59,7 @@ repository, but for now you will need to install this branch.
 
     ```bash
     conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
-    pip install git+ssh://git@github.com/orionarcher/pymatgen.git@networking_support
+    pip install git+ssh://git@github.com:materialsproject/pymatgen.git
     ```
 
 5. Install the package in editable mode.
@@ -70,7 +70,7 @@ repository, but for now you will need to install this branch.
 
 ### Running tests
 
-To run the testing suite, run following commands from the root of the repository and with your 
+To run the testing suite, run following commands from the root of the repository and with your
 conda environment activated:
 
 ```bash
