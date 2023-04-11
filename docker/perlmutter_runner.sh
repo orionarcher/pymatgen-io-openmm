@@ -2,7 +2,7 @@
 
 # Check if the correct number of arguments are provided
 if [ "$#" -ne 4 ]; then
-  echo "Usage: ./run_container.sh <CONTAINER_NAME> <PYTHON_FILE> <INPUT_DIRECTORY> <OUTPUT_DIRECTORY>"
+  echo "Usage: ./perlmutter_runner.sh <CONTAINER_NAME> <PYTHON_FILE> <INPUT_DIRECTORY> <OUTPUT_DIRECTORY>"
   exit 1
 fi
 

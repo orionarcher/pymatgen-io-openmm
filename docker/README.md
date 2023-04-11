@@ -6,11 +6,14 @@
 # podman-hpc needs this to store the container
 mkdir $SCRATCH/storage
 
-# you will need a docker account to do this, sorry
+# this will prompt you for your username and password, leave both blank
 podman-hpc login docker.io
 
 # pull the image
 podman-hpc pull orioncohen/pymatgen_openmm_gpu:latest
+
+# test that the image is present
+podman-hpc images
 ```
 
 ### Inputs and Outputs
@@ -47,6 +50,8 @@ Note that perlmuter_runner.sh is included in this repository and must
 be in your PATH.
 
 ```bash
+chmod +x perlmutter_runner.sh
+
 srun -n 4 -G 4 perlmutter_runner.sh \
   docker.io/orioncohen/pymatgen_openmm_gpu \
   production.py \
