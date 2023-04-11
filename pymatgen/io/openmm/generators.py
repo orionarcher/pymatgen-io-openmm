@@ -127,7 +127,7 @@ class OpenMMSolutionGen(InputGenerator):
         box: List[float],
     ) -> Dict:
         openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
-        atom_types = smiles_to_atom_type_array(openff_counts)
+        atom_types = smiles_to_atom_type_array(openff_counts)  # type: ignore
         atom_resnames = smiles_to_resname_array(mol_specs)
         # TODO: add mol_specs
         settings_dict = {
@@ -199,7 +199,7 @@ class OpenMMSolutionGen(InputGenerator):
                             f"and the provided geometry {geometry.xyz}."
                         )
                     new_mol = pymatgen.core.Molecule.from_sites(
-                        [geometry.xyz.sites[i] for i in atom_map.values()]
+                        [geometry.xyz.sites[i] for i in atom_map.values()]  # type: ignore
                     )
                     openff_mol.add_conformer(new_mol.cart_coords * angstrom)
             else:
