@@ -1,0 +1,18 @@
+name: test
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.8
+  - pip
+  - MDAnalysis>=2.0.0
+  - scipy
+  - numpy
+  - pandas
+  - matplotlib
+  - statsmodels
+  - pytest
+  - pytest-cov
+  - codecov
+  - rdkit
+  - plotly
