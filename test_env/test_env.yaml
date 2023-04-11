@@ -6,15 +6,16 @@ dependencies:
     # Base depends
   - python
   - pip
+  - pymatgen>=2022.3.22
+  - MDAnalysis
   - openmm
-  - parmed
   - numpy
   - pytest
   - openbabel
   - rdkit
-  - openff-toolkit
+  - openff-toolkit>=0.12.0
   - packmol
-  - openmmforcefields
+  - pydantic
 
     # Pip-only installs
   - pip:

@@ -57,8 +57,3 @@ classifiers = [
     'Topic :: Scientific/Engineering :: Chemistry',
     'Topic :: Software Development :: Libraries :: Python Modules',
 ]
-
-#[project.urls]
-#Documentation = 'https://solvation-analysis.readthedocs.io'
-#"Issue Tracker" = 'https://github.com/MDAnalysis/solvation-analysis/issues'
-#Source = 'https://github.com/MDAnalysis/solvation-analysis'

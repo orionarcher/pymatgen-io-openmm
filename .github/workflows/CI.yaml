@@ -67,7 +67,8 @@ jobs:
       shell: bash -l {0}
 
       run: |
-        pytest -v --cov=pymatgen/io/openmm --cov-report=xml --color=yes pymatgen/io/openmm/tests/
+        pytest -v --color=yes pymatgen/io/openmm/tests/
+#        pytest -v --cov=pymatgen/io/openmm --cov-report=xml --color=yes pymatgen/io/openmm/tests/
 
 #    - name: CodeCov
 #      uses: codecov/codecov-action@v1
@@ -98,4 +99,4 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest -v --color=yes solvation_analysis/tests/
+        pytest -v --color=yes pymatgen/io/openmm/tests/
