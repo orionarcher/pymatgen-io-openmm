@@ -9,7 +9,7 @@ from pymatgen.io.openmm.generators import OpenMMSolutionGen
 from pymatgen.io.openmm.sets import OpenMMAlchemySet
 from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal, react_system
 
-from datafiles import alchemy_input_set_path
+from datafiles import alchemy_set_path
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"
@@ -48,7 +48,7 @@ def test_anneal(ethanol_simulation):
 
 def test_react_system():
     # 20 water, 40 ethanol, 40 acetic
-    input_set = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
+    input_set = OpenMMAlchemySet.from_directory(alchemy_set_path)
     assert input_set.validate()
     input_set_2 = react_system(
         input_set,

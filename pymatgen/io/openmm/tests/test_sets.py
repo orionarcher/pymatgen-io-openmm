@@ -15,8 +15,8 @@ from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
 from pymatgen.io.openmm.tests.datafiles import (
     input_set_dir,
     corrupted_state_path,
-    default_input_set_path,
-    alchemy_input_set_path,
+    default_set_path,
+    alchemy_set_path,
 )
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
@@ -43,7 +43,7 @@ class TestOpenMMSet:
 
     def test_dump_load_input_set(self):
 
-        input_set1 = OpenMMSet.from_directory(default_input_set_path)
+        input_set1 = OpenMMSet.from_directory(default_set_path)
         with tempfile.TemporaryDirectory() as tmpdir:
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
@@ -95,7 +95,7 @@ class TestOpenMMSet:
 class TestOpenMMAlchemySet:
     def test_dump_load_input_set(self):
 
-        input_set1 = OpenMMSet.from_directory(alchemy_input_set_path)
+        input_set1 = OpenMMSet.from_directory(alchemy_set_path)
         with tempfile.TemporaryDirectory() as tmpdir:
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
@@ -117,7 +117,7 @@ class TestOpenMMAlchemySet:
         """
         to do
         """
-        input_set = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
+        input_set = OpenMMAlchemySet.from_directory(alchemy_set_path)
         assert isinstance(input_set, OpenMMAlchemySet)
         assert set(input_set.inputs.keys()) == {
             "topology.pdb",
