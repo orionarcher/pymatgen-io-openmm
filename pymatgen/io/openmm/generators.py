@@ -261,7 +261,7 @@ class OpenMMSolutionGen(InputGenerator):
                 "All molecules must use the same force field and it must be 'sage' or 'opls'."
             )
         # figure out FF
-
+        # TODO: wrap system creation in try/except to catch periodic boundary errors
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
