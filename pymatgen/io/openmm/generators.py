@@ -32,6 +32,7 @@ from pymatgen.io.openmm.inputs import (
     MSONableInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
+from pymatgen.io.openmm.parameterizer import Parameterizer, ParameterizerAssignment, ParameterizerType
 from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.utils import (
     get_box,
@@ -39,7 +40,6 @@ from pymatgen.io.openmm.utils import (
     smiles_to_atom_type_array,
     smiles_to_resname_array,
     get_atom_map,
-    parameterize_w_interchange,
     get_openff_topology,
     infer_openff_mol,
 )
@@ -149,6 +149,10 @@ class OpenMMSolutionGen(InputGenerator):
         input_mol_dicts: List[Union[Dict, InputMoleculeSpec]],
         density: Optional[float] = None,
         box: Optional[List[float]] = None,
+        parameterizer_type: Optional[ParameterizerType] = None, 
+        parameterizer_assignment: ParameterizerAssignment = ParameterizerAssignment.INFERRED,
+        customize_force_field: bool = False,
+        custom_file_paths: Optional[List[str]] = None,
     ):
         """
         Helper function for instantiating OpenMMSet objects from by specifying a
@@ -164,6 +168,14 @@ class OpenMMSolutionGen(InputGenerator):
             simulation density, molecules/atoms per cubic centimeter
         box : Optional[List[float]]
             simulation box dimensions in centimeters
+        parameterizer_type : ParameterizerType
+            The parameterizer type used for the force fields.
+        parameterizer_assignment : ParameterizerAssignment
+            How the parameterizer should be assigned for building the system
+        using_custom_files : bool
+            Whether or not to use custom force field files for parameterization.
+        custom_force_field_files : Optional[List[str]]
+            A list of file paths to custom force field files. Only used if using_custom_files is True.
         Returns
         -------
         input_set : OpenMMSet
@@ -248,20 +260,14 @@ class OpenMMSolutionGen(InputGenerator):
             openff_counts, box, self.packmol_random_seed, self.packmol_timeout
         )
         openff_topology = get_openff_topology(openff_counts)
-        openmm_topology = openff_topology.to_openmm()
 
-        ffs = np.array([mol_spec["forcefield"] for mol_spec in mol_specs])
-        if np.all(ffs == ffs[0]) and ffs[0] in ["sage", "opls"]:
-            system = parameterize_w_interchange(
-                openff_topology, mol_specs, box, force_field=ffs[0]
-            )
-        else:
-            # system = parameterize_w_openmm_forcefields(mol_specs)
-            raise ValueError(
-                "All molecules must use the same force field and it must be 'sage' or 'opls'."
-            )
-        # figure out FF
+        ffs = ([mol_spec["forcefield"] for mol_spec in mol_specs])
+
+        parameterizer = Parameterizer(openff_topology, mol_specs,box,ffs, parameterizer_type, parameterizer_assignment, customize_force_field, custom_file_paths)
+
+        system = parameterizer.parameterize_system()
         # TODO: wrap system creation in try/except to catch periodic boundary errors
+
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
@@ -274,7 +280,7 @@ class OpenMMSolutionGen(InputGenerator):
         state = context.getState(getPositions=True)
         input_set = OpenMMSet(
             inputs={
-                self.topology_file: TopologyInput(openmm_topology),
+                self.topology_file: TopologyInput(openff_topology.to_openmm()),
                 self.system_file: SystemInput(system),
                 self.integrator_file: IntegratorInput(integrator),
                 self.state_file: StateInput(state),

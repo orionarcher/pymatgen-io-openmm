@@ -17,6 +17,7 @@ from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
 import pymatgen
 from pymatgen.io.xyz import XYZ
 from pymatgen.io.packmol import PackmolBoxGen
+from openmm.app import Topology as OpenMMTopology
 
 from pint import Quantity
 
@@ -191,6 +192,7 @@ def get_coordinates(
             ]
             coords = Molecule.from_sites(sites)
             # TODO: test the units here
+        
             packmol_molecules.append(
                 {
                     "name": f"mol_{i}_conformer_{j}",
@@ -209,27 +211,6 @@ def get_coordinates(
         ).as_dataframe()
     raw_coordinates = coordinates.loc[:, "x":"z"].values  # type: ignore
     return raw_coordinates
-
-
-def parameterize_w_interchange(openff_topology, mol_specs, box, force_field="sage"):
-    assert force_field == "sage", "currently only the sage force field is supported"
-
-    from openff.interchange import Interchange
-    from openff.toolkit import ForceField
-    import numpy as np
-
-    box_arr = np.array(box)
-    box_matrix = np.diag(box_arr[3:6] - box_arr[0:3]) * angstrom
-    sage = ForceField("openff_unconstrained-2.0.0.offxml")
-    interchange = Interchange.from_smirnoff(
-        force_field=sage,
-        topology=openff_topology,
-        charge_from_molecules=[spec["openff_mol"] for spec in mol_specs],
-        box=box_matrix,
-        allow_nonintegral_charges=True,
-    )
-    return interchange.to_openmm()
-
 
 def molgraph_from_molecules(molecules: Iterable[tk.Molecule]):
     """

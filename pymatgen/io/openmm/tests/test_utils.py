@@ -25,7 +25,6 @@ from pymatgen.io.openmm.utils import (
     molgraph_from_openff_topology,
     get_openff_topology,
     infer_openff_mol,
-    parameterize_w_interchange,
     get_unique_subgraphs,
     molgraph_from_molecules,
     molgraph_to_openff_topology,

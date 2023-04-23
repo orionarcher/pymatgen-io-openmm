@@ -25,13 +25,17 @@ __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
 from pymatgen.io.openmm.sets import OpenMMAlchemySet
-from pymatgen.io.openmm.utils import parameterize_w_interchange
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
     SystemInput,
     IntegratorInput,
     StateInput,
     MSONableInput,
+)
+from pymatgen.io.openmm.parameterizer import (
+    Parameterizer,
+    ParameterizerType,
+    ParameterizerAssignment
 )
 
 
@@ -43,6 +47,10 @@ def react_system(
     cutoff_distance: float = 4,
     platform: Optional[Union[str, Platform]] = None,
     platformProperties: Optional[Dict[str, str]] = None,
+    parameterizer_type: Optional[ParameterizerType] = None, 
+    parameterizer_assignment: ParameterizerAssignment = ParameterizerAssignment.INFERRED,
+    customize_force_field: bool = False,
+    custom_file_paths: Optional[List[str]] = None,
 ):
     simulation = input_set.get_simulation(
         platform=platform, platformProperties=platformProperties
@@ -80,7 +88,9 @@ def react_system(
 
         box_matrix = state.getPeriodicBoxVectors(asNumpy=True)._value
         box = np.concatenate([[0, 0, 0], np.diag(box_matrix)]) * 10
-        openmm_system = parameterize_w_interchange(openff_topology, mol_specs, box)
+        ffs = ([mol_spec["forcefield"] for mol_spec in mol_specs])
+        parameterizer = Parameterizer(openff_topology,mol_specs,box,ffs,parameterizer_type,parameterizer_assignment,customize_force_field,custom_file_paths)
+        openmm_system = parameterizer.parameterize_system()
         openmm_topology = openff_topology.to_openmm()
 
         # create and evolve simulation
