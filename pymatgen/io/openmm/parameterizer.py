@@ -62,10 +62,10 @@ class ParameterizerType(Enum):
         "charmm_polar": ["charmm_polar_2019.xml"],
         "charmm": ["charmm36.xml","charmm36/water.xml"]
     }
-    INTERCHANGE_PARAMETERIZER: dict[str,str] = {
+    INTERCHANGE_PARAMETERIZER: dict[str,list[str]] = {
         "sage": ["openff_unconstrained-2.0.0.offxml"]
     }
-    DEFAULT_PARAMETERIZER: dict[str,str] = OPENMM_PARAMETERIZER
+    DEFAULT_PARAMETERIZER: dict[str,list[str]] = OPENMM_PARAMETERIZER
 
 
 class Parameterizer:
@@ -296,24 +296,25 @@ class Parameterizer:
         for i in range(len(force_fields)):
             ff = force_fields[i]
 
-            assert(type(parameterizer_assignment) == ParameterizerAssignment, INVALID_ASSIGNMENT_TYPE)
+            assert type(parameterizer_assignment) == ParameterizerAssignment, INVALID_ASSIGNMENT_TYPE
             assignment = parameterizer_assignment
             
             if parameterizer_type:
-                assert(type(parameterizer_type) == ParameterizerType, INVALID_PARAMETERIZER_TYPE)
+                assert type(parameterizer_type) == ParameterizerType, INVALID_PARAMETERIZER_TYPE
 
             if assignment == ParameterizerAssignment.INFERRED:
                 self.infer_parameterizer_type(ff)
             elif assignment == ParameterizerAssignment.EXPLICIT:
                 assert parameterizer_type != None, PARAMETERIZER_TYPE_REQUIRED
-                self.parameterizer_type = parameterizer_type
+                if(parameterizer_type != None):
+                    self.parameterizer_type = parameterizer_type
             elif assignment == ParameterizerAssignment.DEFAULT:
                 self.parameterizer_type  = ParameterizerType.DEFAULT_PARAMETERIZER
             else:
                 self.parameterizer_type  = ParameterizerType.DEFAULT_PARAMETERIZER
 
             if i > 0:
-                assert(self.parameterizer_type == prev_parameterizer_type, MULTIPLE_PARAMETERIZERS_NOT_SUPPORTED)
+                assert self.parameterizer_type == prev_parameterizer_type, MULTIPLE_PARAMETERIZERS_NOT_SUPPORTED
     
     def assign_topology(self, topology:  tk.Topology):
         """
