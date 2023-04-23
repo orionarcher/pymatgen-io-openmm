@@ -266,6 +266,7 @@ class OpenMMSolutionGen(InputGenerator):
         parameterizer = Parameterizer(openff_topology, mol_specs,box,ffs, parameterizer_type, parameterizer_assignment, customize_force_field, custom_file_paths)
 
         system = parameterizer.parameterize_system()
+        # TODO: wrap system creation in try/except to catch periodic boundary errors
 
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
