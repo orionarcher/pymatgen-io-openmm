@@ -201,12 +201,9 @@ def get_coordinates(
                 }
             )
     with tempfile.TemporaryDirectory() as scratch_dir:
-        print("in tempfile")
         pw = PackmolBoxGen(seed=random_seed).get_input_set(
-            molecules: list(Molecule)=packmol_molecules, box=box
+            molecules=packmol_molecules, box=box
         )
-
-        print("here")
         pw.write_input(scratch_dir)
         pw.run(scratch_dir, timeout=packmol_timeout)
         coordinates = XYZ.from_file(
