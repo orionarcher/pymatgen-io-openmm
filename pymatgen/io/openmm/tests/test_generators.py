@@ -55,8 +55,9 @@ class TestOpenMMSolutionGen:
             "integrator.xml",
             "state.xml",
         }
-        assert set(input_set.settings["atom_resnames"]) == {"CCO", "H2O"}
-        assert len(input_set.settings["atom_types"]) == 780
+        settings = input_set.settings
+        assert set(settings["atom_resnames"]) == {"CCO", "H2O"}
+        assert len(settings["atom_types"]) == 780
         assert input_set.validate()
 
     def test_dump_load_input_set(self):
