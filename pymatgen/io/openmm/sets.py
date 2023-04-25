@@ -130,6 +130,7 @@ class OpenMMSet(InputSet):
         topology_input = self.inputs[self.topology_file]
         system_input = self.inputs[self.system_file]
         integrator_input = self.inputs[self.integrator_file]
+        state_input = self.inputs[self.state_file]
         if isinstance(platform, str):
             platform = openmm.openmm.Platform.getPlatformByName(platform)  # type: ignore
         simulation = Simulation(
@@ -139,10 +140,7 @@ class OpenMMSet(InputSet):
             platform=platform,
             platformProperties=platformProperties,
         )
-        if hasattr(self, "state_file") and self.state_file:
-            # TODO: confirm that this works correctly
-            state_input = self.inputs[self.state_file]
-            simulation.context.setState(state_input.get_state())  # type: ignore
+        simulation.context.setState(state_input.get_state())
         return simulation
 
 
