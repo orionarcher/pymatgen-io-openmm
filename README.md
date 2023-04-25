@@ -56,7 +56,7 @@ with python 3.10 or greater.
 
     ```bash
     conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
-    pip install git+ssh://git@github.com:materialsproject/pymatgen.git
+    pip install git+ssh://git@github.com/materialsproject/pymatgen.git
     ```
 
 5. Install the package in editable mode.
