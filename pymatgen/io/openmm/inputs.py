@@ -229,21 +229,21 @@ class StateInput(XmlInput):
         return XmlSerializer.deserialize(self.openmm_object)
 
 
-class MSONableInput(InputFile):
+class SettingsInput(InputFile):
     """
     A standardized definition for InputFiles based on MSON serialization.
 
     # TODO: there has to be a better way than this
     """
 
-    def __init__(self, msonable):
+    def __init__(self, settings):
         """
         Create an InputFile from a serializable OpenMM object.
 
         Args:
             msonable:
         """
-        self.msonable = msonable
+        self.settings = settings
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
@@ -256,7 +256,7 @@ class MSONableInput(InputFile):
         Returns:
             MSONInput object
         """
-        return MSONableInput(json.loads(contents, cls=MontyDecoder))
+        return SettingsInput(json.loads(contents, cls=MontyDecoder))
 
     def get_string(self) -> str:
         """
@@ -265,4 +265,4 @@ class MSONableInput(InputFile):
         Returns:
             string
         """
-        return json.dumps(self.msonable, cls=MontyEncoder)
+        return json.dumps(self.settings, cls=MontyEncoder)
