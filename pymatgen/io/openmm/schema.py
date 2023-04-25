@@ -36,6 +36,7 @@ class InputMoleculeSpec(BaseModel):
     force_field: Optional[constr(to_lower=True)] = None  # type: ignore
     geometries: Optional[List[Geometry]] = None
     partial_charges: Optional[List[float]] = None
+    partial_charge_label: Optional[str] = None
     max_conformers: PositiveInt = 1
 
     class Config:
@@ -90,6 +91,20 @@ class InputMoleculeSpec(BaseModel):
                     "partial_charges must be the same length as all geometries"
                 )
         return list(partial_charges)
+
+    @validator("partial_charge_label", pre=True)
+    def check_partial_charges_are_set(cls, partial_charge_label, values):
+        """label partial charge method if partial_charges is set, defaults to 'custom'"""
+        if partial_charge_label is not None:
+            if values.get("partial_charges") is None:
+                raise ValueError(
+                    "partial_charges must be set if partial_charge_label is set"
+                )
+            return partial_charge_label
+        else:
+            if values.get("partial_charges") is None:
+                return None
+            return "custom"
 
 
 class InputSetSettings(BaseModel):
