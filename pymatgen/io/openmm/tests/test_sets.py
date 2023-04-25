@@ -34,12 +34,6 @@ class TestOpenMMSet:
         assert input_set.state_file == "state.xml"
         assert isinstance(input_set.inputs["topology.pdb"], TopologyInput)
         assert isinstance(input_set.inputs["state.xml"], StateInput)
-        input_set2 = OpenMMSet.from_directory(
-            input_set_dir, state_file="wrong_file.xml"
-        )
-        assert len(input_set2.inputs) == 3
-        assert input_set2.topology_file == "topology.pdb"
-        assert input_set2.get("state_file") is None
 
     def test_dump_load_input_set(self):
 

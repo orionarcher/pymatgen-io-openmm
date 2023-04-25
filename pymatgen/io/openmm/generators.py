@@ -1,6 +1,7 @@
 """
 Concrete implementations of InputGenerators for the OpenMM IO.
 """
+import copy
 
 # base python
 from pathlib import Path
@@ -42,6 +43,7 @@ from pymatgen.io.openmm.utils import (
     parameterize_w_interchange,
     get_openff_topology,
     infer_openff_mol,
+    molgraph_from_openff_mol,
 )
 from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction, ReactiveSystem
 
@@ -127,16 +129,35 @@ class OpenMMSolutionGen(InputGenerator):
         box: List[float],
     ) -> Dict:
         openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
+
+        # replace openff mols with molgraphs in mol_specs
+        molgraph_specs = []
+        for spec in mol_specs:
+            spec = copy.deepcopy(spec)
+            openff_mol = spec.pop("openff_mol")
+            spec["molgraph"] = molgraph_from_openff_mol(openff_mol)
+            molgraph_specs.append(spec)
+
+        # calculate atom types for analysis convenience
         atom_types = smiles_to_atom_type_array(openff_counts)
         atom_resnames = smiles_to_resname_array(mol_specs)
-        # TODO: add mol_specs
+
+        # calculate force field and charge method
+        force_fields = list({spec["force_field"] for spec in mol_specs})
+        force_field = force_fields[0] if len(force_fields) == 1 else force_fields
+        charge_methods = list({spec["charge_method"] for spec in mol_specs})
+        charge_method = (
+            charge_methods[0] if len(charge_methods) == 1 else charge_methods
+        )
+
         settings_dict = {
+            "components": molgraph_specs,
             "box": box,
-            "force_field": self.default_force_field,
+            "force_field": force_field,
             "temperature": self.temperature,
             "step_size": self.step_size,
             "friction_coefficient": self.friction_coefficient,
-            "partial_charge_method": self.default_charge_method,
+            "partial_charge_method": charge_method,
             "atom_types": atom_types,
             "atom_resnames": atom_resnames,
         }
@@ -210,9 +231,11 @@ class OpenMMSolutionGen(InputGenerator):
                 )
 
             # assign partial charges
+            charge_method = self.default_charge_method
             if mol_dict.partial_charges is not None:
                 partial_charges = np.array(mol_dict.partial_charges)
                 openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
+                charge_method = mol_dict.partial_charge_label
             elif openff_mol.n_atoms == 1:
                 openff_mol.partial_charges = (
                     np.array([openff_mol.total_charge.magnitude]) * elementary_charge
@@ -227,10 +250,11 @@ class OpenMMSolutionGen(InputGenerator):
                 name=mol_dict.name,
                 count=mol_dict.count,
                 smile=mol_dict.smile,
-                forcefield=mol_dict.force_field or self.default_force_field,  # type: ignore
+                force_field=mol_dict.force_field or self.default_force_field,  # type: ignore
                 formal_charge=int(
                     np.sum(openff_mol.partial_charges.magnitude) / charge_scaling
                 ),
+                charge_method=charge_method,
                 openff_mol=openff_mol,
             )
             mol_specs.append(mol_spec)
@@ -250,7 +274,7 @@ class OpenMMSolutionGen(InputGenerator):
         openff_topology = get_openff_topology(openff_counts)
         openmm_topology = openff_topology.to_openmm()
 
-        ffs = np.array([mol_spec["forcefield"] for mol_spec in mol_specs])
+        ffs = np.array([mol_spec["force_field"] for mol_spec in mol_specs])
         if np.all(ffs == ffs[0]) and ffs[0] in ["sage", "opls"]:
             system = parameterize_w_interchange(
                 openff_topology, mol_specs, box, force_field=ffs[0]
@@ -284,7 +308,6 @@ class OpenMMSolutionGen(InputGenerator):
             integrator_file=self.integrator_file,
             state_file=self.state_file,
         )
-        # TODO: get_input_settings must be refactored
         input_set.settings = self._get_input_settings(mol_specs, box)
         return input_set
 
