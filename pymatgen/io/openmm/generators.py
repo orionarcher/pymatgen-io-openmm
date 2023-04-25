@@ -308,7 +308,6 @@ class OpenMMSolutionGen(InputGenerator):
             integrator_file=self.integrator_file,
             state_file=self.state_file,
         )
-        # TODO: get_input_settings must be refactored
         input_set.settings = self._get_input_settings(mol_specs, box)
         return input_set
 

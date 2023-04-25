@@ -60,6 +60,7 @@ class OpenMMSet(InputSet):
             state_file: name of the serialized State xml file. If there is no state_file,
                 then positions must be set for simulation.
 
+
         Returns:
             an OpenMMSet
         """
@@ -68,30 +69,20 @@ class OpenMMSet(InputSet):
         topology_input = TopologyInput.from_file(source_dir / topology_file)
         system_input = SystemInput.from_file(source_dir / system_file)
         integrator_input = IntegratorInput.from_file(source_dir / integrator_file)
+        state_input = StateInput.from_file(source_dir / state_file)
         inputs = {
             topology_file: topology_input,
             system_file: system_input,
             integrator_file: integrator_input,
+            state_file: state_input,
         }
-        # TODO: should state file be mandatory?
-        if Path(source_dir / state_file).is_file():
-            openmm_set = OpenMMSet(
-                inputs=inputs,  # type: ignore
-                topology_file=topology_file,
-                system_file=system_file,
-                integrator_file=integrator_file,
-                state_file=state_file,
-            )
-            openmm_set.inputs[state_file] = StateInput.from_file(
-                source_dir / state_file
-            )
-        else:
-            openmm_set = OpenMMSet(
-                inputs=inputs,  # type: ignore
-                topology_file=topology_file,
-                system_file=system_file,
-                integrator_file=integrator_file,
-            )
+        openmm_set = OpenMMSet(
+            inputs=inputs,  # type: ignore
+            topology_file=topology_file,
+            system_file=system_file,
+            integrator_file=integrator_file,
+            state_file=state_file,
+        )
         return openmm_set
 
     def validate(self) -> bool:
