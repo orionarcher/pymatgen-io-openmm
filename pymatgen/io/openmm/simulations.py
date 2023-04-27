@@ -31,7 +31,7 @@ from pymatgen.io.openmm.inputs import (
     SystemInput,
     IntegratorInput,
     StateInput,
-    MSONableInput,
+    ReactiveSystemInput,
 )
 
 
@@ -54,7 +54,7 @@ def react_system(
     simulation.minimizeEnergy()
     simulation.step(initial_steps)
 
-    reactive_system = input_set.inputs[input_set.reactive_system_file].msonable
+    reactive_system = input_set.inputs[input_set.reactive_system_file].reactive_system
 
     for cycle in range(n_cycles):
         # get positions
@@ -103,7 +103,7 @@ def react_system(
             input_set.system_file: SystemInput(openmm_system),
             input_set.integrator_file: IntegratorInput(simulation.integrator),
             input_set.state_file: StateInput(state),
-            input_set.reactive_system_file: MSONableInput(reactive_system),
+            input_set.reactive_system_file: ReactiveSystemInput(reactive_system),
         },
         topology_file=input_set.topology_file,
         system_file=input_set.system_file,

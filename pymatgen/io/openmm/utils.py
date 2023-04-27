@@ -21,7 +21,7 @@ from pymatgen.io.packmol import PackmolBoxGen
 from pint import Quantity
 
 
-def smiles_to_atom_type_array(openff_counts: Dict[tk.Molecule, int]) -> np.ndarray:
+def smiles_to_atom_types(openff_counts: Dict[tk.Molecule, int]) -> List[int]:
     """
     Cal to an array of atom types.
 
@@ -38,12 +38,12 @@ def smiles_to_atom_type_array(openff_counts: Dict[tk.Molecule, int]) -> np.ndarr
         types_array = np.hstack([types for _ in range(count)])
         all_types_list.append(types_array)
         offset += mol.n_atoms
-    return np.concatenate(all_types_list)
+    return list(np.concatenate(all_types_list))
 
 
-def smiles_to_resname_array(
+def smiles_to_resnames(
     mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]]
-) -> np.ndarray:
+) -> List[str]:
     """
     Convert a list of SMILEs to an array of residue names.
 
@@ -62,7 +62,7 @@ def smiles_to_resname_array(
         count = mol_spec["count"]
         smile_size = mol_spec["openff_mol"].n_atoms  # type: ignore
         resnames.extend([name] * count * smile_size)  # type: ignore
-    return np.array(resnames)
+    return resnames
 
 
 def xyz_to_molecule(
