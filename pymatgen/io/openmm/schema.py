@@ -1,3 +1,5 @@
+from monty.json import MSONable
+from dataclasses import dataclass
 from pydantic import BaseModel, PositiveInt, confloat, constr, validator
 from typing import List, Optional, Union
 from pathlib import Path
@@ -5,6 +7,9 @@ import pymatgen
 import openff.toolkit as tk
 
 from pymatgen.io.openmm.utils import xyz_to_molecule
+from pymatgen.analysis.graphs import MoleculeGraph
+
+import numpy as np
 
 
 class Geometry(BaseModel):
@@ -111,3 +116,23 @@ class InputSetSettings(BaseModel):
     # TODO: need to fill this out and integrate with SolutionGen and InputSet
     # one option would be to have base settings and then inherit from multiple classes
     settings: dict
+
+
+@dataclass
+class MoleculeSpec(MSONable):
+    name: str
+    count: int
+    smile: str
+    force_field: str
+    formal_charge: int
+    charge_method: str
+    molgraph: MoleculeGraph
+
+
+@dataclass
+class SetContents(MSONable):
+    molecule_specs: List[MoleculeSpec]
+    force_fields: List[str]
+    partial_charge_methods: List[str]
+    atom_types: np.ndarray[int]
+    atom_resnames: np.ndarray[int]
