@@ -5,11 +5,13 @@ from typing import Dict, Iterable, List, Tuple, Union
 import pathlib
 from pathlib import Path
 import tempfile
+import copy
 
 import numpy as np
 import openff
 import openff.toolkit as tk
 from openmm.unit import elementary_charge, angstrom
+from pymatgen.io.openmm.schema import SetContents, MoleculeSpec
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.core import Element, Molecule
 from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
@@ -445,3 +447,34 @@ def infer_openff_mol(
     molgraph = metal_edge_extender(molgraph)
     inferred_mol = molgraph_to_openff_mol(molgraph)
     return inferred_mol
+
+
+def get_set_contents(
+    mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]],
+) -> SetContents:
+    openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
+
+    # replace openff mols with molgraphs in mol_specs
+    molgraph_specs = []
+    for spec in mol_specs:
+        spec = copy.deepcopy(spec)
+        openff_mol = spec.pop("openff_mol")
+        spec["molgraph"] = molgraph_from_openff_mol(openff_mol)
+        mol_spec = MoleculeSpec(**spec)
+        molgraph_specs.append(mol_spec)
+
+    # calculate atom types for analysis convenience
+    atom_types = smiles_to_atom_types(openff_counts)  # type: ignore
+    atom_resnames = smiles_to_resnames(mol_specs)
+
+    # calculate force field and charge method
+    force_fields = list({spec["force_field"] for spec in mol_specs})
+    charge_methods = list({spec["charge_method"] for spec in mol_specs})
+
+    return SetContents(
+        molecule_specs=molgraph_specs,
+        force_fields=force_fields,
+        partial_charge_methods=charge_methods,
+        atom_types=atom_types,
+        atom_resnames=atom_resnames,
+    )

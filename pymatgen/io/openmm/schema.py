@@ -6,8 +6,27 @@ from pathlib import Path
 import pymatgen
 import openff.toolkit as tk
 
-from pymatgen.io.openmm.utils import xyz_to_molecule
 from pymatgen.analysis.graphs import MoleculeGraph
+
+
+def xyz_to_molecule(
+    mol_geometry: Union[pymatgen.core.Molecule, str, Path]
+) -> pymatgen.core.Molecule:
+    """
+    Convert a XYZ file to a Pymatgen.Molecule.
+
+    Accepts a str or pathlib.Path file that can be parsed for xyz coordinates from OpenBabel and
+    returns a Pymatgen.Molecule. If a Pymatgen.Molecule is passed in, it is returned unchanged.
+
+    Args:
+        mol_geometry:
+
+    Returns:
+
+    """
+    if isinstance(mol_geometry, (str, Path)):
+        mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
+    return mol_geometry
 
 
 class Geometry(BaseModel):
@@ -108,12 +127,6 @@ class InputMoleculeSpec(BaseModel):
             if values.get("partial_charges") is None:
                 return None
             return "custom"
-
-
-class InputSetSettings(BaseModel):
-    # TODO: need to fill this out and integrate with SolutionGen and InputSet
-    # one option would be to have base settings and then inherit from multiple classes
-    settings: dict
 
 
 @dataclass

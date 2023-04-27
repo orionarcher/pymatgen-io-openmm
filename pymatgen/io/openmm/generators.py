@@ -1,7 +1,6 @@
 """
 Concrete implementations of InputGenerators for the OpenMM IO.
 """
-import copy
 
 # base python
 from pathlib import Path
@@ -34,17 +33,15 @@ from pymatgen.io.openmm.inputs import (
     SetContentsInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
-from pymatgen.io.openmm.schema import InputMoleculeSpec, MoleculeSpec, SetContents
+from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
-    smiles_to_atom_types,
-    smiles_to_resnames,
     get_atom_map,
     parameterize_w_interchange,
     get_openff_topology,
     infer_openff_mol,
-    molgraph_from_openff_mol,
+    get_set_contents,
 )
 from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction, ReactiveSystem
 
@@ -55,7 +52,6 @@ __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
 
-# TODO: change to Dataclass
 # noinspection PyMethodOverriding
 class OpenMMSolutionGen(InputGenerator):
     """
@@ -125,37 +121,6 @@ class OpenMMSolutionGen(InputGenerator):
         self.integrator_file = integrator_file
         self.state_file = state_file
         self.contents_file = contents_file
-
-    def _get_input_settings(
-        self,
-        mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]],
-    ) -> SetContents:
-        openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
-
-        # replace openff mols with molgraphs in mol_specs
-        molgraph_specs = []
-        for spec in mol_specs:
-            spec = copy.deepcopy(spec)
-            openff_mol = spec.pop("openff_mol")
-            spec["molgraph"] = molgraph_from_openff_mol(openff_mol)
-            mol_spec = MoleculeSpec(**spec)
-            molgraph_specs.append(mol_spec)
-
-        # calculate atom types for analysis convenience
-        atom_types = smiles_to_atom_types(openff_counts)
-        atom_resnames = smiles_to_resnames(mol_specs)
-
-        # calculate force field and charge method
-        force_fields = list({spec["force_field"] for spec in mol_specs})
-        charge_methods = list({spec["charge_method"] for spec in mol_specs})
-
-        return SetContents(
-            molecule_specs=molgraph_specs,
-            force_fields=force_fields,
-            partial_charge_methods=charge_methods,
-            atom_types=atom_types,
-            atom_resnames=atom_resnames,
-        )
 
     def get_input_set(
         self,
@@ -288,7 +253,7 @@ class OpenMMSolutionGen(InputGenerator):
         # Angstrom from packmol. Convert.
         context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
-        contents = self._get_input_settings(mol_specs)
+        contents = get_set_contents(mol_specs)
         input_set = OpenMMSet(
             inputs={
                 self.topology_file: TopologyInput(openmm_topology, coordinates),
