@@ -507,6 +507,7 @@ def add_conformers(
 
 
     """
+    # TODO: test this
     atom_map = None
     if geometries:
         for geometry in geometries:
@@ -553,6 +554,7 @@ def assign_partial_charges(
         The OpenFF Molecule with assigned partial charges.
 
     """
+    # TODO: test this
     # assign partial charges
     if partial_charges is not None:
         partial_charges = np.array(partial_charges)
@@ -588,6 +590,7 @@ def process_mol_specs(
     List[dict]
         A list of dictionaries containing processed molecular specifications.
     """
+    # TODO: test this
     mol_specs = []
     for i, mol_dict in enumerate(input_mol_specs):
         openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
