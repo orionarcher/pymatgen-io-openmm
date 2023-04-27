@@ -9,8 +9,6 @@ import openff.toolkit as tk
 from pymatgen.io.openmm.utils import xyz_to_molecule
 from pymatgen.analysis.graphs import MoleculeGraph
 
-import numpy as np
-
 
 class Geometry(BaseModel):
     """
@@ -120,6 +118,10 @@ class InputSetSettings(BaseModel):
 
 @dataclass
 class MoleculeSpec(MSONable):
+    """
+    A molecule schema to be output by OpenMMGenerators.
+    """
+
     name: str
     count: int
     smile: str
@@ -131,8 +133,12 @@ class MoleculeSpec(MSONable):
 
 @dataclass
 class SetContents(MSONable):
+    """
+    The molecular contents of an OpenMMSet
+    """
+
     molecule_specs: List[MoleculeSpec]
     force_fields: List[str]
     partial_charge_methods: List[str]
-    atom_types: np.ndarray[int]
-    atom_resnames: np.ndarray[int]
+    atom_types: List[int]
+    atom_resnames: List[str]

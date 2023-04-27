@@ -266,12 +266,12 @@ class MSONableInput(InputFile):
         Returns:
             string
         """
-        return json.dumps(self.getattr(self._contents), cls=MontyEncoder)
+        return json.dumps(getattr(self, self._contents), cls=MontyEncoder)
 
 
-class AlchemySystemInput(MSONableInput):
+class ReactiveSystemInput(MSONableInput):
     """
-    Input handler for OpenMM alchemy systems. Stores and parses MSON files.
+    Input handler for reactive system.
     """
 
     def __init__(self, reactive_system):
@@ -279,11 +279,11 @@ class AlchemySystemInput(MSONableInput):
         self._contents = "reactive_system"
 
 
-class SetContents(MSONableInput):
+class SetContentsInput(MSONableInput):
     """
-    Input handler for OpenMM alchemy systems. Stores and parses MSON files.
+    Input handler for set contents.
     """
 
     def __init__(self, contents):
-        self.reactive_system = contents
-        self._contents = "reactive_system"
+        self.contents = contents
+        self._contents = "contents"
