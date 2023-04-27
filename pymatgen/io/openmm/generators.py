@@ -11,18 +11,17 @@ from typing import Dict, List, Optional, Union
 import numpy as np
 
 # openff
-import openff
 import openff.toolkit as tk
+import openmm
 
 # openmm
-from openmm.unit import kelvin, picoseconds, angstrom, elementary_charge
+from openmm.unit import kelvin, picoseconds
 from openmm.openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
 
 # pymatgen
-import pymatgen.core
 from pymatgen.io.core import InputGenerator
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
@@ -37,11 +36,10 @@ from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
-    get_atom_map,
     parameterize_w_interchange,
     get_openff_topology,
-    infer_openff_mol,
     get_set_contents,
+    process_mol_specs,
 )
 from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction, ReactiveSystem
 
@@ -161,60 +159,9 @@ class OpenMMSolutionGen(InputGenerator):
         if len(smiles) != len(set(smiles)):
             raise ValueError("Smiles in input mol dicts must be unique.")
 
-        mol_specs = []
-        for i, mol_dict in enumerate(input_mol_specs):
-            # TODO: put this in a function
-            openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
-
-            # add conformer
-            if geometries := mol_dict.geometries:
-                for geometry in geometries:
-                    inferred_mol = infer_openff_mol(geometry.xyz)
-                    is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-                    if not is_isomorphic:
-                        raise ValueError(
-                            f"An isomorphism cannot be found between smile {mol_dict.smile} "
-                            f"and the provided geometry {geometry.xyz}."
-                        )
-                    new_mol = pymatgen.core.Molecule.from_sites(
-                        [geometry.xyz.sites[i] for i in atom_map.values()]
-                    )
-                    openff_mol.add_conformer(new_mol.cart_coords * angstrom)
-            else:
-                atom_map = {i: i for i in range(openff_mol.n_atoms)}
-                # TODO document this
-                openff_mol.generate_conformers(
-                    n_conformers=mol_dict.max_conformers or 1
-                )
-
-            # assign partial charges
-            charge_method = self.default_charge_method
-            if mol_dict.partial_charges is not None:
-                partial_charges = np.array(mol_dict.partial_charges)
-                openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
-                charge_method = mol_dict.partial_charge_label
-            elif openff_mol.n_atoms == 1:
-                openff_mol.partial_charges = (
-                    np.array([openff_mol.total_charge.magnitude]) * elementary_charge
-                )
-            else:
-                openff_mol.assign_partial_charges(self.default_charge_method)
-            charge_scaling = mol_dict.charge_scaling or 1
-            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
-
-            # create mol_spec
-            mol_spec = dict(
-                name=mol_dict.name,
-                count=mol_dict.count,
-                smile=mol_dict.smile,
-                force_field=mol_dict.force_field or self.default_force_field,  # type: ignore
-                formal_charge=int(
-                    np.sum(openff_mol.partial_charges.magnitude) / charge_scaling
-                ),
-                charge_method=charge_method,
-                openff_mol=openff_mol,
-            )
-            mol_specs.append(mol_spec)
+        mol_specs = process_mol_specs(
+            input_mol_specs, self.default_charge_method, self.default_force_field
+        )
 
         openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
 
@@ -224,7 +171,6 @@ class OpenMMSolutionGen(InputGenerator):
         if box is None:
             box = get_box(openff_counts, density)  # type: ignore
 
-        # TODO: create molgraphs later
         coordinates = get_coordinates(
             openff_counts, box, self.packmol_random_seed, self.packmol_timeout
         )
@@ -242,13 +188,19 @@ class OpenMMSolutionGen(InputGenerator):
                 "All molecules must use the same force field and it must be 'sage' or 'opls'."
             )
         # figure out FF
-        # TODO: wrap system creation in try/except to catch periodic boundary errors
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
             self.step_size * picoseconds,
         )
-        context = Context(system, integrator)
+        try:
+            context = Context(system, integrator)
+        except openmm.OpenMMException:  # type: ignore
+            raise ValueError(
+                "Your system is too small. OpenMM cannot create a system where the nonbonded "
+                "cutoff distance is greater than half the periodic box size. Try adding more "
+                "molecules to the system or decreasing the system density."
+            )
         # context.setPositions needs coordinates in nm, but we have them in
         # Angstrom from packmol. Convert.
         context.setPositions(np.divide(coordinates, 10))

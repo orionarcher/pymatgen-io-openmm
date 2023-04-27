@@ -11,7 +11,12 @@ import numpy as np
 import openff
 import openff.toolkit as tk
 from openmm.unit import elementary_charge, angstrom
-from pymatgen.io.openmm.schema import SetContents, MoleculeSpec
+from pymatgen.io.openmm.schema import (
+    SetContents,
+    MoleculeSpec,
+    InputMoleculeSpec,
+    Geometry,
+)
 from pymatgen.analysis.graphs import MoleculeGraph
 from pymatgen.core import Element, Molecule
 from pymatgen.analysis.local_env import OpenBabelNN, metal_edge_extender
@@ -478,3 +483,139 @@ def get_set_contents(
         atom_types=atom_types,
         atom_resnames=atom_resnames,
     )
+
+
+def add_conformers(
+    openff_mol: tk.Molecule, geometries: List[Geometry], max_conformers: int
+):
+    """
+    Adds conformers to an OpenFF Molecule based on the provided geometries or generates conformers up to the specified maximum number.
+
+    Parameters
+    ----------
+    openff_mol : openff.toolkit.topology.Molecule
+        The OpenFF Molecule to add conformers to.
+    geometries : List[Geometry]:
+        A list of Geometry objects containing the coordinates of the conformers to be added.
+    max_conformers : int
+        The maximum number of conformers to be generated if no geometries are provided.
+
+    Returns
+    -------
+    openff.toolkit.topology.Molecule, Dict[int, int]
+        A tuple containing the OpenFF Molecule with added conformers and a dictionary representing the atom mapping between the input and output molecules.
+
+
+    """
+    atom_map = None
+    if geometries:
+        for geometry in geometries:
+            inferred_mol = infer_openff_mol(geometry.xyz)
+            is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
+            if not is_isomorphic:
+                raise ValueError(
+                    f"An isomorphism cannot be found between smile {openff_mol.to_smiles()} "
+                    f"and the provided geometry {geometry.xyz}."
+                )
+            new_mol = pymatgen.core.Molecule.from_sites(
+                [geometry.xyz.sites[i] for i in atom_map.values()]
+            )
+            openff_mol.add_conformer(new_mol.cart_coords * angstrom)
+    else:
+        atom_map = {i: i for i in range(openff_mol.n_atoms)}
+        openff_mol.generate_conformers(n_conformers=max_conformers or 1)
+    return openff_mol, atom_map
+
+
+def assign_partial_charges(
+    openff_mol: tk.Molecule,
+    atom_map: Dict[int, int],
+    charge_method: str,
+    partial_charges: Union[None, List[float]],
+):
+    """
+    Assigns partial charges to an OpenFF Molecule using the provided partial charges or a specified charge method.
+
+    Parameters
+    ----------
+    openff_mol : openff.toolkit.topology.Molecule
+        The OpenFF Molecule to assign partial charges to.
+    partial_charges : List[float]
+        A list of partial charges to be assigned to the molecule, or None to use the charge method.
+    charge_method : str
+        The charge method to be used if partial charges are not provided.
+    atom_map : Dict[int, int]
+        A dictionary representing the atom mapping between the input and output molecules.
+
+    Returns
+    -------
+    openff.toolkit.topology.Molecule
+        The OpenFF Molecule with assigned partial charges.
+
+    """
+    # assign partial charges
+    if partial_charges is not None:
+        partial_charges = np.array(partial_charges)
+        openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
+    elif openff_mol.n_atoms == 1:
+        openff_mol.partial_charges = (
+            np.array([openff_mol.total_charge.magnitude]) * elementary_charge
+        )
+    else:
+        openff_mol.assign_partial_charges(charge_method)
+    return openff_mol
+
+
+def process_mol_specs(
+    input_mol_specs: List[InputMoleculeSpec],
+    default_charge_method: str,
+    default_force_field: str,
+):
+    """
+    Processes a list of input molecular specifications, generating conformers, assigning partial charges, and creating output molecular specifications.
+
+    Parameters
+    ----------
+    input_mol_specs : List[Union[Dict, InputMoleculeSpec]]
+        A list of dictionaries containing input molecular specifications.
+    default_charge_method : str
+        The default charge method to be used if not specified in the input molecular specifications.
+    default_force_field : str
+        The default force field to be used if not specified in the input molecular specifications.
+
+    Returns
+    -------
+    List[dict]
+        A list of dictionaries containing processed molecular specifications.
+    """
+    mol_specs = []
+    for i, mol_dict in enumerate(input_mol_specs):
+        openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
+
+        # add conformers
+        openff_mol, atom_map = add_conformers(
+            openff_mol, mol_dict.geometries, mol_dict.max_conformers
+        )
+
+        # assign partial charges
+        charge_method = mol_dict.charge_method or default_charge_method
+        openff_mol = assign_partial_charges(
+            openff_mol, atom_map, charge_method, mol_dict.partial_charges
+        )
+        charge_scaling = mol_dict.charge_scaling or 1
+        openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
+
+        # create mol_spec
+        mol_spec = dict(
+            name=mol_dict.name,
+            count=mol_dict.count,
+            smile=mol_dict.smile,
+            force_field=mol_dict.force_field or default_force_field,  # type: ignore
+            formal_charge=int(
+                np.sum(openff_mol.partial_charges.magnitude) / charge_scaling
+            ),
+            charge_method=charge_method,
+            openff_mol=openff_mol,
+        )
+        mol_specs.append(mol_spec)
+    return mol_specs
