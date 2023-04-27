@@ -1,10 +1,32 @@
+from monty.json import MSONable
+from dataclasses import dataclass
 from pydantic import BaseModel, PositiveInt, confloat, constr, validator
 from typing import List, Optional, Union
 from pathlib import Path
 import pymatgen
 import openff.toolkit as tk
 
-from pymatgen.io.openmm.utils import xyz_to_molecule
+from pymatgen.analysis.graphs import MoleculeGraph
+
+
+def xyz_to_molecule(
+    mol_geometry: Union[pymatgen.core.Molecule, str, Path]
+) -> pymatgen.core.Molecule:
+    """
+    Convert a XYZ file to a Pymatgen.Molecule.
+
+    Accepts a str or pathlib.Path file that can be parsed for xyz coordinates from OpenBabel and
+    returns a Pymatgen.Molecule. If a Pymatgen.Molecule is passed in, it is returned unchanged.
+
+    Args:
+        mol_geometry:
+
+    Returns:
+
+    """
+    if isinstance(mol_geometry, (str, Path)):
+        mol_geometry = pymatgen.core.Molecule.from_file(str(mol_geometry))
+    return mol_geometry
 
 
 class Geometry(BaseModel):
@@ -36,7 +58,7 @@ class InputMoleculeSpec(BaseModel):
     force_field: Optional[constr(to_lower=True)] = None  # type: ignore
     geometries: Optional[List[Geometry]] = None
     partial_charges: Optional[List[float]] = None
-    partial_charge_label: Optional[str] = None
+    charge_method: Optional[str] = None
     max_conformers: PositiveInt = 1
 
     class Config:
@@ -92,22 +114,44 @@ class InputMoleculeSpec(BaseModel):
                 )
         return list(partial_charges)
 
-    @validator("partial_charge_label", pre=True)
-    def check_partial_charges_are_set(cls, partial_charge_label, values):
+    @validator("charge_method", pre=True)
+    def set_custom_charge_method(cls, charge_method, values):
         """label partial charge method if partial_charges is set, defaults to 'custom'"""
-        if partial_charge_label is not None:
-            if values.get("partial_charges") is None:
-                raise ValueError(
-                    "partial_charges must be set if partial_charge_label is set"
-                )
-            return partial_charge_label
-        else:
-            if values.get("partial_charges") is None:
-                return None
+        # if partial_charge_label is not None:
+        #     if values.get("partial_charges") is None:
+        #         raise ValueError(
+        #             "partial_charges must be set if partial_charge_label is set"
+        #         )
+        #     return partial_charge_label
+        # else:
+        if values.get("partial_charges") is not None and charge_method is None:
             return "custom"
+        return charge_method
 
 
-class InputSetSettings(BaseModel):
-    # TODO: need to fill this out and integrate with SolutionGen and InputSet
-    # one option would be to have base settings and then inherit from multiple classes
-    settings: dict
+@dataclass
+class MoleculeSpec(MSONable):
+    """
+    A molecule schema to be output by OpenMMGenerators.
+    """
+
+    name: str
+    count: int
+    smile: str
+    force_field: str
+    formal_charge: int
+    charge_method: str
+    molgraph: MoleculeGraph
+
+
+@dataclass
+class SetContents(MSONable):
+    """
+    The molecular contents of an OpenMMSet
+    """
+
+    molecule_specs: List[MoleculeSpec]
+    force_fields: List[str]
+    partial_charge_methods: List[str]
+    atom_types: List[int]
+    atom_resnames: List[str]

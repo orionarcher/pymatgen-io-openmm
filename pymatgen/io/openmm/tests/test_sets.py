@@ -29,7 +29,7 @@ __date__ = "Nov 2021"
 class TestOpenMMSet:
     def test_from_directory(self):
         input_set = OpenMMSet.from_directory(input_set_dir)
-        assert len(input_set.inputs) == 4
+        assert len(input_set.inputs) == 5
         assert input_set.topology_file == "topology.pdb"
         assert input_set.state_file == "state.xml"
         assert isinstance(input_set.inputs["topology.pdb"], TopologyInput)
@@ -42,7 +42,17 @@ class TestOpenMMSet:
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
 
-        assert input_set1.as_dict() == input_set2.as_dict()
+        for file in [
+            "topology.pdb",
+            "state.xml",
+            "integrator.xml",
+            "system.xml",
+            "contents.json",
+        ]:
+            assert (
+                input_set1.inputs[file].get_string()
+                == input_set2.inputs[file].get_string()
+            )
 
         assert input_set1.keys() == input_set2.keys()
 
@@ -79,7 +89,7 @@ class TestOpenMMSet:
         with tempfile.TemporaryDirectory() as scratch_dir:
             input_set.write_input(scratch_dir)
             input_set2 = OpenMMSet.from_directory(scratch_dir)
-        assert len(input_set2.inputs) == 4
+        assert len(input_set2.inputs) == 5
         assert input_set2.topology_file == "topology.pdb"
         assert input_set2.state_file == "state.xml"
         assert isinstance(input_set2.inputs["topology.pdb"], TopologyInput)
@@ -89,12 +99,23 @@ class TestOpenMMSet:
 class TestOpenMMAlchemySet:
     def test_dump_load_input_set(self):
 
-        input_set1 = OpenMMSet.from_directory(alchemy_input_set_path)
+        input_set1 = OpenMMAlchemySet.from_directory(alchemy_input_set_path)
         with tempfile.TemporaryDirectory() as tmpdir:
             monty.serialization.dumpfn(input_set1, tmpdir + "/input_set.json")
             input_set2 = monty.serialization.loadfn(tmpdir + "/input_set.json")
 
-        assert input_set1.as_dict() == input_set2.as_dict()
+        for file in [
+            "topology.pdb",
+            "state.xml",
+            "integrator.xml",
+            "system.xml",
+            "contents.json",
+            "reactive_system.json",
+        ]:
+            assert (
+                input_set1.inputs[file].get_string()
+                == input_set2.inputs[file].get_string()
+            )
 
         assert input_set1.keys() == input_set2.keys()
 
@@ -118,10 +139,11 @@ class TestOpenMMAlchemySet:
             "system.xml",
             "integrator.xml",
             "state.xml",
+            "contents.json",
             "reactive_system.json",
         }
         assert input_set.validate()
-        reactive_system = input_set.inputs["reactive_system.json"].msonable
+        reactive_system = input_set.inputs["reactive_system.json"].reactive_system
         reactive_atoms = reactive_system.reactive_atom_sets[0]
         assert len(reactive_atoms.trigger_atoms_left) == 40
         assert len(reactive_atoms.trigger_atoms_right) == 40

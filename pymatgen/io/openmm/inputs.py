@@ -244,6 +244,7 @@ class MSONableInput(InputFile):
             msonable:
         """
         self.msonable = msonable
+        self._contents = "msonable"
 
     @classmethod
     def from_string(cls, contents: str) -> InputFile:
@@ -256,7 +257,7 @@ class MSONableInput(InputFile):
         Returns:
             MSONInput object
         """
-        return MSONableInput(json.loads(contents, cls=MontyDecoder))
+        return cls(json.loads(contents, cls=MontyDecoder))
 
     def get_string(self) -> str:
         """
@@ -265,4 +266,24 @@ class MSONableInput(InputFile):
         Returns:
             string
         """
-        return json.dumps(self.msonable, cls=MontyEncoder)
+        return json.dumps(getattr(self, self._contents), cls=MontyEncoder)
+
+
+class ReactiveSystemInput(MSONableInput):
+    """
+    Input handler for reactive system.
+    """
+
+    def __init__(self, reactive_system):
+        self.reactive_system = reactive_system
+        self._contents = "reactive_system"
+
+
+class SetContentsInput(MSONableInput):
+    """
+    Input handler for set contents.
+    """
+
+    def __init__(self, contents):
+        self.contents = contents
+        self._contents = "contents"

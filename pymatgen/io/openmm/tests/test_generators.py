@@ -54,10 +54,11 @@ class TestOpenMMSolutionGen:
             "system.xml",
             "integrator.xml",
             "state.xml",
+            "contents.json",
         }
-        settings = input_set.settings
-        assert set(settings["atom_resnames"]) == {"CCO", "H2O"}
-        assert len(settings["atom_types"]) == 780
+        contents = input_set.inputs["contents.json"].contents
+        assert set(contents.atom_resnames) == {"CCO", "H2O"}
+        assert len(contents.atom_types) == 780
         assert input_set.validate()
 
     def test_dump_load_input_set(self):
@@ -88,6 +89,7 @@ class TestOpenMMSolutionGen:
             "system.xml",
             "integrator.xml",
             "state.xml",
+            "contents.json",
         }
         assert input_set.validate()
 
@@ -142,6 +144,7 @@ class TestOpenMMSolutionGen:
             "system.xml",
             "integrator.xml",
             "state.xml",
+            "contents.json",
         }
         assert input_set.validate()
 
@@ -151,8 +154,8 @@ class TestOpenMMAlchemyGen:
         generator = OpenMMAlchemyGen(default_force_field="sage")
         input_mol_dicts = [
             {"smile": "O", "count": 20},
-            {"smile": "CCO", "count": 10},
-            {"smile": "CC(=O)O", "count": 10},
+            {"smile": "CCO", "count": 40},
+            {"smile": "CC(=O)O", "count": 40},
         ]
         # density is low to prevent a non bonded cutoff error
         input_set = generator.get_input_set(

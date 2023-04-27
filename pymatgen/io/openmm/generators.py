@@ -1,7 +1,6 @@
 """
 Concrete implementations of InputGenerators for the OpenMM IO.
 """
-import copy
 
 # base python
 from pathlib import Path
@@ -12,38 +11,35 @@ from typing import Dict, List, Optional, Union
 import numpy as np
 
 # openff
-import openff
 import openff.toolkit as tk
+import openmm
 
 # openmm
-from openmm.unit import kelvin, picoseconds, angstrom, elementary_charge
+from openmm.unit import kelvin, picoseconds
 from openmm.openmm import (
     Context,
     LangevinMiddleIntegrator,
 )
 
 # pymatgen
-import pymatgen.core
 from pymatgen.io.core import InputGenerator
 from pymatgen.io.openmm.inputs import (
     TopologyInput,
     SystemInput,
     IntegratorInput,
     StateInput,
-    MSONableInput,
+    ReactiveSystemInput,
+    SetContentsInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
 from pymatgen.io.openmm.schema import InputMoleculeSpec
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
-    smiles_to_atom_type_array,
-    smiles_to_resname_array,
-    get_atom_map,
     parameterize_w_interchange,
     get_openff_topology,
-    infer_openff_mol,
-    molgraph_from_openff_mol,
+    get_set_contents,
+    process_mol_specs,
 )
 from pymatgen.io.openmm.alchemy_utils import AlchemicalReaction, ReactiveSystem
 
@@ -54,7 +50,6 @@ __email__ = "orion@lbl.gov"
 __date__ = "Nov 2021"
 
 
-# TODO: change to Dataclass
 # noinspection PyMethodOverriding
 class OpenMMSolutionGen(InputGenerator):
     """
@@ -82,6 +77,7 @@ class OpenMMSolutionGen(InputGenerator):
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
         state_file: Union[str, Path] = "state.xml",
+        contents_file: Union[str, Path] = "contents.json",
     ):
         """
         Instantiates an OpenMMSolutionGen.
@@ -122,48 +118,7 @@ class OpenMMSolutionGen(InputGenerator):
         self.system_file = system_file
         self.integrator_file = integrator_file
         self.state_file = state_file
-
-    def _get_input_settings(
-        self,
-        mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]],
-        box: List[float],
-    ) -> Dict:
-        openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
-
-        # replace openff mols with molgraphs in mol_specs
-        molgraph_specs = []
-        for spec in mol_specs:
-            spec = copy.deepcopy(spec)
-            openff_mol = spec.pop("openff_mol")
-            spec["molgraph"] = molgraph_from_openff_mol(openff_mol)
-            molgraph_specs.append(spec)
-
-        # calculate atom types for analysis convenience
-        atom_types = smiles_to_atom_type_array(openff_counts)
-        atom_resnames = smiles_to_resname_array(mol_specs)
-
-        # calculate force field and charge method
-        force_fields = list({spec["force_field"] for spec in mol_specs})
-        force_field = force_fields[0] if len(force_fields) == 1 else force_fields
-        charge_methods = list({spec["charge_method"] for spec in mol_specs})
-        charge_method = (
-            charge_methods[0] if len(charge_methods) == 1 else charge_methods
-        )
-
-        settings_dict = {
-            "components": molgraph_specs,
-            "box": box,
-            "force_field": force_field,
-            "temperature": self.temperature,
-            "step_size": self.step_size,
-            "friction_coefficient": self.friction_coefficient,
-            "partial_charge_method": charge_method,
-            "atom_types": atom_types,
-            "atom_resnames": atom_resnames,
-        }
-        # TODO: will need to serialize this to JSON and include in settings
-        # ideally the settings should be a pydantic BaseModel
-        return settings_dict
+        self.contents_file = contents_file
 
     def get_input_set(
         self,
@@ -204,60 +159,9 @@ class OpenMMSolutionGen(InputGenerator):
         if len(smiles) != len(set(smiles)):
             raise ValueError("Smiles in input mol dicts must be unique.")
 
-        mol_specs = []
-        for i, mol_dict in enumerate(input_mol_specs):
-            # TODO: put this in a function
-            openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
-
-            # add conformer
-            if geometries := mol_dict.geometries:
-                for geometry in geometries:
-                    inferred_mol = infer_openff_mol(geometry.xyz)
-                    is_isomorphic, atom_map = get_atom_map(inferred_mol, openff_mol)
-                    if not is_isomorphic:
-                        raise ValueError(
-                            f"An isomorphism cannot be found between smile {mol_dict.smile} "
-                            f"and the provided geometry {geometry.xyz}."
-                        )
-                    new_mol = pymatgen.core.Molecule.from_sites(
-                        [geometry.xyz.sites[i] for i in atom_map.values()]
-                    )
-                    openff_mol.add_conformer(new_mol.cart_coords * angstrom)
-            else:
-                atom_map = {i: i for i in range(openff_mol.n_atoms)}
-                # TODO document this
-                openff_mol.generate_conformers(
-                    n_conformers=mol_dict.max_conformers or 1
-                )
-
-            # assign partial charges
-            charge_method = self.default_charge_method
-            if mol_dict.partial_charges is not None:
-                partial_charges = np.array(mol_dict.partial_charges)
-                openff_mol.partial_charges = partial_charges[list(atom_map.values())] * elementary_charge  # type: ignore
-                charge_method = mol_dict.partial_charge_label
-            elif openff_mol.n_atoms == 1:
-                openff_mol.partial_charges = (
-                    np.array([openff_mol.total_charge.magnitude]) * elementary_charge
-                )
-            else:
-                openff_mol.assign_partial_charges(self.default_charge_method)
-            charge_scaling = mol_dict.charge_scaling or 1
-            openff_mol.partial_charges = openff_mol.partial_charges * charge_scaling
-
-            # create mol_spec
-            mol_spec = dict(
-                name=mol_dict.name,
-                count=mol_dict.count,
-                smile=mol_dict.smile,
-                force_field=mol_dict.force_field or self.default_force_field,  # type: ignore
-                formal_charge=int(
-                    np.sum(openff_mol.partial_charges.magnitude) / charge_scaling
-                ),
-                charge_method=charge_method,
-                openff_mol=openff_mol,
-            )
-            mol_specs.append(mol_spec)
+        mol_specs = process_mol_specs(
+            input_mol_specs, self.default_charge_method, self.default_force_field
+        )
 
         openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
 
@@ -267,7 +171,6 @@ class OpenMMSolutionGen(InputGenerator):
         if box is None:
             box = get_box(openff_counts, density)  # type: ignore
 
-        # TODO: create molgraphs later
         coordinates = get_coordinates(
             openff_counts, box, self.packmol_random_seed, self.packmol_timeout
         )
@@ -285,30 +188,38 @@ class OpenMMSolutionGen(InputGenerator):
                 "All molecules must use the same force field and it must be 'sage' or 'opls'."
             )
         # figure out FF
-        # TODO: wrap system creation in try/except to catch periodic boundary errors
         integrator = LangevinMiddleIntegrator(
             self.temperature * kelvin,
             self.friction_coefficient / picoseconds,
             self.step_size * picoseconds,
         )
-        context = Context(system, integrator)
+        try:
+            context = Context(system, integrator)
+        except openmm.OpenMMException:  # type: ignore
+            raise ValueError(
+                "Your system is too small. OpenMM cannot create a system where the nonbonded "
+                "cutoff distance is greater than half the periodic box size. Try adding more "
+                "molecules to the system or decreasing the system density."
+            )
         # context.setPositions needs coordinates in nm, but we have them in
         # Angstrom from packmol. Convert.
         context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
+        contents = get_set_contents(mol_specs)
         input_set = OpenMMSet(
             inputs={
-                self.topology_file: TopologyInput(openmm_topology),
+                self.topology_file: TopologyInput(openmm_topology, coordinates),
                 self.system_file: SystemInput(system),
                 self.integrator_file: IntegratorInput(integrator),
                 self.state_file: StateInput(state),
+                self.contents_file: SetContentsInput(contents),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
             integrator_file=self.integrator_file,
             state_file=self.state_file,
+            contents_file=self.contents_file,
         )
-        input_set.settings = self._get_input_settings(mol_specs, box)
         return input_set
 
 
@@ -357,7 +268,7 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         rxn_input_set = OpenMMAlchemySet(
             inputs={
                 **input_set.inputs,
-                self.reactive_system_file: MSONableInput(reactive_system),
+                self.reactive_system_file: ReactiveSystemInput(reactive_system),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
