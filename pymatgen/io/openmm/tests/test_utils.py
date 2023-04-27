@@ -18,8 +18,8 @@ from pymatgen.io.openmm.utils import (
     get_box,
     get_atom_map,
     get_coordinates,
-    smiles_to_atom_type_array,
-    smiles_to_resname_array,
+    smiles_to_atom_types,
+    smiles_to_resnames,
     molgraph_to_openff_mol,
     molgraph_from_openff_mol,
     molgraph_from_openff_topology,
@@ -59,7 +59,7 @@ def test_smiles_to_atom_type_array():
     O = tk.Molecule.from_smiles("O")
     CCO = tk.Molecule.from_smiles("CCO")
     mols = {O: 5, CCO: 2}
-    atom_type_array = smiles_to_atom_type_array(mols)
+    atom_type_array = smiles_to_atom_types(mols)
     assert atom_type_array[0] == 0
     assert atom_type_array[15] == 3
 
@@ -71,7 +71,7 @@ def test_smiles_to_resname_array():
         {"openff_mol": O, "count": 5, "name": "O"},
         {"openff_mol": CCO, "count": 5, "name": "CCO"},
     ]
-    resname_array = smiles_to_resname_array(mol_specs)
+    resname_array = smiles_to_resnames(mol_specs)
     assert resname_array[0] == "O"
     assert resname_array[15] == "CCO"
 

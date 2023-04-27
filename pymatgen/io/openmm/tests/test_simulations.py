@@ -55,7 +55,9 @@ def test_react_system():
         n_cycles=1,
         steps_per_cycle=200,
     )
-    topology = input_set_2.inputs["reactive_system.json"].msonable.generate_topology()
+    topology = input_set_2.inputs[
+        "reactive_system.json"
+    ].reactive_system.generate_topology()
 
     [mol for mol in topology.unique_molecules]
     [mol.n_atoms for mol in topology.molecules]
