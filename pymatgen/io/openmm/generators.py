@@ -30,15 +30,16 @@ from pymatgen.io.openmm.inputs import (
     SystemInput,
     IntegratorInput,
     StateInput,
-    MSONableInput,
+    ReactiveSystemInput,
+    SetContentsInput,
 )
 from pymatgen.io.openmm.sets import OpenMMSet, OpenMMAlchemySet
-from pymatgen.io.openmm.schema import InputMoleculeSpec
+from pymatgen.io.openmm.schema import InputMoleculeSpec, MoleculeSpec, SetContents
 from pymatgen.io.openmm.utils import (
     get_box,
     get_coordinates,
-    smiles_to_atom_type_array,
-    smiles_to_resname_array,
+    smiles_to_atom_types,
+    smiles_to_resnames,
     get_atom_map,
     parameterize_w_interchange,
     get_openff_topology,
@@ -82,6 +83,7 @@ class OpenMMSolutionGen(InputGenerator):
         system_file: Union[str, Path] = "system.xml",
         integrator_file: Union[str, Path] = "integrator.xml",
         state_file: Union[str, Path] = "state.xml",
+        contents_file: Union[str, Path] = "contents.json",
     ):
         """
         Instantiates an OpenMMSolutionGen.
@@ -122,12 +124,12 @@ class OpenMMSolutionGen(InputGenerator):
         self.system_file = system_file
         self.integrator_file = integrator_file
         self.state_file = state_file
+        self.contents_file = contents_file
 
     def _get_input_settings(
         self,
         mol_specs: List[Dict[str, Union[str, int, tk.Molecule]]],
-        box: List[float],
-    ) -> Dict:
+    ) -> SetContents:
         openff_counts = {spec["openff_mol"]: spec["count"] for spec in mol_specs}
 
         # replace openff mols with molgraphs in mol_specs
@@ -136,34 +138,24 @@ class OpenMMSolutionGen(InputGenerator):
             spec = copy.deepcopy(spec)
             openff_mol = spec.pop("openff_mol")
             spec["molgraph"] = molgraph_from_openff_mol(openff_mol)
-            molgraph_specs.append(spec)
+            mol_spec = MoleculeSpec(**spec)
+            molgraph_specs.append(mol_spec)
 
         # calculate atom types for analysis convenience
-        atom_types = smiles_to_atom_type_array(openff_counts)
-        atom_resnames = smiles_to_resname_array(mol_specs)
+        atom_types = smiles_to_atom_types(openff_counts)
+        atom_resnames = smiles_to_resnames(mol_specs)
 
         # calculate force field and charge method
         force_fields = list({spec["force_field"] for spec in mol_specs})
-        force_field = force_fields[0] if len(force_fields) == 1 else force_fields
         charge_methods = list({spec["charge_method"] for spec in mol_specs})
-        charge_method = (
-            charge_methods[0] if len(charge_methods) == 1 else charge_methods
-        )
 
-        settings_dict = {
-            "components": molgraph_specs,
-            "box": box,
-            "force_field": force_field,
-            "temperature": self.temperature,
-            "step_size": self.step_size,
-            "friction_coefficient": self.friction_coefficient,
-            "partial_charge_method": charge_method,
-            "atom_types": atom_types,
-            "atom_resnames": atom_resnames,
-        }
-        # TODO: will need to serialize this to JSON and include in settings
-        # ideally the settings should be a pydantic BaseModel
-        return settings_dict
+        return SetContents(
+            molecule_specs=molgraph_specs,
+            force_fields=force_fields,
+            partial_charge_methods=charge_methods,
+            atom_types=atom_types,
+            atom_resnames=atom_resnames,
+        )
 
     def get_input_set(
         self,
@@ -296,19 +288,21 @@ class OpenMMSolutionGen(InputGenerator):
         # Angstrom from packmol. Convert.
         context.setPositions(np.divide(coordinates, 10))
         state = context.getState(getPositions=True)
+        contents = self._get_input_settings(mol_specs)
         input_set = OpenMMSet(
             inputs={
-                self.topology_file: TopologyInput(openmm_topology),
+                self.topology_file: TopologyInput(openmm_topology, coordinates),
                 self.system_file: SystemInput(system),
                 self.integrator_file: IntegratorInput(integrator),
                 self.state_file: StateInput(state),
+                self.contents_file: SetContentsInput(contents),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
             integrator_file=self.integrator_file,
             state_file=self.state_file,
+            contents_file=self.contents_file,
         )
-        input_set.settings = self._get_input_settings(mol_specs, box)
         return input_set
 
 
@@ -357,7 +351,7 @@ class OpenMMAlchemyGen(OpenMMSolutionGen):
         rxn_input_set = OpenMMAlchemySet(
             inputs={
                 **input_set.inputs,
-                self.reactive_system_file: MSONableInput(reactive_system),
+                self.reactive_system_file: ReactiveSystemInput(reactive_system),
             },
             topology_file=self.topology_file,
             system_file=self.system_file,
