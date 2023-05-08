@@ -11,7 +11,7 @@ with open(os.path.join(SETUP_PTH, "README.md")) as f:
 setup(
     name="pymatgen-io-openmm",  # mypy: ignore
     packages=find_namespace_packages(include=["pymatgen.io.*"]),
-    version="0.0.1",
+    version="0.0.2",
     install_requires=[
         # "pymatgen>=2022.3.22",
         # "openmm",
