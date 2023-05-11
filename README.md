@@ -65,6 +65,15 @@ with python 3.10 or greater.
     pip install -e .
     ```
 
+### Installing on Apple Silicon
+
+If you are using Apple Silicon, installation is a bit trickier. Some dependencies of OpenFF
+are not compatible with Apple Silicon so you will need to use Rosetta 2. First open your 
+terminal application with Rosetta2 enabled, then create a conda environment following 
+[these instructions](https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html)
+everything should work from there. This replaces step 1. Do not use `mamba`, which is not 
+fully integrated with x86 installations for Apple Silicon.
+
 ### Running tests
 
 To run the testing suite, run following commands from the root of the repository and with your
