@@ -70,8 +70,12 @@ class InputMoleculeSpec(BaseModel):
         """check that smile generates a valid molecule"""
         try:
             tk.Molecule.from_smiles(smile)
-        except Exception:
-            raise ValueError(f"Invalid SMILES string: {smile}")
+        except Exception as smile_error:
+            raise ValueError(
+                f"Invalid SMILES string: {smile} "
+                f"OpenFF Toolkit returned the following "
+                f"error: {smile_error}"
+            )
         return smile
 
     @validator("force_field", pre=True)
@@ -83,7 +87,7 @@ class InputMoleculeSpec(BaseModel):
     def set_name(cls, name, values):
         """assign name if not provided"""
         if name is None:
-            return values["smile"]
+            return values.get("smile")
         return name
 
     @validator("geometries", pre=True)
