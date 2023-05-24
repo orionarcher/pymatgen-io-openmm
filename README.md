@@ -52,14 +52,7 @@ with python 3.10 or greater.
     conda install -c conda-forge --file requirements.txt
     ```
 
-4. Clone and install pymatgen. Some important bug fixes are not yet integrated that into a release.
-
-    ```bash
-    conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
-    pip install git+ssh://git@github.com/materialsproject/pymatgen.git
-    ```
-
-5. Install the package in editable mode.
+4. Install the package in editable mode.
 
     ```bash
     pip install -e .
