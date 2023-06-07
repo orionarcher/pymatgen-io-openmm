@@ -1,0 +1,699 @@
+.............F...FF...........EE................F.........               [100%]
+==================================== ERRORS ====================================
+_________________ ERROR at setup of test_equilibrate_pressure __________________
+
+    @pytest.fixture
+    def ethanol_simulation():
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        input_mol_dicts = [
+            {"smile": "O", "count": 600},
+            {"smile": "CCO", "count": 50},
+        ]
+>       input_set = generator.get_input_set(input_mol_dicts, density=1.0)
+
+test_simulations.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../generators.py:221: in get_input_set
+    openff_mol.assign_partial_charges(self.default_charge_method)
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/topology/molecule.py:2503: in assign_partial_charges
+    toolkit_registry.call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ToolkitRegistry containing The RDKit, AmberTools, Built-in Toolkit>
+method_name = 'assign_partial_charges', raise_exception_types = [], args = ()
+kwargs = {'_cls': <class 'openff.toolkit.topology.molecule.Molecule'>, 'molecule': Molecule with name '' and SMILES '[H][O][H]', 'normalize_partial_charges': True, 'partial_charge_method': 'am1bcc', ...}
+errors = [(ToolkitWrapper around The RDKit version 2022.09.1, ChargeMethodUnavailableError("partial_charge_method 'am1bcc' is n...hod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']'))]
+toolkit = ToolkitWrapper around Built-in Toolkit version None
+method = <bound method BuiltInToolkitWrapper.assign_partial_charges of ToolkitWrapper around Built-in Toolkit version None>
+msg = 'No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{\'molecule\': M...thod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']\n'
+error = ChargeMethodUnavailableError('Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']')
+
+    def call(self, method_name, *args, raise_exception_types=None, **kwargs):
+        """
+        Execute the requested method by attempting to use all registered toolkits in order of precedence.
+    
+        ``*args`` and ``**kwargs`` are passed to the desired method, and return values of the method are returned
+    
+        This is a convenient shorthand for ``toolkit_registry.resolve_method(method_name)(*args, **kwargs)``
+    
+        Parameters
+        ----------
+        method_name : str
+            The name of the method to execute
+        raise_exception_types : list of Exception subclasses, default=None
+            A list of exception-derived types to catch and raise immediately. If None, this will be set to [Exception],
+            which will raise an error immediately if the first ToolkitWrapper in the registry fails. To try each
+            ToolkitWrapper that provides a suitably-named method, set this to the empty list ([]). If all
+            ToolkitWrappers run without raising any exceptions in this list, a single ValueError will be raised
+            containing the each ToolkitWrapper that was tried and the exception it raised.
+    
+        Raises
+        ------
+        NotImplementedError if the requested method cannot be found among the registered toolkits
+    
+        ValueError if no exceptions in the raise_exception_types list were raised by ToolkitWrappers, and
+        all ToolkitWrappers in the ToolkitRegistry were tried.
+    
+        Other forms of exceptions are possible if raise_exception_types is specified.
+        These are defined by the ToolkitWrapper method being called.
+    
+        Examples
+        --------
+    
+        Create a molecule, and call the toolkit ``to_smiles()`` method directly
+    
+        >>> from openff.toolkit import Molecule
+        >>> molecule = Molecule.from_smiles('Cc1ccccc1')
+        >>> toolkit_registry = ToolkitRegistry([OpenEyeToolkitWrapper, RDKitToolkitWrapper])
+        >>> smiles = toolkit_registry.call('to_smiles', molecule)
+    
+        """
+        if raise_exception_types is None:
+            raise_exception_types = [Exception]
+    
+        errors = list()
+        for toolkit in self._toolkits:
+            if hasattr(toolkit, method_name):
+                method = getattr(toolkit, method_name)
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    for exception_type in raise_exception_types:
+                        if isinstance(e, exception_type):
+                            raise e
+                    errors.append((toolkit, e))
+    
+        # No toolkit was found to provide the requested capability
+        # TODO: Can we help developers by providing a check for typos in expected method names?
+        msg = (
+            f'No registered toolkits can provide the capability "{method_name}" '
+            f'for args "{args}" and kwargs "{kwargs}"\n'
+        )
+    
+        msg += "Available toolkits are: {}\n".format(self.registered_toolkits)
+        # Append information about toolkits that implemented the method, but could not handle the provided parameters
+        for toolkit, error in errors:
+            msg += " {} {} : {}\n".format(toolkit, type(error), error)
+>       raise ValueError(msg)
+E       ValueError: No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{'molecule': Molecule with name '' and SMILES '[H][O][H]', 'partial_charge_method': 'am1bcc', 'use_conformers': None, 'strict_n_conformers': False, 'normalize_partial_charges': True, '_cls': <class 'openff.toolkit.topology.molecule.Molecule'>}"
+E       Available toolkits are: [ToolkitWrapper around The RDKit version 2022.09.1, ToolkitWrapper around AmberTools version 22.0, ToolkitWrapper around Built-in Toolkit version None]
+E        ToolkitWrapper around The RDKit version 2022.09.1 <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : partial_charge_method 'am1bcc' is not available from RDKitToolkitWrapper. Available charge methods are ['gasteiger', 'mmff94'] 
+E        ToolkitWrapper around AmberTools version 22.0 <class 'subprocess.CalledProcessError'> : Command '['antechamber', '-i', 'molecule.sdf', '-fi', 'sdf', '-o', 'charged.mol2', '-fo', 'mol2', '-pf', 'yes', '-dr', 'n', '-c', 'bcc', '-nc', '0.0']' returned non-zero exit status 1.
+E        ToolkitWrapper around Built-in Toolkit version None <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are ['zeros', 'formal_charge']
+
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/utils/toolkit_registry.py:370: ValueError
+---------------------------- Captured stderr setup -----------------------------
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/wrapped_progs/antechamber: Fatal Error!
+Cannot properly run "/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/sqm -O -i sqm.in -o sqm.out".
+________________________ ERROR at setup of test_anneal _________________________
+
+    @pytest.fixture
+    def ethanol_simulation():
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        input_mol_dicts = [
+            {"smile": "O", "count": 600},
+            {"smile": "CCO", "count": 50},
+        ]
+>       input_set = generator.get_input_set(input_mol_dicts, density=1.0)
+
+test_simulations.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../generators.py:221: in get_input_set
+    openff_mol.assign_partial_charges(self.default_charge_method)
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/topology/molecule.py:2503: in assign_partial_charges
+    toolkit_registry.call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ToolkitRegistry containing The RDKit, AmberTools, Built-in Toolkit>
+method_name = 'assign_partial_charges', raise_exception_types = [], args = ()
+kwargs = {'_cls': <class 'openff.toolkit.topology.molecule.Molecule'>, 'molecule': Molecule with name '' and SMILES '[H][O][H]', 'normalize_partial_charges': True, 'partial_charge_method': 'am1bcc', ...}
+errors = [(ToolkitWrapper around The RDKit version 2022.09.1, ChargeMethodUnavailableError("partial_charge_method 'am1bcc' is n...hod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']'))]
+toolkit = ToolkitWrapper around Built-in Toolkit version None
+method = <bound method BuiltInToolkitWrapper.assign_partial_charges of ToolkitWrapper around Built-in Toolkit version None>
+msg = 'No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{\'molecule\': M...thod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']\n'
+error = ChargeMethodUnavailableError('Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']')
+
+    def call(self, method_name, *args, raise_exception_types=None, **kwargs):
+        """
+        Execute the requested method by attempting to use all registered toolkits in order of precedence.
+    
+        ``*args`` and ``**kwargs`` are passed to the desired method, and return values of the method are returned
+    
+        This is a convenient shorthand for ``toolkit_registry.resolve_method(method_name)(*args, **kwargs)``
+    
+        Parameters
+        ----------
+        method_name : str
+            The name of the method to execute
+        raise_exception_types : list of Exception subclasses, default=None
+            A list of exception-derived types to catch and raise immediately. If None, this will be set to [Exception],
+            which will raise an error immediately if the first ToolkitWrapper in the registry fails. To try each
+            ToolkitWrapper that provides a suitably-named method, set this to the empty list ([]). If all
+            ToolkitWrappers run without raising any exceptions in this list, a single ValueError will be raised
+            containing the each ToolkitWrapper that was tried and the exception it raised.
+    
+        Raises
+        ------
+        NotImplementedError if the requested method cannot be found among the registered toolkits
+    
+        ValueError if no exceptions in the raise_exception_types list were raised by ToolkitWrappers, and
+        all ToolkitWrappers in the ToolkitRegistry were tried.
+    
+        Other forms of exceptions are possible if raise_exception_types is specified.
+        These are defined by the ToolkitWrapper method being called.
+    
+        Examples
+        --------
+    
+        Create a molecule, and call the toolkit ``to_smiles()`` method directly
+    
+        >>> from openff.toolkit import Molecule
+        >>> molecule = Molecule.from_smiles('Cc1ccccc1')
+        >>> toolkit_registry = ToolkitRegistry([OpenEyeToolkitWrapper, RDKitToolkitWrapper])
+        >>> smiles = toolkit_registry.call('to_smiles', molecule)
+    
+        """
+        if raise_exception_types is None:
+            raise_exception_types = [Exception]
+    
+        errors = list()
+        for toolkit in self._toolkits:
+            if hasattr(toolkit, method_name):
+                method = getattr(toolkit, method_name)
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    for exception_type in raise_exception_types:
+                        if isinstance(e, exception_type):
+                            raise e
+                    errors.append((toolkit, e))
+    
+        # No toolkit was found to provide the requested capability
+        # TODO: Can we help developers by providing a check for typos in expected method names?
+        msg = (
+            f'No registered toolkits can provide the capability "{method_name}" '
+            f'for args "{args}" and kwargs "{kwargs}"\n'
+        )
+    
+        msg += "Available toolkits are: {}\n".format(self.registered_toolkits)
+        # Append information about toolkits that implemented the method, but could not handle the provided parameters
+        for toolkit, error in errors:
+            msg += " {} {} : {}\n".format(toolkit, type(error), error)
+>       raise ValueError(msg)
+E       ValueError: No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{'molecule': Molecule with name '' and SMILES '[H][O][H]', 'partial_charge_method': 'am1bcc', 'use_conformers': None, 'strict_n_conformers': False, 'normalize_partial_charges': True, '_cls': <class 'openff.toolkit.topology.molecule.Molecule'>}"
+E       Available toolkits are: [ToolkitWrapper around The RDKit version 2022.09.1, ToolkitWrapper around AmberTools version 22.0, ToolkitWrapper around Built-in Toolkit version None]
+E        ToolkitWrapper around The RDKit version 2022.09.1 <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : partial_charge_method 'am1bcc' is not available from RDKitToolkitWrapper. Available charge methods are ['gasteiger', 'mmff94'] 
+E        ToolkitWrapper around AmberTools version 22.0 <class 'subprocess.CalledProcessError'> : Command '['antechamber', '-i', 'molecule.sdf', '-fi', 'sdf', '-o', 'charged.mol2', '-fo', 'mol2', '-pf', 'yes', '-dr', 'n', '-c', 'bcc', '-nc', '0.0']' returned non-zero exit status 1.
+E        ToolkitWrapper around Built-in Toolkit version None <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are ['zeros', 'formal_charge']
+
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/utils/toolkit_registry.py:370: ValueError
+---------------------------- Captured stderr setup -----------------------------
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/wrapped_progs/antechamber: Fatal Error!
+Cannot properly run "/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/sqm -O -i sqm.in -o sqm.out".
+=================================== FAILURES ===================================
+___________________ TestOpenMMSolutionGen.test_get_input_set ___________________
+
+self = <test_generators.TestOpenMMSolutionGen object at 0x7f7d96f27730>
+
+    def test_get_input_set(self):
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        # TODO: figure out why tests are failing if density is 1
+        input_mol_dicts = [
+            {"smile": "O", "count": 200, "name": "H2O"},
+            {"smile": "CCO", "count": 20},
+        ]
+>       input_set = generator.get_input_set(input_mol_dicts, density=0.8)
+
+test_generators.py:50: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../generators.py:221: in get_input_set
+    openff_mol.assign_partial_charges(self.default_charge_method)
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/topology/molecule.py:2503: in assign_partial_charges
+    toolkit_registry.call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ToolkitRegistry containing The RDKit, AmberTools, Built-in Toolkit>
+method_name = 'assign_partial_charges', raise_exception_types = [], args = ()
+kwargs = {'_cls': <class 'openff.toolkit.topology.molecule.Molecule'>, 'molecule': Molecule with name '' and SMILES '[H][O][H]', 'normalize_partial_charges': True, 'partial_charge_method': 'am1bcc', ...}
+errors = [(ToolkitWrapper around The RDKit version 2022.09.1, ChargeMethodUnavailableError("partial_charge_method 'am1bcc' is n...hod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']'))]
+toolkit = ToolkitWrapper around Built-in Toolkit version None
+method = <bound method BuiltInToolkitWrapper.assign_partial_charges of ToolkitWrapper around Built-in Toolkit version None>
+msg = 'No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{\'molecule\': M...thod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']\n'
+error = ChargeMethodUnavailableError('Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']')
+
+    def call(self, method_name, *args, raise_exception_types=None, **kwargs):
+        """
+        Execute the requested method by attempting to use all registered toolkits in order of precedence.
+    
+        ``*args`` and ``**kwargs`` are passed to the desired method, and return values of the method are returned
+    
+        This is a convenient shorthand for ``toolkit_registry.resolve_method(method_name)(*args, **kwargs)``
+    
+        Parameters
+        ----------
+        method_name : str
+            The name of the method to execute
+        raise_exception_types : list of Exception subclasses, default=None
+            A list of exception-derived types to catch and raise immediately. If None, this will be set to [Exception],
+            which will raise an error immediately if the first ToolkitWrapper in the registry fails. To try each
+            ToolkitWrapper that provides a suitably-named method, set this to the empty list ([]). If all
+            ToolkitWrappers run without raising any exceptions in this list, a single ValueError will be raised
+            containing the each ToolkitWrapper that was tried and the exception it raised.
+    
+        Raises
+        ------
+        NotImplementedError if the requested method cannot be found among the registered toolkits
+    
+        ValueError if no exceptions in the raise_exception_types list were raised by ToolkitWrappers, and
+        all ToolkitWrappers in the ToolkitRegistry were tried.
+    
+        Other forms of exceptions are possible if raise_exception_types is specified.
+        These are defined by the ToolkitWrapper method being called.
+    
+        Examples
+        --------
+    
+        Create a molecule, and call the toolkit ``to_smiles()`` method directly
+    
+        >>> from openff.toolkit import Molecule
+        >>> molecule = Molecule.from_smiles('Cc1ccccc1')
+        >>> toolkit_registry = ToolkitRegistry([OpenEyeToolkitWrapper, RDKitToolkitWrapper])
+        >>> smiles = toolkit_registry.call('to_smiles', molecule)
+    
+        """
+        if raise_exception_types is None:
+            raise_exception_types = [Exception]
+    
+        errors = list()
+        for toolkit in self._toolkits:
+            if hasattr(toolkit, method_name):
+                method = getattr(toolkit, method_name)
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    for exception_type in raise_exception_types:
+                        if isinstance(e, exception_type):
+                            raise e
+                    errors.append((toolkit, e))
+    
+        # No toolkit was found to provide the requested capability
+        # TODO: Can we help developers by providing a check for typos in expected method names?
+        msg = (
+            f'No registered toolkits can provide the capability "{method_name}" '
+            f'for args "{args}" and kwargs "{kwargs}"\n'
+        )
+    
+        msg += "Available toolkits are: {}\n".format(self.registered_toolkits)
+        # Append information about toolkits that implemented the method, but could not handle the provided parameters
+        for toolkit, error in errors:
+            msg += " {} {} : {}\n".format(toolkit, type(error), error)
+>       raise ValueError(msg)
+E       ValueError: No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{'molecule': Molecule with name '' and SMILES '[H][O][H]', 'partial_charge_method': 'am1bcc', 'use_conformers': None, 'strict_n_conformers': False, 'normalize_partial_charges': True, '_cls': <class 'openff.toolkit.topology.molecule.Molecule'>}"
+E       Available toolkits are: [ToolkitWrapper around The RDKit version 2022.09.1, ToolkitWrapper around AmberTools version 22.0, ToolkitWrapper around Built-in Toolkit version None]
+E        ToolkitWrapper around The RDKit version 2022.09.1 <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : partial_charge_method 'am1bcc' is not available from RDKitToolkitWrapper. Available charge methods are ['gasteiger', 'mmff94'] 
+E        ToolkitWrapper around AmberTools version 22.0 <class 'subprocess.CalledProcessError'> : Command '['antechamber', '-i', 'molecule.sdf', '-fi', 'sdf', '-o', 'charged.mol2', '-fo', 'mol2', '-pf', 'yes', '-dr', 'n', '-c', 'bcc', '-nc', '0.0']' returned non-zero exit status 1.
+E        ToolkitWrapper around Built-in Toolkit version None <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are ['zeros', 'formal_charge']
+
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/utils/toolkit_registry.py:370: ValueError
+----------------------------- Captured stderr call -----------------------------
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/wrapped_progs/antechamber: Fatal Error!
+Cannot properly run "/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/sqm -O -i sqm.in -o sqm.out".
+______________ TestOpenMMSolutionGen.test_get_input_set_w_charges ______________
+
+self = <test_generators.TestOpenMMSolutionGen object at 0x7f7d96f27bb0>
+
+    def test_get_input_set_w_charges(self):
+        pf6_charge_array = np.load(PF6_charges)
+        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        input_mol_dicts = [
+            {"smile": "O", "count": 200, "name": "H2O"},
+            {"smile": "CCO", "count": 20},
+            {
+                "smile": "[Li+]",
+                "count": 10,
+                "charge_scaling": 0.9,
+                "forcefield": "Sage",
+            },
+            {
+                "smile": "F[P-](F)(F)(F)(F)F",
+                "count": 10,
+                "charge_scaling": 0.9,
+                "geometries": [PF6_xyz],
+                "partial_charges": pf6_charge_array,
+            },
+        ]
+>       input_set = generator.get_input_set(input_mol_dicts, density=1)
+
+test_generators.py:137: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../generators.py:221: in get_input_set
+    openff_mol.assign_partial_charges(self.default_charge_method)
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/topology/molecule.py:2503: in assign_partial_charges
+    toolkit_registry.call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ToolkitRegistry containing The RDKit, AmberTools, Built-in Toolkit>
+method_name = 'assign_partial_charges', raise_exception_types = [], args = ()
+kwargs = {'_cls': <class 'openff.toolkit.topology.molecule.Molecule'>, 'molecule': Molecule with name '' and SMILES '[H][O][H]', 'normalize_partial_charges': True, 'partial_charge_method': 'am1bcc', ...}
+errors = [(ToolkitWrapper around The RDKit version 2022.09.1, ChargeMethodUnavailableError("partial_charge_method 'am1bcc' is n...hod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']'))]
+toolkit = ToolkitWrapper around Built-in Toolkit version None
+method = <bound method BuiltInToolkitWrapper.assign_partial_charges of ToolkitWrapper around Built-in Toolkit version None>
+msg = 'No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{\'molecule\': M...thod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']\n'
+error = ChargeMethodUnavailableError('Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']')
+
+    def call(self, method_name, *args, raise_exception_types=None, **kwargs):
+        """
+        Execute the requested method by attempting to use all registered toolkits in order of precedence.
+    
+        ``*args`` and ``**kwargs`` are passed to the desired method, and return values of the method are returned
+    
+        This is a convenient shorthand for ``toolkit_registry.resolve_method(method_name)(*args, **kwargs)``
+    
+        Parameters
+        ----------
+        method_name : str
+            The name of the method to execute
+        raise_exception_types : list of Exception subclasses, default=None
+            A list of exception-derived types to catch and raise immediately. If None, this will be set to [Exception],
+            which will raise an error immediately if the first ToolkitWrapper in the registry fails. To try each
+            ToolkitWrapper that provides a suitably-named method, set this to the empty list ([]). If all
+            ToolkitWrappers run without raising any exceptions in this list, a single ValueError will be raised
+            containing the each ToolkitWrapper that was tried and the exception it raised.
+    
+        Raises
+        ------
+        NotImplementedError if the requested method cannot be found among the registered toolkits
+    
+        ValueError if no exceptions in the raise_exception_types list were raised by ToolkitWrappers, and
+        all ToolkitWrappers in the ToolkitRegistry were tried.
+    
+        Other forms of exceptions are possible if raise_exception_types is specified.
+        These are defined by the ToolkitWrapper method being called.
+    
+        Examples
+        --------
+    
+        Create a molecule, and call the toolkit ``to_smiles()`` method directly
+    
+        >>> from openff.toolkit import Molecule
+        >>> molecule = Molecule.from_smiles('Cc1ccccc1')
+        >>> toolkit_registry = ToolkitRegistry([OpenEyeToolkitWrapper, RDKitToolkitWrapper])
+        >>> smiles = toolkit_registry.call('to_smiles', molecule)
+    
+        """
+        if raise_exception_types is None:
+            raise_exception_types = [Exception]
+    
+        errors = list()
+        for toolkit in self._toolkits:
+            if hasattr(toolkit, method_name):
+                method = getattr(toolkit, method_name)
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    for exception_type in raise_exception_types:
+                        if isinstance(e, exception_type):
+                            raise e
+                    errors.append((toolkit, e))
+    
+        # No toolkit was found to provide the requested capability
+        # TODO: Can we help developers by providing a check for typos in expected method names?
+        msg = (
+            f'No registered toolkits can provide the capability "{method_name}" '
+            f'for args "{args}" and kwargs "{kwargs}"\n'
+        )
+    
+        msg += "Available toolkits are: {}\n".format(self.registered_toolkits)
+        # Append information about toolkits that implemented the method, but could not handle the provided parameters
+        for toolkit, error in errors:
+            msg += " {} {} : {}\n".format(toolkit, type(error), error)
+>       raise ValueError(msg)
+E       ValueError: No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{'molecule': Molecule with name '' and SMILES '[H][O][H]', 'partial_charge_method': 'am1bcc', 'use_conformers': None, 'strict_n_conformers': False, 'normalize_partial_charges': True, '_cls': <class 'openff.toolkit.topology.molecule.Molecule'>}"
+E       Available toolkits are: [ToolkitWrapper around The RDKit version 2022.09.1, ToolkitWrapper around AmberTools version 22.0, ToolkitWrapper around Built-in Toolkit version None]
+E        ToolkitWrapper around The RDKit version 2022.09.1 <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : partial_charge_method 'am1bcc' is not available from RDKitToolkitWrapper. Available charge methods are ['gasteiger', 'mmff94'] 
+E        ToolkitWrapper around AmberTools version 22.0 <class 'subprocess.CalledProcessError'> : Command '['antechamber', '-i', 'molecule.sdf', '-fi', 'sdf', '-o', 'charged.mol2', '-fo', 'mol2', '-pf', 'yes', '-dr', 'n', '-c', 'bcc', '-nc', '0.0']' returned non-zero exit status 1.
+E        ToolkitWrapper around Built-in Toolkit version None <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are ['zeros', 'formal_charge']
+
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/utils/toolkit_registry.py:370: ValueError
+----------------------------- Captured stderr call -----------------------------
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/wrapped_progs/antechamber: Fatal Error!
+Cannot properly run "/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/sqm -O -i sqm.in -o sqm.out".
+______________ TestOpenMMAlchemyGen.test_get_alchemical_input_set ______________
+
+self = <test_generators.TestOpenMMAlchemyGen object at 0x7f7d96f27ca0>
+acetic_rxn = <pymatgen.io.openmm.alchemy_utils.AlchemicalReaction object at 0x7f7d98e4fd90>
+
+    def test_get_alchemical_input_set(self, acetic_rxn):
+        generator = OpenMMAlchemyGen(default_force_field="sage")
+        input_mol_dicts = [
+            {"smile": "O", "count": 20},
+            {"smile": "CCO", "count": 10},
+            {"smile": "CC(=O)O", "count": 10},
+        ]
+        # density is low to prevent a non bonded cutoff error
+>       input_set = generator.get_input_set(
+            input_mol_dicts,
+            reactions=[acetic_rxn],
+            density=0.2,
+        )
+
+test_generators.py:157: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../generators.py:328: in get_input_set
+    input_set = super().get_input_set(input_mol_dicts, density, box)
+../generators.py:221: in get_input_set
+    openff_mol.assign_partial_charges(self.default_charge_method)
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/topology/molecule.py:2503: in assign_partial_charges
+    toolkit_registry.call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ToolkitRegistry containing The RDKit, AmberTools, Built-in Toolkit>
+method_name = 'assign_partial_charges', raise_exception_types = [], args = ()
+kwargs = {'_cls': <class 'openff.toolkit.topology.molecule.Molecule'>, 'molecule': Molecule with name '' and SMILES '[H][O][H]', 'normalize_partial_charges': True, 'partial_charge_method': 'am1bcc', ...}
+errors = [(ToolkitWrapper around The RDKit version 2022.09.1, ChargeMethodUnavailableError("partial_charge_method 'am1bcc' is n...hod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']'))]
+toolkit = ToolkitWrapper around Built-in Toolkit version None
+method = <bound method BuiltInToolkitWrapper.assign_partial_charges of ToolkitWrapper around Built-in Toolkit version None>
+msg = 'No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{\'molecule\': M...thod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']\n'
+error = ChargeMethodUnavailableError('Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']')
+
+    def call(self, method_name, *args, raise_exception_types=None, **kwargs):
+        """
+        Execute the requested method by attempting to use all registered toolkits in order of precedence.
+    
+        ``*args`` and ``**kwargs`` are passed to the desired method, and return values of the method are returned
+    
+        This is a convenient shorthand for ``toolkit_registry.resolve_method(method_name)(*args, **kwargs)``
+    
+        Parameters
+        ----------
+        method_name : str
+            The name of the method to execute
+        raise_exception_types : list of Exception subclasses, default=None
+            A list of exception-derived types to catch and raise immediately. If None, this will be set to [Exception],
+            which will raise an error immediately if the first ToolkitWrapper in the registry fails. To try each
+            ToolkitWrapper that provides a suitably-named method, set this to the empty list ([]). If all
+            ToolkitWrappers run without raising any exceptions in this list, a single ValueError will be raised
+            containing the each ToolkitWrapper that was tried and the exception it raised.
+    
+        Raises
+        ------
+        NotImplementedError if the requested method cannot be found among the registered toolkits
+    
+        ValueError if no exceptions in the raise_exception_types list were raised by ToolkitWrappers, and
+        all ToolkitWrappers in the ToolkitRegistry were tried.
+    
+        Other forms of exceptions are possible if raise_exception_types is specified.
+        These are defined by the ToolkitWrapper method being called.
+    
+        Examples
+        --------
+    
+        Create a molecule, and call the toolkit ``to_smiles()`` method directly
+    
+        >>> from openff.toolkit import Molecule
+        >>> molecule = Molecule.from_smiles('Cc1ccccc1')
+        >>> toolkit_registry = ToolkitRegistry([OpenEyeToolkitWrapper, RDKitToolkitWrapper])
+        >>> smiles = toolkit_registry.call('to_smiles', molecule)
+    
+        """
+        if raise_exception_types is None:
+            raise_exception_types = [Exception]
+    
+        errors = list()
+        for toolkit in self._toolkits:
+            if hasattr(toolkit, method_name):
+                method = getattr(toolkit, method_name)
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    for exception_type in raise_exception_types:
+                        if isinstance(e, exception_type):
+                            raise e
+                    errors.append((toolkit, e))
+    
+        # No toolkit was found to provide the requested capability
+        # TODO: Can we help developers by providing a check for typos in expected method names?
+        msg = (
+            f'No registered toolkits can provide the capability "{method_name}" '
+            f'for args "{args}" and kwargs "{kwargs}"\n'
+        )
+    
+        msg += "Available toolkits are: {}\n".format(self.registered_toolkits)
+        # Append information about toolkits that implemented the method, but could not handle the provided parameters
+        for toolkit, error in errors:
+            msg += " {} {} : {}\n".format(toolkit, type(error), error)
+>       raise ValueError(msg)
+E       ValueError: No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{'molecule': Molecule with name '' and SMILES '[H][O][H]', 'partial_charge_method': 'am1bcc', 'use_conformers': None, 'strict_n_conformers': False, 'normalize_partial_charges': True, '_cls': <class 'openff.toolkit.topology.molecule.Molecule'>}"
+E       Available toolkits are: [ToolkitWrapper around The RDKit version 2022.09.1, ToolkitWrapper around AmberTools version 22.0, ToolkitWrapper around Built-in Toolkit version None]
+E        ToolkitWrapper around The RDKit version 2022.09.1 <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : partial_charge_method 'am1bcc' is not available from RDKitToolkitWrapper. Available charge methods are ['gasteiger', 'mmff94'] 
+E        ToolkitWrapper around AmberTools version 22.0 <class 'subprocess.CalledProcessError'> : Command '['antechamber', '-i', 'molecule.sdf', '-fi', 'sdf', '-o', 'charged.mol2', '-fo', 'mol2', '-pf', 'yes', '-dr', 'n', '-c', 'bcc', '-nc', '0.0']' returned non-zero exit status 1.
+E        ToolkitWrapper around Built-in Toolkit version None <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are ['zeros', 'formal_charge']
+
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/utils/toolkit_registry.py:370: ValueError
+----------------------------- Captured stderr call -----------------------------
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/wrapped_progs/antechamber: Fatal Error!
+Cannot properly run "/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/sqm -O -i sqm.in -o sqm.out".
+_______________________ test_parameterize_w_interchange ________________________
+
+    def test_parameterize_w_interchange():
+        O = tk.Molecule.from_smiles("O")
+        CCO = tk.Molecule.from_smiles("CCO")
+>       O.assign_partial_charges("am1bcc")
+
+test_utils.py:295: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/topology/molecule.py:2503: in assign_partial_charges
+    toolkit_registry.call(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <ToolkitRegistry containing The RDKit, AmberTools, Built-in Toolkit>
+method_name = 'assign_partial_charges', raise_exception_types = [], args = ()
+kwargs = {'_cls': <class 'openff.toolkit.topology.molecule.Molecule'>, 'molecule': Molecule with name '' and SMILES '[H][O][H]', 'normalize_partial_charges': True, 'partial_charge_method': 'am1bcc', ...}
+errors = [(ToolkitWrapper around The RDKit version 2022.09.1, ChargeMethodUnavailableError("partial_charge_method 'am1bcc' is n...hod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']'))]
+toolkit = ToolkitWrapper around Built-in Toolkit version None
+method = <bound method BuiltInToolkitWrapper.assign_partial_charges of ToolkitWrapper around Built-in Toolkit version None>
+msg = 'No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{\'molecule\': M...thod "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']\n'
+error = ChargeMethodUnavailableError('Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are [\'zeros\', \'formal_charge\']')
+
+    def call(self, method_name, *args, raise_exception_types=None, **kwargs):
+        """
+        Execute the requested method by attempting to use all registered toolkits in order of precedence.
+    
+        ``*args`` and ``**kwargs`` are passed to the desired method, and return values of the method are returned
+    
+        This is a convenient shorthand for ``toolkit_registry.resolve_method(method_name)(*args, **kwargs)``
+    
+        Parameters
+        ----------
+        method_name : str
+            The name of the method to execute
+        raise_exception_types : list of Exception subclasses, default=None
+            A list of exception-derived types to catch and raise immediately. If None, this will be set to [Exception],
+            which will raise an error immediately if the first ToolkitWrapper in the registry fails. To try each
+            ToolkitWrapper that provides a suitably-named method, set this to the empty list ([]). If all
+            ToolkitWrappers run without raising any exceptions in this list, a single ValueError will be raised
+            containing the each ToolkitWrapper that was tried and the exception it raised.
+    
+        Raises
+        ------
+        NotImplementedError if the requested method cannot be found among the registered toolkits
+    
+        ValueError if no exceptions in the raise_exception_types list were raised by ToolkitWrappers, and
+        all ToolkitWrappers in the ToolkitRegistry were tried.
+    
+        Other forms of exceptions are possible if raise_exception_types is specified.
+        These are defined by the ToolkitWrapper method being called.
+    
+        Examples
+        --------
+    
+        Create a molecule, and call the toolkit ``to_smiles()`` method directly
+    
+        >>> from openff.toolkit import Molecule
+        >>> molecule = Molecule.from_smiles('Cc1ccccc1')
+        >>> toolkit_registry = ToolkitRegistry([OpenEyeToolkitWrapper, RDKitToolkitWrapper])
+        >>> smiles = toolkit_registry.call('to_smiles', molecule)
+    
+        """
+        if raise_exception_types is None:
+            raise_exception_types = [Exception]
+    
+        errors = list()
+        for toolkit in self._toolkits:
+            if hasattr(toolkit, method_name):
+                method = getattr(toolkit, method_name)
+                try:
+                    return method(*args, **kwargs)
+                except Exception as e:
+                    for exception_type in raise_exception_types:
+                        if isinstance(e, exception_type):
+                            raise e
+                    errors.append((toolkit, e))
+    
+        # No toolkit was found to provide the requested capability
+        # TODO: Can we help developers by providing a check for typos in expected method names?
+        msg = (
+            f'No registered toolkits can provide the capability "{method_name}" '
+            f'for args "{args}" and kwargs "{kwargs}"\n'
+        )
+    
+        msg += "Available toolkits are: {}\n".format(self.registered_toolkits)
+        # Append information about toolkits that implemented the method, but could not handle the provided parameters
+        for toolkit, error in errors:
+            msg += " {} {} : {}\n".format(toolkit, type(error), error)
+>       raise ValueError(msg)
+E       ValueError: No registered toolkits can provide the capability "assign_partial_charges" for args "()" and kwargs "{'molecule': Molecule with name '' and SMILES '[H][O][H]', 'partial_charge_method': 'am1bcc', 'use_conformers': None, 'strict_n_conformers': False, 'normalize_partial_charges': True, '_cls': <class 'openff.toolkit.topology.molecule.Molecule'>}"
+E       Available toolkits are: [ToolkitWrapper around The RDKit version 2022.09.1, ToolkitWrapper around AmberTools version 22.0, ToolkitWrapper around Built-in Toolkit version None]
+E        ToolkitWrapper around The RDKit version 2022.09.1 <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : partial_charge_method 'am1bcc' is not available from RDKitToolkitWrapper. Available charge methods are ['gasteiger', 'mmff94'] 
+E        ToolkitWrapper around AmberTools version 22.0 <class 'subprocess.CalledProcessError'> : Command '['antechamber', '-i', 'molecule.sdf', '-fi', 'sdf', '-o', 'charged.mol2', '-fo', 'mol2', '-pf', 'yes', '-dr', 'n', '-c', 'bcc', '-nc', '0.0']' returned non-zero exit status 1.
+E        ToolkitWrapper around Built-in Toolkit version None <class 'openff.toolkit.utils.exceptions.ChargeMethodUnavailableError'> : Partial charge method "am1bcc"" is not supported by the Built-in toolkit. Available charge methods are ['zeros', 'formal_charge']
+
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/lib/python3.10/site-packages/openff/toolkit/utils/toolkit_registry.py:370: ValueError
+----------------------------- Captured stderr call -----------------------------
+/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/wrapped_progs/antechamber: Fatal Error!
+Cannot properly run "/Users/xperrylinn/miniconda3/envs/pymatgen-io-openmm/bin/sqm -O -i sqm.in -o sqm.out".
+=============================== warnings summary ===============================
+pymatgen/io/openmm/tests/test_alchemy_utils.py: 24 warnings
+  /Users/xperrylinn/Documents/Academics/MSSE/spring_2023/Capstone/pymatgen-io-openmm/pymatgen/io/openmm/alchemy_utils.py:276: DeprecationWarning: In a future version, `df.iloc[:, i] = newvals` will attempt to set the values inplace instead of always setting a new array. To retain the old behavior, use either `df[df.columns[i]] = newvals` or, if columns are non-unique, `df.isetitem(i, newvals)`
+    atoms_df.loc[:, ["trigger_ix"]] = ix
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+30.57s call     pymatgen/io/openmm/tests/test_simulations.py::test_react_system
+5.96s call     pymatgen/io/openmm/tests/test_generators.py::TestOpenMMSolutionGen::test_get_input_set_big_smile
+4.16s call     pymatgen/io/openmm/tests/test_utils.py::test_get_unique_subgraphs_from_topology
+3.03s call     pymatgen/io/openmm/tests/test_utils.py::test_molgraph_from_openff_topology
+1.31s call     pymatgen/io/openmm/tests/test_utils.py::test_get_coordinates_added_geometry
+0.93s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestAlchemicalReaction::test_visualize_reactions
+0.74s call     pymatgen/io/openmm/tests/test_sets.py::TestOpenMMSet::test_validate
+0.51s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestAlchemicalReaction::test_make_propanedioic_system
+0.47s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_react_molgraph_no_delete
+0.45s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestAlchemicalReaction::test_make_acetic
+0.45s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_react_acetic
+0.44s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_react_acetic_delete
+0.43s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_generate_topology
+0.43s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_react_molgraph_delete
+0.43s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_generate_topology_w_reaction
+0.42s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestReactiveSystem::test_from_reactions
+0.42s call     pymatgen/io/openmm/tests/test_alchemy_utils.py::TestAlchemicalReaction::test_make_acetic_del_water
+0.41s call     pymatgen/io/openmm/tests/test_sets.py::TestOpenMMAlchemySet::test_from_directory
+0.32s call     pymatgen/io/openmm/tests/test_sets.py::TestOpenMMSet::test_get_simulation
+0.29s call     pymatgen/io/openmm/tests/test_generators.py::TestOpenMMSolutionGen::test_get_input_set_w_charges
+0.28s call     pymatgen/io/openmm/tests/test_generators.py::TestOpenMMSolutionGen::test_get_input_set
+0.26s call     pymatgen/io/openmm/tests/test_sets.py::TestOpenMMSet::test_write_inputs
+0.26s call     pymatgen/io/openmm/tests/test_utils.py::test_get_coordinates
+0.24s setup    pymatgen/io/openmm/tests/test_simulations.py::test_anneal
+0.23s call     pymatgen/io/openmm/tests/test_generators.py::TestOpenMMAlchemyGen::test_get_alchemical_input_set
+0.21s call     pymatgen/io/openmm/tests/test_utils.py::test_get_unique_subgraphs_basic
+0.20s setup    pymatgen/io/openmm/tests/test_simulations.py::test_equilibrate_pressure
+0.20s call     pymatgen/io/openmm/tests/test_inputs.py::TestInputFiles::test_topology_input
+0.18s call     pymatgen/io/openmm/tests/test_sets.py::TestOpenMMAlchemySet::test_dump_load_input_set
+0.17s call     pymatgen/io/openmm/tests/test_sets.py::TestOpenMMSet::test_from_directory
+=========================== short test summary info ============================
+FAILED test_generators.py::TestOpenMMSolutionGen::test_get_input_set - ValueE...
+FAILED test_generators.py::TestOpenMMSolutionGen::test_get_input_set_w_charges
+FAILED test_generators.py::TestOpenMMAlchemyGen::test_get_alchemical_input_set
+FAILED test_utils.py::test_parameterize_w_interchange - ValueError: No regist...
+ERROR test_simulations.py::test_equilibrate_pressure - ValueError: No registe...
+ERROR test_simulations.py::test_anneal - ValueError: No registered toolkits c...
+4 failed, 52 passed, 24 warnings, 2 errors in 57.10s
