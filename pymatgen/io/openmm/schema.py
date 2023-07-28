@@ -69,7 +69,7 @@ class InputMoleculeSpec(BaseModel):
     def smile_is_valid(cls, smile):
         """check that smile generates a valid molecule"""
         try:
-            tk.Molecule.from_smiles(smile)
+            tk.Molecule.from_smiles(smile, allow_undefined_stereo=True)
         except Exception as smile_error:
             raise ValueError(
                 f"Invalid SMILES string: {smile} "
@@ -96,7 +96,7 @@ class InputMoleculeSpec(BaseModel):
         if geometries is not None:
             geometries = [Geometry(xyz=xyz) for xyz in geometries]
             # assert xyz lengths are the same
-            n_atoms = tk.Molecule.from_smiles(values["smile"]).n_atoms
+            n_atoms = tk.Molecule.from_smiles(values["smile"], allow_undefined_stereo=True).n_atoms
             if not all([len(geometry.xyz) == n_atoms for geometry in geometries]):
                 raise ValueError(
                     "All geometries must have the same number of atoms as the molecule"
@@ -158,4 +158,5 @@ class SetContents(MSONable):
     force_fields: List[str]
     partial_charge_methods: List[str]
     atom_types: List[int]
-    atom_resnames: List[str]
+    atom_resnames: List[str]  # TODO: include residue types information
+    # molecule_resids: Dict[str, List[int]]

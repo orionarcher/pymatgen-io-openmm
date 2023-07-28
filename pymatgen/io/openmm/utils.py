@@ -593,7 +593,7 @@ def process_mol_specs(
     # TODO: test this
     mol_specs = []
     for i, mol_dict in enumerate(input_mol_specs):
-        openff_mol = openff.toolkit.topology.Molecule.from_smiles(mol_dict.smile)
+        openff_mol = tk.Molecule.from_smiles(mol_dict.smile, allow_undefined_stereo=True)
 
         # add conformers
         openff_mol, atom_map = add_conformers(
