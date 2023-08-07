@@ -76,7 +76,7 @@ class TopologyInput(InputFile):
         return self.topology
 
     @classmethod
-    def from_string(cls, contents: str) -> InputFile:
+    def from_str(cls, contents: str) -> InputFile:
         """
         Get an InputFile from a PDB string.
 
@@ -138,7 +138,7 @@ class XmlInput(InputFile):
         return self.openmm_object
 
     @classmethod
-    def from_string(cls, contents: str):
+    def from_str(cls, contents: str):
         """
         This is a template that should be overwritten. Replace XmlInput with child class.
         """
@@ -151,7 +151,7 @@ class SystemInput(XmlInput):
     """
 
     @classmethod
-    def from_string(cls, contents: str) -> InputFile:
+    def from_str(cls, contents: str) -> InputFile:
         """
         Return a SystemInput from a serialized XML System file.
 
@@ -179,7 +179,7 @@ class IntegratorInput(XmlInput):
     """
 
     @classmethod
-    def from_string(cls, contents: str) -> InputFile:
+    def from_str(cls, contents: str) -> InputFile:
         """
         Return a IntegratorInput from a serialized XML Integrator file.
 
@@ -207,7 +207,7 @@ class StateInput(XmlInput):
     """
 
     @classmethod
-    def from_string(cls, contents: str) -> InputFile:
+    def from_str(cls, contents: str) -> InputFile:
         """
         Return a StateInput from a serialized XML State file.
 
@@ -247,7 +247,7 @@ class MSONableInput(InputFile):
         self._contents = "msonable"
 
     @classmethod
-    def from_string(cls, contents: str) -> InputFile:
+    def from_str(cls, contents: str) -> InputFile:
         """
         Return an MSONInput from a serialized MSON file.
 
