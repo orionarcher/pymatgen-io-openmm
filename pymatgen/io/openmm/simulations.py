@@ -7,7 +7,7 @@ simulation forward in time.
 """
 
 # base python
-from typing import Union, List, Optional, Dict
+from typing import Union, Tuple, Optional, Dict
 
 # scipy
 import numpy as np
@@ -151,7 +151,7 @@ def equilibrate_pressure(
 def anneal(
     simulation: Simulation,
     temperature: Union[float, int],
-    steps: List[int],
+    steps: Tuple[int, int, int],
     temp_steps: int = 100,
 ):
     """

@@ -39,7 +39,7 @@ def test_equilibrate_pressure(ethanol_simulation):
 
 def test_anneal(ethanol_simulation):
     ethanol_simulation.minimizeEnergy()
-    anneal(ethanol_simulation, 400, [100, 100, 100], 10)
+    anneal(ethanol_simulation, 400, (100, 100, 100), 10)
     end_time = ethanol_simulation.context.getState().getTime()._value  # picoseconds
     np.testing.assert_almost_equal(0.300, end_time)
     end_temp = ethanol_simulation.integrator.getTemperature()._value  # Kelvin
