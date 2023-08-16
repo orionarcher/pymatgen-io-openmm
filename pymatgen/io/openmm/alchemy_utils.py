@@ -39,7 +39,7 @@ def openff_counts_to_universe(openff_counts: Dict[tk.Molecule, int]):
     """
     topology = get_openff_topology(openff_counts).to_openmm()
     topology_input = TopologyInput(topology)
-    with StringIO(topology_input.get_string()) as topology_file:
+    with StringIO(topology_input.get_str()) as topology_file:
         universe = mda.Universe(topology_file, format="pdb")
     return universe
 
