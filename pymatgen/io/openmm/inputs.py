@@ -66,7 +66,7 @@ class TopologyInput(InputFile):
             pdb = s.read()
         return pdb
 
-    def get_string(self) -> str:
+    def get_str(self) -> str:
         """
         Get a string representation of the topology PDB.
 
@@ -128,7 +128,7 @@ class XmlInput(InputFile):
     def _serialize(openmm_object) -> str:
         return XmlSerializer.serialize(openmm_object)
 
-    def get_string(self) -> str:
+    def get_str(self) -> str:
         """
         Return a string of the serialized Xml file.
 
@@ -259,7 +259,7 @@ class MSONableInput(InputFile):
         """
         return cls(json.loads(contents, cls=MontyDecoder))
 
-    def get_string(self) -> str:
+    def get_str(self) -> str:
         """
         Return a string of the serialized MSON file.
 
