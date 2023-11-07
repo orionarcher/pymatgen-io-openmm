@@ -9,7 +9,7 @@ from pymatgen.io.openmm.generators import OpenMMSolutionGen
 from pymatgen.io.openmm.sets import OpenMMAlchemySet
 from pymatgen.io.openmm.simulations import equilibrate_pressure, anneal, react_system
 
-from datafiles import alchemy_input_set_path
+from .datafiles import alchemy_input_set_path
 
 __author__ = "Orion Cohen, Ryan Kingsbury"
 __version__ = "1.0"

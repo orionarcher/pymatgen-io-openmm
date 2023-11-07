@@ -50,8 +50,7 @@ class TestOpenMMSet:
             "contents.json",
         ]:
             assert (
-                input_set1.inputs[file].get_string()
-                == input_set2.inputs[file].get_string()
+                input_set1.inputs[file].get_str() == input_set2.inputs[file].get_str()
             )
 
         assert input_set1.keys() == input_set2.keys()
@@ -113,8 +112,7 @@ class TestOpenMMAlchemySet:
             "reactive_system.json",
         ]:
             assert (
-                input_set1.inputs[file].get_string()
-                == input_set2.inputs[file].get_string()
+                input_set1.inputs[file].get_str() == input_set2.inputs[file].get_str()
             )
 
         assert input_set1.keys() == input_set2.keys()

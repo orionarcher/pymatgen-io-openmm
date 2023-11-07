@@ -14,14 +14,22 @@ partial_charges = test_files_path / "partial_charge"
 geometries = test_files_path / "geometries"
 
 
-topology_path = resource_filename(__name__, str(default_input_set_path / "topology.pdb"))
+topology_path = resource_filename(
+    __name__, str(default_input_set_path / "topology.pdb")
+)
 system_path = resource_filename(__name__, str(default_input_set_path / "system.xml"))
-integrator_path = resource_filename(__name__, str(default_input_set_path / "integrator.xml"))
+integrator_path = resource_filename(
+    __name__, str(default_input_set_path / "integrator.xml")
+)
 state_path = resource_filename(__name__, str(default_input_set_path / "state.xml"))
-corrupted_state_path = resource_filename(__name__, str(default_input_set_path / "corrupted_state.xml"))
+corrupted_state_path = resource_filename(
+    __name__, str(default_input_set_path / "corrupted_state.xml")
+)
 input_set_dir = resource_filename(__name__, str(default_input_set_path))
 
-coordinates_path = resource_filename(__name__, str(test_files_path / "water_ethanol_coordinates.npy"))
+coordinates_path = resource_filename(
+    __name__, str(test_files_path / "water_ethanol_coordinates.npy")
+)
 
 CCO_xyz = resource_filename(__name__, str(partial_charges / "CCO.xyz"))
 CCO_charges = resource_filename(__name__, str(partial_charges / "CCO.npy"))
@@ -35,3 +43,38 @@ Li_xyz = resource_filename(__name__, str(partial_charges / "Li.xyz"))
 
 trimer_pdb = resource_filename(__name__, str(geometries / "trimer.pdb"))
 trimer_txt = resource_filename(__name__, str(geometries / "trimer.txt"))
+
+#
+# package_name = "pymatgen.io.openmm"
+# test_files_path = Path(__file__).parent / "test_files"
+#
+# input_sets_path = test_files_path / "input_sets"
+# default_input_set_path = input_sets_path / "default_input_set"
+# alchemy_input_set_path = input_sets_path / "alchemy_input_set"
+# partial_charges = test_files_path / "partial_charge"
+# geometries = test_files_path / "geometries"
+#
+# def resource_path(resource: Path) -> Path:
+#     return files(package_name).joinpath(str(resource))
+#
+# topology_path = resource_path(default_input_set_path / "topology.pdb")
+# system_path = resource_path(default_input_set_path / "system.xml")
+# integrator_path = resource_path(default_input_set_path / "integrator.xml")
+# state_path = resource_path(default_input_set_path / "state.xml")
+# corrupted_state_path = resource_path(default_input_set_path / "corrupted_state.xml")
+# input_set_dir = resource_path(default_input_set_path)
+#
+# coordinates_path = resource_path(test_files_path / "water_ethanol_coordinates.npy")
+#
+# CCO_xyz = resource_path(partial_charges / "CCO.xyz")
+# CCO_charges = resource_path(partial_charges / "CCO.npy")
+# FEC_r_xyz = resource_path(partial_charges / "FEC-r.xyz")
+# FEC_s_xyz = resource_path(partial_charges / "FEC-s.xyz")
+# FEC_charges = resource_path(partial_charges / "FEC.npy")
+# PF6_xyz = resource_path(partial_charges / "PF6.xyz")
+# PF6_charges = resource_path(partial_charges / "PF6.npy")
+# Li_charges = resource_path(partial_charges / "Li.npy")
+# Li_xyz = resource_path(partial_charges / "Li.xyz")
+#
+# trimer_pdb = resource_path(geometries / "trimer.pdb")
+# trimer_txt = resource_path(geometries / "trimer.txt")

@@ -39,7 +39,7 @@ def openff_counts_to_universe(openff_counts: Dict[tk.Molecule, int]):
     """
     topology = get_openff_topology(openff_counts).to_openmm()
     topology_input = TopologyInput(topology)
-    with StringIO(topology_input.get_string()) as topology_file:
+    with StringIO(topology_input.get_str()) as topology_file:
         universe = mda.Universe(topology_file, format="pdb")
     return universe
 
@@ -460,6 +460,7 @@ class AlchemicalReaction(MSONable):
         triggers_right = reactive_atoms.trigger_atoms_right
 
         u = openff_counts_to_universe({mol: 1 for mol in openff_mols})
+        # TODO: add utility for getting universe
         rdmol = u.atoms.convert_to("RDKIT")
         rdCoordGen.AddCoords(rdmol)
         for trigger_atom, half_reaction in half_reactions_dict.items():
