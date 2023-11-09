@@ -34,10 +34,6 @@ RUN wget https://raw.githubusercontent.com/orionarcher/pymatgen-io-openmm/main/r
 
 RUN /opt/miniconda3/bin/mamba install -c conda-forge --file requirements.txt -y
 
-RUN /opt/miniconda3/bin/conda uninstall pymatgen -y
-
-RUN pip install git+https://github.com/materialsproject/pymatgen.git
-
 RUN pip install git+https://github.com/orionarcher/pymatgen-io-openmm.git
 
 WORKDIR /app

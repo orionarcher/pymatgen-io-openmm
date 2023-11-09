@@ -119,7 +119,7 @@ class TestOpenMMSolutionGen:
 
     def test_get_input_set_w_charges(self):
         pf6_charge_array = np.load(PF6_charges)
-        generator = OpenMMSolutionGen(packmol_random_seed=1)
+        generator = OpenMMSolutionGen(packmol_random_seed=1, default_charge_method='mmff94')
         input_mol_dicts = [
             {"smile": "O", "count": 200, "name": "H2O"},
             {"smile": "CCO", "count": 20},

@@ -52,18 +52,20 @@ with python 3.10 or greater.
     conda install -c conda-forge --file requirements.txt
     ```
 
-4. Clone and install pymatgen. Some important bug fixes are not yet integrated that into a release.
-
-    ```bash
-    conda uninstall pymatgen # uninstall the pymatgen package installed in step 3
-    pip install git+ssh://git@github.com/materialsproject/pymatgen.git
-    ```
-
-5. Install the package in editable mode.
+4. Install the package in editable mode.
 
     ```bash
     pip install -e .
     ```
+
+### Installing on Apple Silicon
+
+If you are using Apple Silicon, installation is a bit trickier. Some dependencies of OpenFF
+are not compatible with Apple Silicon so you will need to use Rosetta 2. First open your 
+terminal application with Rosetta2 enabled, then create a conda environment following 
+[these instructions](https://docs.openforcefield.org/projects/toolkit/en/stable/installation.html)
+everything should work from there. This replaces step 1. Do not use `mamba`, which is not 
+fully integrated with x86 installations for Apple Silicon.
 
 ### Running tests
 

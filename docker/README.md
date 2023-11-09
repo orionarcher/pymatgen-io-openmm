@@ -58,3 +58,17 @@ srun -n 4 -G 4 perlmutter_runner.sh \
   <INPUT_DIRECTORY> \
   <OUTPUT_DIRECTORY>
 ```
+
+
+### Debugging Tips
+
+If your container environment is not working, here are quick commands to try.
+
+```bash
+python -m openmm.testInstallation # will test openmm
+nvidia-smi # will tell you the cuda version
+conda list | grep cudatoolkit # will tell you the cudatoolkit version, should match cuda version
+```
+A mismatch between the cuda version and cudatoolkit version will cause the 
+CUDA tests to fail!
+
