@@ -139,6 +139,8 @@ def equilibrate_pressure(
     assert (
         system.usesPeriodicBoundaryConditions()
     ), "system must use periodic boundary conditions for pressure equilibration."
+    integrator = simulation.context.getIntegrator()
+    integrator.setTemperature(temperature * kelvin)
     barostat_force_index = system.addForce(
         MonteCarloBarostat(pressure * atmosphere, temperature * kelvin, frequency)
     )
